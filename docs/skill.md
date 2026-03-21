@@ -1,43 +1,57 @@
-# Development Skill
+---
+name: development
+description: Development workflow for the FastAPI boilerplate project. Use when writing code, adding features, creating modules, fixing bugs, or making any changes to the codebase. Covers layer responsibilities, coding conventions, SQL migration workflow, testing strategy, exception handling, and event bus usage.
+---
 
-## System of work
+# Development
 
-### Before coding
-1. Read `docs/architecture.md` for layer responsibilities and conventions
-2. Check existing patterns in a similar module (e.g., auth or items)
-3. Follow the "Adding a new module" checklist
+## Before coding
 
-### Layer rules
-- **Routers** only parse HTTP, call use cases, return schemas. No business logic.
-- **Use cases** orchestrate services. They are thin — if a use case has >20 lines, the logic should move to a service. Use cases that produce side effects should publish events via `EventBus`.
-- **Services** own business rules. They receive repos via constructor. They raise domain exceptions.
-- **Repos** extend BaseRepo[T]. Override `_base_select()` for eager loading. Configure `map_field` for filtering.
-- **Models** use `IntPkMixin` + `AuditMixin`. Use `Mapped[]` annotations, not legacy `Column()`.
-- **Event handlers** live in `app/core/events/handlers/`. Registered via `@dispatcher.register("event.type")`. Must be idempotent. See `docs/event-bus.md`.
+1. Read the architecture reference for layer responsibilities and conventions
+2. Check existing patterns in a similar module (e.g., `auth/` or `items/`)
+3. Follow the "Adding a new module" checklist in the architecture reference
 
-### Exception handling
+## Layer rules
+
+- **Routers** (`api/v1/`) — Parse HTTP, call use cases, return schemas. No business logic.
+- **Use cases** (`use_cases/`) — Orchestrate services. Thin (<20 lines). Publish events via `EventBus` when producing side effects.
+- **Services** (`services/`) — Own business rules. Receive repos via constructor. Raise domain exceptions.
+- **Repos** (`repos/`) — Extend `BaseRepo[T]`. Override `_base_select()` for eager loading. Configure `map_field` for filtering.
+- **Models** (`models/`) — Use `IntPkMixin` + `AuditMixin`. Use `Mapped[]` annotations, not legacy `Column()`.
+- **Event handlers** (`core/events/handlers/`) — Register via `@dispatcher.register("event.type")`. Must be idempotent.
+
+## Exception handling
+
 - Raise domain exceptions (`NotFoundError`, `ConflictError`, `AuthenticationError`, etc.)
-- Never raise `HTTPException` from services/repos — the global handlers convert domain exceptions to HTTP responses
+- Never raise `HTTPException` from services/repos — global handlers convert domain exceptions to HTTP responses
 - Custom exceptions: subclass `UseCaseException` (400-level) or `DomainException` (500-level)
 
-### Testing
+## SQL changes
+
+1. Update `sql/schema.sql` with the new DDL (source of truth for fresh installs)
+2. Create `sql/deltas/NNN_description.sql` with the ALTER/CREATE statements
+3. **Always** apply via `bash sql/apply.sh` — never use `psql` or `docker exec` directly, as that bypasses `_schema_migrations` tracking
+
+## Testing
+
 - Unit tests: mock repos with `AsyncMock`, test services and use cases in isolation
 - Integration tests: use `httpx.AsyncClient` + `ASGITransport`, override `get_session`
-- Name: `test_{feature}_{scenario}`
+- Naming: `test_{feature}_{scenario}`
+- Run: `uv run pytest`
 
-### Before committing
+## Before committing
+
 1. Run tests: `uv run pytest`
 2. Run linter: `uv run ruff check app/ tests/`
 3. Run formatter: `uv run ruff format app/ tests/`
 
-Pre-commit hooks enforce this automatically, but run them manually to catch issues early.
+## Dependencies
 
-### SQL changes
-1. Update `sql/schema.sql` with the new DDL (source of truth for fresh installs)
-2. Create `sql/deltas/NNN_description.sql` with the ALTER/CREATE statements
-3. **Always** run `bash sql/apply.sh` to apply to existing databases — never apply SQL directly via `psql` or `docker exec`, as that bypasses the `_schema_migrations` tracking table and future runs of `apply.sh` won't know the migration was already applied
-
-### Dependencies
 - Add to `pyproject.toml` under `[project.dependencies]`
 - Pin major versions: `"httpx>=0.28"`
-- Run `uv sync` to install after adding
+- Run `uv sync` to install
+
+## References
+
+- **Architecture and layers**: See [references/architecture.md](references/architecture.md) for full layer spec, data flow, key patterns, adding a new module checklist, and SQL management
+- **Event bus**: See [references/event-bus.md](references/event-bus.md) for the Transactional Outbox pattern, publishing events, creating handlers, retry/backoff, cleanup, and known limitations
