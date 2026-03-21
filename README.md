@@ -1,6 +1,6 @@
 # FastAPI Boilerplate
 
-Boilerplate reutilizable para proyectos FastAPI con SQLAlchemy async, JWT auth y arquitectura por capas.
+Reusable FastAPI boilerplate with async SQLAlchemy, JWT auth, and layered architecture.
 
 ## Stack
 
@@ -9,50 +9,50 @@ Boilerplate reutilizable para proyectos FastAPI con SQLAlchemy async, JWT auth y
 - JWT (PyJWT) + Argon2 password hashing
 - Docker + docker-compose
 
-## Setup rápido
+## Quick start
 
 ```bash
-# 1. Levantar PostgreSQL
+# 1. Start PostgreSQL
 docker compose up db -d
 
-# 2. Crear esquema e insertar datos iniciales
+# 2. Create schema and seed initial data
 bash sql/reset.sh
 
-# 3. Instalar dependencias
+# 3. Install dependencies
 uv sync --extra dev
 
-# 4. Arrancar la API
-ENVIRONMENT=local uv run uvicorn app.main:app --reload
+# 4. Start the API
+ENVIRONMENT=local uv run uvicorn main:app --reload
 
-# 5. Abrir docs
+# 5. Open docs
 open http://localhost:8000/docs
 ```
 
-## Setup con Docker
+## Docker setup
 
 ```bash
 docker compose up --build
-bash sql/reset.sh  # en otra terminal
+bash sql/reset.sh  # in another terminal
 ```
 
-## Estructura
+## Project structure
 
 ```
 app/
 ├── core/           # Config, DB, security, logging, exceptions, lifespan
-├── models/         # SQLAlchemy ORM (por dominio: auth/, items/)
+├── models/         # SQLAlchemy ORM (by domain: auth/, items/)
 ├── schemas/        # Pydantic v2 request/response
-├── repos/          # Repositorios async con BaseRepo[T]
-├── services/       # Lógica de negocio
-├── use_cases/      # Orquestadores (coordinan servicios)
+├── repos/          # Async repositories with BaseRepo[T]
+├── services/       # Business logic
+├── use_cases/      # Orchestrators (coordinate services)
 ├── deps/           # FastAPI dependencies (auth, repos)
-└── api/v1/         # Routers HTTP
+└── api/v1/         # HTTP routers
 ```
 
 ## Auth flow
 
 ```bash
-# Registrar usuario
+# Register
 curl -X POST http://localhost:8000/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"user@test.com","username":"user1","password":"pass123"}'
@@ -62,7 +62,7 @@ curl -X POST http://localhost:8000/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"user@test.com","password":"pass123"}'
 
-# Usar token
+# Use token
 curl http://localhost:8000/v1/auth/me \
   -H "Authorization: Bearer <access_token>"
 
@@ -75,24 +75,24 @@ curl -X POST http://localhost:8000/v1/auth/refresh \
 ## Tests
 
 ```bash
-# Unit tests (sin DB)
+# Unit tests (no DB)
 pytest tests/unit
 
-# Integration tests (sin DB real, mocks)
+# Integration tests (no real DB, mocks)
 pytest tests/integration
 
-# Todos
+# All
 pytest
 ```
 
 ## SQL migrations
 
 ```bash
-# Reset completo (drop + schema + seeds)
+# Full reset (drop + schema + seeds)
 bash sql/reset.sh
 
-# Aplicar deltas pendientes
+# Apply pending deltas
 bash sql/apply.sh
 ```
 
-Ver `docs/architecture.md` para la guía completa de cómo añadir un nuevo módulo.
+See `docs/architecture.md` for the full guide on adding a new module.
