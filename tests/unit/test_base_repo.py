@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from sqlalchemy import Text, asc, desc
 from sqlalchemy.orm import Mapped, mapped_column

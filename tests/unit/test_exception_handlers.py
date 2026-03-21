@@ -2,7 +2,6 @@ from unittest.mock import MagicMock
 
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
-from pydantic import ValidationError
 from starlette.datastructures import URL
 
 from app.core.exceptions import AuthenticationError, ConflictError, NotFoundError
