@@ -187,9 +187,7 @@ class BaseRepo(Generic[T]):
             | ((sort_column == cursor_value) & (self.model.id < cursor_id))
         )
 
-    def _apply_filters(
-        self, stmt: Select, filters: dict[str, Any] | None
-    ) -> Select:
+    def _apply_filters(self, stmt: Select, filters: dict[str, Any] | None) -> Select:
         if not filters:
             return stmt
         for key, value in filters.items():
@@ -211,9 +209,7 @@ class BaseRepo(Generic[T]):
                 stmt = stmt.where(getattr(self.model, key) == value)
         return stmt
 
-    def _apply_ordering(
-        self, stmt: Select, order_by: str | None, order_dir: str
-    ) -> Select:
+    def _apply_ordering(self, stmt: Select, order_by: str | None, order_dir: str) -> Select:
         if not order_by:
             return stmt.order_by(asc(self.model.id))
 

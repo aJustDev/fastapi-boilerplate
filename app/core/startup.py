@@ -31,7 +31,11 @@ def log_system_info(db_status: str) -> None:
     env_info = settings.ENVIRONMENT.capitalize()
     log_level = settings.LOG_LEVEL.upper()
 
-    db_host = settings.DATABASE_URL.split("@")[-1].split("/")[0] if "@" in settings.DATABASE_URL else "unknown"
+    db_host = (
+        settings.DATABASE_URL.split("@")[-1].split("/")[0]
+        if "@" in settings.DATABASE_URL
+        else "unknown"
+    )
 
     logger.info("========== SYSTEM CONFIGURATION ==========")
     logger.info(f"Host     : {hostname:<27} | OS     : {os_info}")

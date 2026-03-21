@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+
 def _auth_service(
     user_repo: Annotated[UserRepo, Depends(get_repo(UserRepo))],
 ) -> AuthService:

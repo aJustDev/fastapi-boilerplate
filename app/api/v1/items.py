@@ -112,16 +112,12 @@ async def get_item(item_id: int, service: ItemServiceDep, user: CurrentUser):
 @router.post("", response_model=ItemRead, status_code=201)
 async def create_item(body: ItemCreate, service: ItemServiceDep, user: CurrentUser):
     uc = CreateItemUseCase(service)
-    item = await uc.execute(
-        body.name, user.id, body.description, body.category, body.priority
-    )
+    item = await uc.execute(body.name, user.id, body.description, body.category, body.priority)
     return ItemRead.model_validate(item)
 
 
 @router.patch("/{item_id}", response_model=ItemRead)
-async def update_item(
-    item_id: int, body: ItemUpdate, service: ItemServiceDep, user: CurrentUser
-):
+async def update_item(item_id: int, body: ItemUpdate, service: ItemServiceDep, user: CurrentUser):
     uc = UpdateItemUseCase(service)
     data = body.model_dump(exclude_unset=True)
     item = await uc.execute(item_id, data)

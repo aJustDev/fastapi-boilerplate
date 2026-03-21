@@ -42,7 +42,7 @@ def _status_color(code: int) -> str:
 def _shorten_path(filepath: str) -> str:
     marker = "/app/"
     idx = filepath.find(marker)
-    return filepath[idx + 1:] if idx != -1 else filepath
+    return filepath[idx + 1 :] if idx != -1 else filepath
 
 
 def _extract_context(request: Request, exc: Exception) -> dict:
@@ -95,9 +95,7 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 async def validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
-    errors = [
-        f"{'.'.join(str(loc) for loc in err['loc'])}: {err['msg']}" for err in exc.errors()
-    ]
+    errors = [f"{'.'.join(str(loc) for loc in err['loc'])}: {err['msg']}" for err in exc.errors()]
     logger.warning(f"Validation error on {request.method} {request.url.path}: {errors}")
     return JSONResponse(
         status_code=422,

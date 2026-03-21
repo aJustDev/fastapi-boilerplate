@@ -6,6 +6,7 @@ from app.services.auth import AuthService
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass(slots=True)
 class LoginUseCase:
     auth_service: AuthService

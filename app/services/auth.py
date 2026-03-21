@@ -25,7 +25,9 @@ class AuthService:
         if not user:
             user = await self.user_repo.get_by_username(username)
 
-        logger.debug(f"User lookup result: {'found' if user else 'not found'} for username: {username}")
+        logger.debug(
+            f"User lookup result: {'found' if user else 'not found'} for username: {username}"
+        )
         if not user or not verify_password(password, user.password_hash):
             raise AuthenticationError("Invalid credentials")
 

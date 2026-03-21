@@ -25,6 +25,4 @@ class UserORM(Base, IntPkMixin, AuditMixin):
         return any(r.name == role_name for r in self.roles)
 
     def has_permission(self, permission_name: str) -> bool:
-        return any(
-            p.name == permission_name for r in self.roles for p in r.permissions
-        )
+        return any(p.name == permission_name for r in self.roles for p in r.permissions)

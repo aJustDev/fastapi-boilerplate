@@ -33,12 +33,7 @@ def setup_logging() -> None:
             },
         }
     else:
-        fmt = (
-            "%(asctime)s %(levelname)s: "
-            "[%(layer_name)s] "
-            "[%(module_name)s] "
-            "❯ %(message)s"
-        )
+        fmt = "%(asctime)s %(levelname)s: [%(layer_name)s] [%(module_name)s] ❯ %(message)s"
         formatter_class = "logging.Formatter"
         formatter_kwargs = {"datefmt": "%Y-%m-%d %H:%M:%S"}
 
