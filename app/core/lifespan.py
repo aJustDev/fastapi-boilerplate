@@ -4,7 +4,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+import app.core.events.handlers  # noqa: F401 — register all event handlers
 from app.core.db import engine
+from app.core.events.worker import OutboxWorker
 from app.core.logging.config import setup_logging
 from app.core.startup import check_database, log_system_info
 
@@ -19,10 +21,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     log_system_info(db_status)
 
     app.state.ready = db_status == "OK"
+
+    worker = OutboxWorker()
+    if app.state.ready:
+        await worker.start()
+    app.state.outbox_worker = worker
+
     logger.info("Startup complete ✓")
 
     yield
 
+    await worker.stop()
     app.state.ready = False
     await engine.dispose()
     logger.info("Shutdown complete")

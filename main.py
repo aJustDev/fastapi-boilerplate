@@ -19,7 +19,7 @@ app = FastAPI(
         "filter": True,
         "displayRequestDuration": True,
         "tryItOutEnabled": True,
-    }
+    },
 )
 
 register_exception_handlers(app)

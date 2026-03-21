@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from app.core.events.bus import EventBus
 from app.models.items.item import ItemORM
 from app.services.items import ItemService
 
@@ -7,6 +8,7 @@ from app.services.items import ItemService
 @dataclass(slots=True)
 class CreateItemUseCase:
     item_service: ItemService
+    event_bus: EventBus
 
     async def execute(
         self,
@@ -16,4 +18,15 @@ class CreateItemUseCase:
         category: str = "general",
         priority: int = 0,
     ) -> ItemORM:
-        return await self.item_service.create(name, owner_id, description, category, priority)
+        item = await self.item_service.create(name, owner_id, description, category, priority)
+
+        await self.event_bus.publish(
+            event_type="item.created",
+            payload={
+                "item_id": item.id,
+                "name": item.name,
+                "owner_id": owner_id,
+            },
+        )
+
+        return item

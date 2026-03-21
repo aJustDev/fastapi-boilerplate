@@ -32,6 +32,16 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
 
+    # Webhooks
+    WEBHOOK_URL: str = ""
+
+    # Event Bus
+    OUTBOX_POLL_INTERVAL_SECONDS: int = 30
+    OUTBOX_MAX_RETRIES: int = 5
+    OUTBOX_HANDLER_TIMEOUT_SECONDS: int = 30
+    OUTBOX_CLEANUP_DAYS: int = 30
+    OUTBOX_CLEANUP_BATCH_SIZE: int = 1000
+
     @model_validator(mode="after")
     def build_database_url(self) -> "Settings":
         if not self.DATABASE_URL:
