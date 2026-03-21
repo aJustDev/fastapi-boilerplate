@@ -9,10 +9,11 @@
 
 ### Layer rules
 - **Routers** only parse HTTP, call use cases, return schemas. No business logic.
-- **Use cases** orchestrate services. They are thin — if a use case has >20 lines, the logic should move to a service.
+- **Use cases** orchestrate services. They are thin — if a use case has >20 lines, the logic should move to a service. Use cases that produce side effects should publish events via `EventBus`.
 - **Services** own business rules. They receive repos via constructor. They raise domain exceptions.
 - **Repos** extend BaseRepo[T]. Override `_base_select()` for eager loading. Configure `map_field` for filtering.
 - **Models** use `IntPkMixin` + `AuditMixin`. Use `Mapped[]` annotations, not legacy `Column()`.
+- **Event handlers** live in `app/core/events/handlers/`. Registered via `@dispatcher.register("event.type")`. Must be idempotent. See `docs/event-bus.md`.
 
 ### Exception handling
 - Raise domain exceptions (`NotFoundError`, `ConflictError`, `AuthenticationError`, etc.)

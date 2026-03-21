@@ -43,14 +43,25 @@ bash sql/reset.sh  # in another terminal
 ```
 app/
 ├── core/           # Config, DB, security, logging, exceptions, lifespan
-├── models/         # SQLAlchemy ORM (by domain: auth/, items/)
+│   └── events/     # Event bus: dispatcher, worker, handlers, cleanup
+├── models/         # SQLAlchemy ORM (by domain: auth/, items/, events/)
 ├── schemas/        # Pydantic v2 request/response
 ├── repos/          # Async repositories with BaseRepo[T]
 ├── services/       # Business logic
-├── use_cases/      # Orchestrators (coordinate services)
-├── deps/           # FastAPI dependencies (auth, repos)
+├── use_cases/      # Orchestrators (coordinate services + publish events)
+├── deps/           # FastAPI dependencies (auth, repos, event bus)
 └── api/v1/         # HTTP routers
 ```
+
+## Event bus
+
+Persistent event bus using the **Transactional Outbox** pattern with PostgreSQL `LISTEN/NOTIFY`. Events are inserted atomically in the same DB transaction as business data and processed asynchronously by a background worker.
+
+- Per-handler isolation with timeout and exponential backoff
+- Succeeded handlers are skipped on retry (no duplicate side effects)
+- Cleanup and replay utilities for production operations
+
+See `docs/event-bus.md` for the full guide.
 
 ## Auth flow
 

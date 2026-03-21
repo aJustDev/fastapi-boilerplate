@@ -11,14 +11,19 @@ models/        → SQLAlchemy 2.x ORM. Mixins: IntPkMixin (BIGINT IDENTITY PK), 
 schemas/       → Pydantic v2. Request/response validation. from_attributes=True.
 deps/          → FastAPI dependencies. get_session, get_repo(RepoClass), get_current_user, require_permissions.
 core/          → Config, DB engine, security (JWT+Argon2), logging, exceptions, lifespan, middleware.
+core/events/   → Transactional Outbox event bus: dispatcher, worker, handlers, cleanup.
 ```
 
 ## Data flow
 
 ```
-Request → Router → Dependency injection (auth + repo) → UseCase → Service → Repo → ORM → DB
+Request → Router → DI (auth + repo + event_bus) → UseCase → Service → Repo → ORM → DB
+                                                     │                              ↓
+                                                     └→ EventBus.publish() ──→ outbox_events
                                                                                     ↓
-Response ← Router ← Schema.model_validate(orm_obj) ←──────────────────────────────←─┘
+                                                                              Worker (async)
+                                                                                    ↓
+Response ← Router ← Schema.model_validate(orm_obj) ←──────────────────────←── Handlers
 ```
 
 ## Key patterns
@@ -28,6 +33,7 @@ Response ← Router ← Schema.model_validate(orm_obj) ←───────�
 - **Pagination**: offset (`list`) and cursor (`list_cursor`) in BaseRepo[T]
 - **Filtering**: `map_field` dict on repos maps query params to columns + operators
 - **Auth**: JWT access (30min) + refresh (7d) tokens. `CurrentUser` annotated dependency.
+- **Event bus**: Transactional Outbox with PostgreSQL `LISTEN/NOTIFY`. Use cases publish events via `EventBus`; a background worker dispatches them to handlers with isolation, timeout, and per-handler retry tracking. See `docs/event-bus.md`.
 
 ## Adding a new module
 
@@ -40,6 +46,7 @@ Response ← Router ← Schema.model_validate(orm_obj) ←───────�
 7. Register router in `app/api/v1/__init__.py`
 8. Add SQL to `sql/schema.sql` + delta in `sql/deltas/`
 9. Add tests in `tests/unit/{domain}/` and `tests/integration/{domain}/`
+10. If the module publishes events: inject `EventBus` in use cases, add handlers in `app/core/events/handlers/`, register in `handlers/__init__.py`. See `docs/event-bus.md`.
 
 ## SQL management
 
