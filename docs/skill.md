@@ -24,6 +24,13 @@
 - Integration tests: use `httpx.AsyncClient` + `ASGITransport`, override `get_session`
 - Name: `test_{feature}_{scenario}`
 
+### Before committing
+1. Run tests: `uv run pytest`
+2. Run linter: `uv run ruff check app/ tests/`
+3. Run formatter: `uv run ruff format app/ tests/`
+
+Pre-commit hooks enforce this automatically, but run them manually to catch issues early.
+
 ### SQL changes
 1. Update `sql/schema.sql` with the new DDL
 2. Create `sql/deltas/NNN_description.sql` with the ALTER/CREATE statements
