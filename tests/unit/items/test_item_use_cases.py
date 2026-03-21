@@ -9,27 +9,39 @@ from app.use_cases.items.update_item import UpdateItemUseCase
 
 
 class TestCreateItemUseCase:
-    async def test_delegates_to_service(self):
+    async def test_delegates_to_service_and_publishes_event(self):
         mock_service = AsyncMock()
+        mock_event_bus = AsyncMock()
         item = MagicMock(spec=ItemORM)
+        item.id = 42
+        item.name = "Item"
         mock_service.create.return_value = item
 
-        uc = CreateItemUseCase(mock_service)
+        uc = CreateItemUseCase(mock_service, mock_event_bus)
         result = await uc.execute(
             name="Item", owner_id=1, description="desc", category="tools", priority=2
         )
 
         mock_service.create.assert_called_once_with("Item", 1, "desc", "tools", 2)
+        mock_event_bus.publish.assert_called_once_with(
+            event_type="item.created",
+            payload={"item_id": 42, "name": "Item", "owner_id": 1},
+        )
         assert result is item
 
     async def test_delegates_with_defaults(self):
         mock_service = AsyncMock()
-        mock_service.create.return_value = MagicMock(spec=ItemORM)
+        mock_event_bus = AsyncMock()
+        item = MagicMock(spec=ItemORM)
+        item.id = 1
+        item.name = "Item"
+        mock_service.create.return_value = item
 
-        uc = CreateItemUseCase(mock_service)
+        uc = CreateItemUseCase(mock_service, mock_event_bus)
         await uc.execute(name="Item", owner_id=1)
 
         mock_service.create.assert_called_once_with("Item", 1, None, "general", 0)
+        mock_event_bus.publish.assert_called_once()
 
 
 class TestGetItemUseCase:
@@ -46,25 +58,37 @@ class TestGetItemUseCase:
 
 
 class TestDeleteItemUseCase:
-    async def test_delegates_to_service(self):
+    async def test_delegates_to_service_and_publishes_event(self):
         mock_service = AsyncMock()
+        mock_event_bus = AsyncMock()
 
-        uc = DeleteItemUseCase(mock_service)
+        uc = DeleteItemUseCase(mock_service, mock_event_bus)
         await uc.execute(42)
 
         mock_service.delete.assert_called_once_with(42)
+        mock_event_bus.publish.assert_called_once_with(
+            event_type="item.deleted",
+            payload={"item_id": 42},
+        )
 
 
 class TestUpdateItemUseCase:
-    async def test_delegates_to_service(self):
+    async def test_delegates_to_service_and_publishes_event(self):
         mock_service = AsyncMock()
+        mock_event_bus = AsyncMock()
         updated = MagicMock(spec=ItemORM)
+        updated.id = 42
+        updated.name = "New Name"
         mock_service.update.return_value = updated
 
-        uc = UpdateItemUseCase(mock_service)
+        uc = UpdateItemUseCase(mock_service, mock_event_bus)
         result = await uc.execute(42, {"name": "New Name"})
 
         mock_service.update.assert_called_once_with(42, {"name": "New Name"})
+        mock_event_bus.publish.assert_called_once_with(
+            event_type="item.updated",
+            payload={"item_id": 42, "name": "New Name", "changes": ["name"]},
+        )
         assert result is updated
 
 
