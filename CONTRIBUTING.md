@@ -12,7 +12,8 @@
 ```bash
 git clone <repo-url>
 cd fastapi
-uv sync
+uv sync --extra dev
+uv run pre-commit install
 
 docker compose up db -d
 bash sql/reset.sh
@@ -24,10 +25,10 @@ ENVIRONMENT=local uv run uvicorn main:app --reload
 1. Create a branch from `main`: `git switch -c feat/my-change`
 2. Implement following the layer rules (see `docs/skill.md`)
 3. Add unit and/or integration tests
-4. Verify all tests pass: `uv run pytest`
-5. Verify linting: `uv run ruff check app/ tests/`
-6. Atomic commits grouped by responsibility (see commits section)
-7. Open a PR against `main`
+4. Atomic commits grouped by responsibility (see commits section)
+5. Open a PR against `main`
+
+Pre-commit hooks automatically run ruff (check + format) and pytest before each commit.
 
 ## Commit conventions
 

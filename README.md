@@ -21,10 +21,13 @@ bash sql/reset.sh
 # 3. Install dependencies
 uv sync --extra dev
 
-# 4. Start the API
+# 4. Install pre-commit hooks
+uv run pre-commit install
+
+# 5. Start the API
 ENVIRONMENT=local uv run uvicorn main:app --reload
 
-# 5. Open docs
+# 6. Open docs
 open http://localhost:8000/docs
 ```
 
