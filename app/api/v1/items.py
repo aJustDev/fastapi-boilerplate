@@ -2,7 +2,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
+from app.core.events.bus import EventBus
 from app.deps.auth import CurrentUser
+from app.deps.events import get_event_bus
 from app.deps.repository import get_repo
 from app.repos.items.item import ItemRepo
 from app.schemas.items.item import ItemCategory, ItemCreate, ItemRead, ItemSortField, ItemUpdate
@@ -24,6 +26,7 @@ def _item_service(
 
 
 ItemServiceDep = Annotated[ItemService, Depends(_item_service)]
+EventBusDep = Annotated[EventBus, Depends(get_event_bus)]
 
 
 @router.get("/filters")
@@ -110,21 +113,37 @@ async def get_item(item_id: int, service: ItemServiceDep, user: CurrentUser):
 
 
 @router.post("", response_model=ItemRead, status_code=201)
-async def create_item(body: ItemCreate, service: ItemServiceDep, user: CurrentUser):
-    uc = CreateItemUseCase(service)
+async def create_item(
+    body: ItemCreate,
+    service: ItemServiceDep,
+    user: CurrentUser,
+    event_bus: EventBusDep,
+):
+    uc = CreateItemUseCase(service, event_bus)
     item = await uc.execute(body.name, user.id, body.description, body.category, body.priority)
     return ItemRead.model_validate(item)
 
 
 @router.patch("/{item_id}", response_model=ItemRead)
-async def update_item(item_id: int, body: ItemUpdate, service: ItemServiceDep, user: CurrentUser):
-    uc = UpdateItemUseCase(service)
+async def update_item(
+    item_id: int,
+    body: ItemUpdate,
+    service: ItemServiceDep,
+    user: CurrentUser,
+    event_bus: EventBusDep,
+):
+    uc = UpdateItemUseCase(service, event_bus)
     data = body.model_dump(exclude_unset=True)
     item = await uc.execute(item_id, data)
     return ItemRead.model_validate(item)
 
 
 @router.delete("/{item_id}", status_code=204)
-async def delete_item(item_id: int, service: ItemServiceDep, user: CurrentUser):
-    uc = DeleteItemUseCase(service)
+async def delete_item(
+    item_id: int,
+    service: ItemServiceDep,
+    user: CurrentUser,
+    event_bus: EventBusDep,
+):
+    uc = DeleteItemUseCase(service, event_bus)
     await uc.execute(item_id)
