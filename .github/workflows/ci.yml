@@ -16,7 +16,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --dev
 
       - name: Ruff check
         run: uv run ruff check app/ tests/
@@ -33,7 +33,7 @@ jobs:
         uses: astral-sh/setup-uv@v4
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --dev
 
       - name: Run tests
         run: uv run pytest --cov=app --cov-report=term-missing
