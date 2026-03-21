@@ -33,9 +33,9 @@
 Pre-commit hooks enforce this automatically, but run them manually to catch issues early.
 
 ### SQL changes
-1. Update `sql/schema.sql` with the new DDL
+1. Update `sql/schema.sql` with the new DDL (source of truth for fresh installs)
 2. Create `sql/deltas/NNN_description.sql` with the ALTER/CREATE statements
-3. Run `bash sql/apply.sh` to apply to existing databases
+3. **Always** run `bash sql/apply.sh` to apply to existing databases — never apply SQL directly via `psql` or `docker exec`, as that bypasses the `_schema_migrations` tracking table and future runs of `apply.sh` won't know the migration was already applied
 
 ### Dependencies
 - Add to `pyproject.toml` under `[project.dependencies]`
