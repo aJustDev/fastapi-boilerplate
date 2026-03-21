@@ -18,8 +18,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     setup_logging()
 
     db_status = await check_database(engine)
-    log_system_info(db_status)
-
     app.state.ready = db_status == "OK"
 
     worker = OutboxWorker()
@@ -27,7 +25,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         await worker.start()
     app.state.outbox_worker = worker
 
-    logger.info("Startup complete ✓")
+    worker_status = "OK" if app.state.ready else "OFF (DB unavailable)"
+    log_system_info(db_status, worker_status=worker_status)
+
+    logger.info("Enjoy!")
 
     yield
 

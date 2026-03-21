@@ -58,7 +58,6 @@ class OutboxWorker:
             try:
                 conn = await asyncpg.connect(_build_asyncpg_dsn())
                 await conn.add_listener(CHANNEL, self._on_notify)
-                logger.info("Listening on channel %s", CHANNEL)
                 reconnect_attempt = 0
 
                 while not self._shutdown_event.is_set():

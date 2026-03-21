@@ -24,7 +24,7 @@ async def check_database(engine: AsyncEngine) -> str:
         return "UNAVAILABLE"
 
 
-def log_system_info(db_status: str) -> None:
+def log_system_info(db_status: str, *, worker_status: str = "OFF") -> None:
     hostname = socket.gethostname()
     os_info = f"{platform.system()} {platform.release()}"
     app_info = f"{settings.APP_NAME} v{settings.APP_VERSION}"
@@ -41,4 +41,5 @@ def log_system_info(db_status: str) -> None:
     logger.info(f"Host     : {hostname:<27} | OS     : {os_info}")
     logger.info(f"App      : {app_info:<27} | Env    : {env_info} ({log_level})")
     logger.info(f"DB       : {db_host:<27} | Status : {db_status}")
+    logger.info(f"Worker   : {'Outbox (LISTEN/NOTIFY)':<27} | Status : {worker_status}")
     logger.info("===========================================")
