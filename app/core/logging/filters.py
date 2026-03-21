@@ -39,16 +39,26 @@ class LayerModuleFilter(logging.Filter):
     Module name is title-cased for readability.
     """
 
+    # Map full logger names to friendly display names
+    LOGGER_OVERRIDES: dict[str, tuple[str, str]] = {
+        "uvicorn.error": ("App", "Server"),
+        "uvicorn.access": ("App", "Access"),
+    }
+
     def filter(self, record: logging.LogRecord) -> bool:
         parts = record.name.split(".")
-        layer_name = "App"
-        module_name = parts[-1] if len(parts) > 1 else record.name
 
-        for part in parts:
-            if part in LAYER_MAP:
-                display, _ = LAYER_MAP[part]
-                layer_name = display
-                break
+        if record.name in self.LOGGER_OVERRIDES:
+            layer_name, module_name = self.LOGGER_OVERRIDES[record.name]
+        else:
+            layer_name = "App"
+            module_name = parts[-1] if len(parts) > 1 else record.name
+
+            for part in parts:
+                if part in LAYER_MAP:
+                    display, _ = LAYER_MAP[part]
+                    layer_name = display
+                    break
 
         clean_module = module_name.replace("_", " ").title()
 
@@ -68,3 +78,10 @@ class IgnoreOptionsFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         return '"OPTIONS' not in record.getMessage()
+
+
+class IgnoreHealthcheckFilter(logging.Filter):
+    """Suppresses healthcheck endpoint logs to reduce noise."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "/health/liveness" not in record.getMessage()

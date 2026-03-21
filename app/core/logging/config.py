@@ -43,6 +43,7 @@ def setup_logging() -> None:
         "filters": {
             "layer_module": {"()": "app.core.logging.filters.LayerModuleFilter"},
             "ignore_options": {"()": "app.core.logging.filters.IgnoreOptionsFilter"},
+            "ignore_healthcheck": {"()": "app.core.logging.filters.IgnoreHealthcheckFilter"},
         },
         "formatters": {
             "default": {
@@ -67,12 +68,12 @@ def setup_logging() -> None:
             },
             "uvicorn": {
                 "handlers": ["console"],
-                "level": "INFO",
+                "level": "WARNING",
                 "propagate": False,
             },
             "uvicorn.access": {
                 "handlers": ["console"],
-                "filters": ["ignore_options"],
+                "filters": ["ignore_options", "ignore_healthcheck"],
                 "level": "INFO",
                 "propagate": False,
             },
