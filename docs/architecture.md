@@ -54,6 +54,6 @@ Response ← Router ← Schema.model_validate(orm_obj) ←───────�
 - Python 3.13+, strict typing, Pydantic v2
 - SQLAlchemy async with asyncpg
 - Absolute imports from `app.`
-- English code, Spanish comments only if clarifying non-obvious logic
+- English
 - Composition over inheritance
 - No Alembic — SQL scripts only
