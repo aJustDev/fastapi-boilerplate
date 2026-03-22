@@ -1,9 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.config import settings
 from app.core.logging.middleware import RequestIdMiddleware
+from app.core.ratelimit import limiter
 
 
 def register_middleware(app: FastAPI) -> None:
@@ -15,4 +17,9 @@ def register_middleware(app: FastAPI) -> None:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    if settings.RATE_LIMIT_ENABLED:
+        app.state.limiter = limiter
+        app.add_middleware(SlowAPIMiddleware)
+
     app.add_middleware(RequestIdMiddleware)

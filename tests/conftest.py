@@ -5,9 +5,14 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.core.db import get_session
+from app.core.ratelimit import limiter
 from app.core.security import create_access_token, hash_password
 from app.models.auth.user import UserORM
 from main import app
+
+# Disable rate limiting globally in tests to avoid flaky failures.
+# Dedicated rate-limit tests re-enable it explicitly.
+limiter.enabled = False
 
 
 @pytest.fixture

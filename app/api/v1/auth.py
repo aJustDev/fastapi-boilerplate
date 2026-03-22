@@ -1,9 +1,11 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.security import OAuth2PasswordRequestForm
 
+from app.core.config import settings
+from app.core.ratelimit import limiter
 from app.deps.auth import CurrentUser
 from app.deps.repository import get_repo
 from app.repos.auth.user import UserRepo
@@ -29,7 +31,9 @@ AuthServiceDep = Annotated[AuthService, Depends(_auth_service)]
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit(settings.RATE_LIMIT_STRICT)
 async def login(
+    request: Request,
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
     service: AuthServiceDep,
 ):
@@ -39,14 +43,16 @@ async def login(
 
 
 @router.post("/register", response_model=UserRead, status_code=201)
-async def register(body: RegisterRequest, service: AuthServiceDep):
+@limiter.limit(settings.RATE_LIMIT_STRICT)
+async def register(request: Request, body: RegisterRequest, service: AuthServiceDep):
     uc = RegisterUseCase(service)
     user = await uc.execute(body.email, body.username, body.password, body.full_name)
     return UserRead.model_validate(user)
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(body: RefreshRequest, service: AuthServiceDep):
+@limiter.limit(settings.RATE_LIMIT_STRICT)
+async def refresh(request: Request, body: RefreshRequest, service: AuthServiceDep):
     uc = RefreshTokenUseCase(service)
     return await uc.execute(body.refresh_token)
 
