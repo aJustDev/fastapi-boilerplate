@@ -54,6 +54,9 @@ class TestLogSystemInfo:
         mock_settings.ENVIRONMENT = "production"
         mock_settings.LOG_LEVEL = "debug"
         mock_settings.DATABASE_URL = "postgresql+asyncpg://user:pass@db-host:5432/mydb"
+        mock_settings.DB_POOL_SIZE = 5
+        mock_settings.DB_MAX_OVERFLOW = 10
+        mock_settings.DB_POOL_TIMEOUT = 30
 
         engine = _mock_engine_with_advisory_lock(acquired=True)
 
@@ -68,6 +71,9 @@ class TestLogSystemInfo:
         assert "DEBUG" in log_text
         assert "db-host:5432" in log_text
         assert "OK" in log_text
+        assert "Pool" in log_text
+        assert "5+10" in log_text
+        assert "timeout 30s" in log_text
 
     @patch("app.core.startup.settings")
     async def test_non_leader_logs_short_line(self, mock_settings, caplog):
@@ -76,6 +82,9 @@ class TestLogSystemInfo:
         mock_settings.ENVIRONMENT = "local"
         mock_settings.LOG_LEVEL = "info"
         mock_settings.DATABASE_URL = "postgresql+asyncpg://u:p@localhost:5432/db"
+        mock_settings.DB_POOL_SIZE = 5
+        mock_settings.DB_MAX_OVERFLOW = 10
+        mock_settings.DB_POOL_TIMEOUT = 30
 
         engine = _mock_engine_with_advisory_lock(acquired=False)
 
@@ -92,6 +101,9 @@ class TestLogSystemInfo:
         mock_settings.ENVIRONMENT = "local"
         mock_settings.LOG_LEVEL = "info"
         mock_settings.DATABASE_URL = "postgresql+asyncpg://u:p@localhost:5432/db"
+        mock_settings.DB_POOL_SIZE = 5
+        mock_settings.DB_MAX_OVERFLOW = 10
+        mock_settings.DB_POOL_TIMEOUT = 30
 
         engine = _mock_engine_with_advisory_lock(acquired=True)
 
@@ -107,6 +119,9 @@ class TestLogSystemInfo:
         mock_settings.ENVIRONMENT = "local"
         mock_settings.LOG_LEVEL = "info"
         mock_settings.DATABASE_URL = "sqlite:///test.db"
+        mock_settings.DB_POOL_SIZE = 5
+        mock_settings.DB_MAX_OVERFLOW = 10
+        mock_settings.DB_POOL_TIMEOUT = 30
 
         engine = _mock_engine_with_advisory_lock(acquired=True)
 

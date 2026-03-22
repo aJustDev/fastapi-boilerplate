@@ -17,16 +17,8 @@ Current state of the boilerplate and what comes next. Items are grouped by prior
 - [x] Pre-commit hooks (ruff check + format)
 - [x] Transactional Outbox event bus with PostgreSQL LISTEN/NOTIFY
 - [x] Scheduled jobs with FOR UPDATE SKIP LOCKED (multi-worker safe)
-
-## P0 — Production essentials
-
-### Connection pool tuning
-
-Expose `pool_size`, `max_overflow`, and `pool_timeout` in config. With `uvicorn --workers N` each process creates its own pool — without explicit limits it's easy to exhaust PostgreSQL's `max_connections`. Sensible defaults should work out of the box and scale with the number of workers.
-
-### Structured logging with request tracing
-
-Replace plain-text log output with JSON-formatted structured logging for production environments (keep human-readable format for local development). Add middleware that generates a unique `request_id` per request and injects it into every log line, making it possible to trace a single request across all layers. This is critical for debugging in production and integrates directly with log aggregators (ELK, Datadog, CloudWatch, Loki).
+- [x] Configurable connection pool (`pool_size`, `max_overflow`, `pool_timeout` via env vars)
+- [x] Structured JSON logging with per-request `request_id` tracing
 
 ## P1 — Hardening
 

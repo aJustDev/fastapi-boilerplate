@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     DB_PASSWORD: str = "postgres"
     DATABASE_URL: str = ""
 
+    # Database Pool
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_TIMEOUT: int = 30
+
     # JWT
     SECRET_KEY: str = "change-me-in-production"
     ALGORITHM: str = "HS256"
@@ -31,6 +36,7 @@ class Settings(BaseSettings):
 
     # Logging
     LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "auto"
 
     # Webhooks
     WEBHOOK_URL: str = ""

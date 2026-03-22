@@ -1,5 +1,8 @@
+import json
 import logging
 import logging.config
+import traceback
+from datetime import UTC, datetime
 
 from app.core.config import settings
 
@@ -11,19 +14,47 @@ except ImportError:
     _has_colorlog = False
 
 
+class JSONFormatter(logging.Formatter):
+    """Serializes LogRecords as single-line JSON for production log aggregators."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        entry = {
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
+            "level": record.levelname,
+            "layer": getattr(record, "layer_name", "App"),
+            "module": getattr(record, "module_name", record.module),
+            "logger": record.name,
+            "request_id": getattr(record, "request_id", ""),
+            "message": record.getMessage(),
+        }
+        if record.exc_info and record.exc_info[1]:
+            entry["exception"] = "".join(traceback.format_exception(*record.exc_info))
+        return json.dumps(entry, default=str)
+
+
 def setup_logging() -> None:
     env = settings.ENVIRONMENT.lower()
-    use_color = _has_colorlog and env in ("local", "dev")
+    log_format = settings.LOG_FORMAT.lower()
 
-    if use_color:
+    use_json = env not in ("local", "dev") if log_format == "auto" else log_format == "json"
+
+    use_color = not use_json and _has_colorlog and env in ("local", "dev")
+
+    if use_json:
+        formatter_config: dict = {
+            "()": "app.core.logging.config.JSONFormatter",
+        }
+    elif use_color:
         fmt = (
             "%(log_color)s%(levelname)s%(reset)s: "
             "[%(colored_layer)s] "
             "[%(colored_module)s] "
+            "[%(request_id)s] "
             "%(log_color)s❯%(reset)s %(message)s"
         )
-        formatter_class = "colorlog.ColoredFormatter"
-        formatter_kwargs = {
+        formatter_config = {
+            "()": "colorlog.ColoredFormatter",
+            "format": fmt,
             "log_colors": {
                 "DEBUG": "white",
                 "INFO": "green",
@@ -33,30 +64,33 @@ def setup_logging() -> None:
             },
         }
     else:
-        fmt = "%(asctime)s %(levelname)s: [%(layer_name)s] [%(module_name)s] ❯ %(message)s"
-        formatter_class = "logging.Formatter"
-        formatter_kwargs = {"datefmt": "%Y-%m-%d %H:%M:%S"}
+        fmt = (
+            "%(asctime)s %(levelname)s: [%(layer_name)s] [%(module_name)s]"
+            " [%(request_id)s] ❯ %(message)s"
+        )
+        formatter_config = {
+            "()": "logging.Formatter",
+            "format": fmt,
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        }
 
     config = {
         "version": 1,
         "disable_existing_loggers": False,
         "filters": {
             "layer_module": {"()": "app.core.logging.filters.LayerModuleFilter"},
+            "request_id": {"()": "app.core.logging.filters.RequestIdFilter"},
             "ignore_options": {"()": "app.core.logging.filters.IgnoreOptionsFilter"},
             "ignore_healthcheck": {"()": "app.core.logging.filters.IgnoreHealthcheckFilter"},
         },
         "formatters": {
-            "default": {
-                "()": formatter_class,
-                "format": fmt,
-                **formatter_kwargs,
-            },
+            "default": formatter_config,
         },
         "handlers": {
             "console": {
                 "class": "logging.StreamHandler",
                 "formatter": "default",
-                "filters": ["layer_module", "ignore_options"],
+                "filters": ["layer_module", "request_id", "ignore_options"],
                 "level": "DEBUG",
             },
         },

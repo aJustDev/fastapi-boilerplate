@@ -96,7 +96,10 @@ async def log_system_info(
         logger.info("========== SYSTEM CONFIGURATION ==========")
         logger.info(f"Host     : {hostname:<27} | OS     : {os_info}")
         logger.info(f"App      : {app_info:<27} | Env    : {env_info} ({log_level})")
+        pool_info = f"{settings.DB_POOL_SIZE}+{settings.DB_MAX_OVERFLOW} (timeout {settings.DB_POOL_TIMEOUT}s)"
+
         logger.info(f"DB       : {db_host:<27} | Status : {db_status}")
+        logger.info(f"Pool     : {pool_info:<27} | Pre-ping: ON")
         logger.info(f"EventBus : {'LISTEN/NOTIFY':<27} | Status : {worker_status}")
         logger.info(f"Jobs     : {jobs_label:<27} | Status : {job_worker_status}")
         logger.info(f"Workers  : {instances_label:<27} |")

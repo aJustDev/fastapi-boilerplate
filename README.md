@@ -6,6 +6,8 @@ A solid foundation for building production-grade backends that scale from small 
 - **JWT auth** — Access + refresh tokens, Argon2 password hashing, permission-based guards
 - **Transactional Outbox event bus** — Domain events persisted atomically and dispatched via PostgreSQL `LISTEN/NOTIFY` with per-handler retry, isolation, and timeout
 - **Scheduled jobs** — Recurring tasks with `FOR UPDATE SKIP LOCKED` for multi-worker safety, no Redis or Celery required
+- **Configurable connection pool** — `pool_size`, `max_overflow`, `pool_timeout` via env vars, safe defaults for multi-worker deployments
+- **Structured logging + request tracing** — JSON logs in production, colored in development, per-request `request_id` across all layers. See `docs/logging.md`
 - **Repository pattern** — Generic `BaseRepo[T]` with offset and cursor pagination, filtering, and field mapping
 - **Use-case orchestration** — Thin use cases coordinate services and publish events, keeping business logic reusable
 - **SQL-first migrations** — No Alembic; plain SQL schema, deltas, and seeds managed via shell scripts

@@ -18,7 +18,7 @@ core/jobs/     → Scheduled jobs: registry, worker, handlers. FOR UPDATE SKIP L
 ## Data flow
 
 ```
-Request → Router → DI (auth + repo + event_bus) → UseCase → Service → Repo → ORM → DB
+Request → RequestIdMiddleware → Router → DI (auth + repo + event_bus) → UseCase → Service → Repo → ORM → DB
                                                      │                              ↓
                                                      └→ EventBus.publish() ──→ outbox_events
                                                                                     ↓
@@ -36,6 +36,8 @@ Response ← Router ← Schema.model_validate(orm_obj) ←───────�
 - **Auth**: JWT access (30min) + refresh (7d) tokens. `CurrentUser` annotated dependency.
 - **Event bus**: Transactional Outbox with PostgreSQL `LISTEN/NOTIFY`. Use cases publish events via `EventBus`; a background worker dispatches them to handlers with isolation, timeout, and per-handler retry tracking. See `docs/event-bus.md`.
 - **Scheduled jobs**: Recurring tasks using `FOR UPDATE SKIP LOCKED` for multi-worker safety. Self-rescheduling with fixed intervals. See `docs/jobs.md`.
+- **Request tracing**: `RequestIdMiddleware` generates a unique `request_id` per request (via `ContextVar`), injected into every log line. Accepts `X-Request-ID` from client for end-to-end correlation. See `docs/logging.md`.
+- **Connection pool**: `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `DB_POOL_TIMEOUT` configurable via env vars. Max connections per worker = `pool_size + max_overflow`. Total = that × number of workers.
 
 ## Adding a new module
 

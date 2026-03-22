@@ -1,6 +1,7 @@
 import logging
 
-from app.core.logging.filters import IgnoreOptionsFilter, LayerModuleFilter
+from app.core.logging.context import request_id_var
+from app.core.logging.filters import IgnoreOptionsFilter, LayerModuleFilter, RequestIdFilter
 
 
 class TestLayerModuleFilter:
@@ -172,4 +173,38 @@ class TestIgnoreOptionsFilter:
         f = IgnoreOptionsFilter()
         record = self._make_record("Application started")
 
+        assert f.filter(record) is True
+
+
+class TestRequestIdFilter:
+    def _make_record(self, msg: str = "test") -> logging.LogRecord:
+        return logging.LogRecord(
+            name="app.api.v1.items",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg=msg,
+            args=(),
+            exc_info=None,
+        )
+
+    def test_injects_request_id_from_context(self):
+        token = request_id_var.set("abc123")
+        try:
+            f = RequestIdFilter()
+            record = self._make_record()
+            f.filter(record)
+            assert record.request_id == "abc123"
+        finally:
+            request_id_var.reset(token)
+
+    def test_empty_when_no_context(self):
+        f = RequestIdFilter()
+        record = self._make_record()
+        f.filter(record)
+        assert record.request_id == ""
+
+    def test_always_returns_true(self):
+        f = RequestIdFilter()
+        record = self._make_record()
         assert f.filter(record) is True
