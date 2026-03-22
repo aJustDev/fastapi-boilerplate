@@ -38,7 +38,7 @@ class OutboxWorker:
     async def start(self) -> None:
         self._shutdown_event.clear()
         self._task = asyncio.create_task(self._run(), name="outbox-worker")
-        logger.info("Outbox worker started")
+        logger.debug("Outbox worker started")
 
     async def stop(self) -> None:
         self._shutdown_event.set()
