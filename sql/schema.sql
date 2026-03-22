@@ -108,3 +108,25 @@ CREATE INDEX outbox_events_aggregate_idx
 CREATE INDEX outbox_events_correlation_idx
     ON outbox_events (correlation_id)
     WHERE correlation_id IS NOT NULL;
+
+-- ─── Jobs ─────────────────────────────────────────────────────
+
+CREATE TABLE scheduled_jobs (
+    id               UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_name         VARCHAR(255)    NOT NULL UNIQUE,
+    description      TEXT,
+    interval_seconds INT             NOT NULL,
+    status           VARCHAR(20)     NOT NULL DEFAULT 'PENDING'
+                         CHECK (status IN ('PENDING', 'RUNNING', 'DISABLED')),
+    last_run_at      TIMESTAMPTZ,
+    next_run_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    last_error       TEXT,
+    run_count        INT             NOT NULL DEFAULT 0,
+    claimed_by       TEXT,
+    created_at       TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    updated_at       TIMESTAMPTZ
+);
+
+CREATE INDEX scheduled_jobs_pending_idx
+    ON scheduled_jobs (next_run_at)
+    WHERE status = 'PENDING';
