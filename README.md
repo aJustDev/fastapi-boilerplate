@@ -1,6 +1,14 @@
 # FastAPI Boilerplate
 
-Reusable FastAPI boilerplate with async SQLAlchemy, JWT auth, and layered architecture.
+A solid foundation for building production-grade backends that scale from small projects to mid-large ones without accumulating infrastructure complexity. Includes a transactional event bus and a recurring job scheduler built entirely on PostgreSQL — no Redis, RabbitMQ, or Celery needed. A single database handles persistence, messaging, and scheduling, keeping the stack minimal while supporting multi-worker deployments out of the box.
+
+- **Async everything** — SQLAlchemy 2.x + asyncpg, fully non-blocking from route to database
+- **JWT auth** — Access + refresh tokens, Argon2 password hashing, permission-based guards
+- **Transactional Outbox event bus** — Domain events persisted atomically and dispatched via PostgreSQL `LISTEN/NOTIFY` with per-handler retry, isolation, and timeout
+- **Scheduled jobs** — Recurring tasks with `FOR UPDATE SKIP LOCKED` for multi-worker safety, no Redis or Celery required
+- **Repository pattern** — Generic `BaseRepo[T]` with offset and cursor pagination, filtering, and field mapping
+- **Use-case orchestration** — Thin use cases coordinate services and publish events, keeping business logic reusable
+- **SQL-first migrations** — No Alembic; plain SQL schema, deltas, and seeds managed via shell scripts
 
 ## Stack
 
