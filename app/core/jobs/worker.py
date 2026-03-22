@@ -135,6 +135,6 @@ class JobWorker:
         job.next_run_at = datetime.now(UTC) + timedelta(seconds=job.interval_seconds)
         job.last_run_at = datetime.now(UTC)
         job.run_count += 1
-        job.last_error = error[:500] if error else None
+        job.last_error = error[-500:] if error else None
         job.updated_at = datetime.now(UTC)
         await session.commit()
