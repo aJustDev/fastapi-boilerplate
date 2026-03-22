@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     RATE_LIMIT_DEFAULT: str = "60/minute"
     RATE_LIMIT_STRICT: str = "5/minute"
 
+    # Metrics
+    METRICS_ENABLED: bool = True
+
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "auto"
