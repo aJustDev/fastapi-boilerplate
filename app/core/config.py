@@ -36,6 +36,7 @@ class Settings(BaseSettings):
 
     # Logging
     LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "auto"
 
     # Webhooks
     WEBHOOK_URL: str = ""

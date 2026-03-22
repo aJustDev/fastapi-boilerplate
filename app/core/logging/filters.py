@@ -85,3 +85,13 @@ class IgnoreHealthcheckFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         return "/health/liveness" not in record.getMessage()
+
+
+class RequestIdFilter(logging.Filter):
+    """Injects request_id from ContextVar into every LogRecord."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        from app.core.logging.context import get_request_id
+
+        record.request_id = get_request_id()
+        return True
