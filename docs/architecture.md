@@ -12,6 +12,7 @@ schemas/       → Pydantic v2. Request/response validation. from_attributes=Tru
 deps/          → FastAPI dependencies. get_session, get_repo(RepoClass), get_current_user, require_permissions.
 core/          → Config, DB engine, security (JWT+Argon2), logging, exceptions, lifespan, middleware.
 core/events/   → Transactional Outbox event bus: dispatcher, worker, handlers, cleanup.
+core/jobs/     → Scheduled jobs: registry, worker, handlers. FOR UPDATE SKIP LOCKED.
 ```
 
 ## Data flow
@@ -34,6 +35,7 @@ Response ← Router ← Schema.model_validate(orm_obj) ←───────�
 - **Filtering**: `map_field` dict on repos maps query params to columns + operators
 - **Auth**: JWT access (30min) + refresh (7d) tokens. `CurrentUser` annotated dependency.
 - **Event bus**: Transactional Outbox with PostgreSQL `LISTEN/NOTIFY`. Use cases publish events via `EventBus`; a background worker dispatches them to handlers with isolation, timeout, and per-handler retry tracking. See `docs/event-bus.md`.
+- **Scheduled jobs**: Recurring tasks using `FOR UPDATE SKIP LOCKED` for multi-worker safety. Self-rescheduling with fixed intervals. See `docs/jobs.md`.
 
 ## Adding a new module
 
