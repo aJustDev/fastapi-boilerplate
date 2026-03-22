@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     OUTBOX_CLEANUP_DAYS: int = 30
     OUTBOX_CLEANUP_BATCH_SIZE: int = 1000
 
+    # Jobs
+    JOB_POLL_INTERVAL_SECONDS: int = 15
+    JOB_HANDLER_TIMEOUT_SECONDS: int = 60
+
     @model_validator(mode="after")
     def build_database_url(self) -> "Settings":
         if not self.DATABASE_URL:

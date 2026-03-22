@@ -43,7 +43,8 @@ bash sql/reset.sh  # in another terminal
 ```
 app/
 ├── core/           # Config, DB, security, logging, exceptions, lifespan
-│   └── events/     # Event bus: dispatcher, worker, handlers, cleanup
+│   ├── events/     # Event bus: dispatcher, worker, handlers, cleanup
+│   └── jobs/       # Scheduled jobs: registry, worker, handlers
 ├── models/         # SQLAlchemy ORM (by domain: auth/, items/, events/)
 ├── schemas/        # Pydantic v2 request/response
 ├── repos/          # Async repositories with BaseRepo[T]
@@ -62,6 +63,16 @@ Persistent event bus using the **Transactional Outbox** pattern with PostgreSQL 
 - Cleanup and replay utilities for production operations
 
 See `docs/event-bus.md` for the full guide.
+
+## Scheduled jobs
+
+Recurring task scheduler using `FOR UPDATE SKIP LOCKED` for multi-worker safety. Each job is a single row in `scheduled_jobs` that self-reschedules after execution.
+
+- Works with `uvicorn --workers N` — only one process runs each job per cycle
+- Fixed interval scheduling with automatic rescheduling
+- Stale recovery on startup (crashed `RUNNING` jobs reset to `PENDING`)
+
+See `docs/jobs.md` for the full guide.
 
 ## Auth flow
 

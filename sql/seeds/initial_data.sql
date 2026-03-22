@@ -57,3 +57,8 @@ SELECT
     (SELECT id FROM users WHERE username = 'admin'),
     now() - ((50 - i) || ' hours')::interval
 FROM generate_series(1, 50) AS i;
+
+-- Scheduled jobs
+INSERT INTO scheduled_jobs (job_name, description, interval_seconds, next_run_at)
+VALUES ('heartbeat_check', 'Example job: logs worker identity every 5 minutes', 300, now())
+ON CONFLICT (job_name) DO NOTHING;
