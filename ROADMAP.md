@@ -22,13 +22,8 @@ Current state of the boilerplate and what comes next. Items are grouped by prior
 
 ## P1 — Hardening
 
-### Rate limiting
-
-Add request throttling to protect public endpoints from abuse. `slowapi` (built on `limits`) supports in-memory, Redis, and other backends. The initial implementation should use in-memory storage to keep the zero-external-dependencies philosophy, with a clear path to swap in PostgreSQL for distributed deployments.
-
-### Observability (metrics + tracing)
-
-Expose application metrics (request latency, status codes, throughput per endpoint, active DB connections) via a `/metrics` endpoint compatible with Prometheus. Optionally integrate OpenTelemetry for distributed tracing. This enables monitoring dashboards and alerting — knowing something is degrading before users report it.
+- [x] Rate limiting — Two-tier throttling via slowapi (strict for auth, default for general endpoints) with in-memory storage
+- [x] Observability (metrics) — Prometheus-compatible `/v1/metrics` endpoint with HTTP request metrics and DB pool gauges
 
 ## P2 — Nice to have
 

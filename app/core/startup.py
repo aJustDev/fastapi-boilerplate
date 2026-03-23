@@ -100,8 +100,14 @@ async def log_system_info(
 
         logger.info(f"DB       : {db_host:<27} | Status : {db_status}")
         logger.info(f"Pool     : {pool_info:<27} | Pre-ping: ON")
+        rate_limit = (
+            f"strict={settings.RATE_LIMIT_STRICT}" if settings.RATE_LIMIT_ENABLED else "OFF"
+        )
+        metrics_status = "ON (/v1/metrics)" if settings.METRICS_ENABLED else "OFF"
+
         logger.info(f"EventBus : {'LISTEN/NOTIFY':<27} | Status : {worker_status}")
         logger.info(f"Jobs     : {jobs_label:<27} | Status : {job_worker_status}")
+        logger.info(f"RateLimit: {rate_limit:<27} | Metrics: {metrics_status}")
         logger.info(f"Workers  : {instances_label:<27} |")
         logger.info("===========================================")
 

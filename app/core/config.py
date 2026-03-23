@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     # CORS
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:4200"]
 
+    # Rate Limiting
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_DEFAULT: str = "60/minute"
+    RATE_LIMIT_STRICT: str = "5/minute"
+
+    # Metrics
+    METRICS_ENABLED: bool = True
+
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "auto"

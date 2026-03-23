@@ -87,6 +87,13 @@ class IgnoreHealthcheckFilter(logging.Filter):
         return "/health/liveness" not in record.getMessage()
 
 
+class IgnoreMetricsFilter(logging.Filter):
+    """Suppresses Prometheus scrape logs to reduce noise."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return "/v1/metrics" not in record.getMessage()
+
+
 class RequestIdFilter(logging.Filter):
     """Injects request_id from ContextVar into every LogRecord."""
 
