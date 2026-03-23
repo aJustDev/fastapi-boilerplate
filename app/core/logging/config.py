@@ -82,6 +82,7 @@ def setup_logging() -> None:
             "request_id": {"()": "app.core.logging.filters.RequestIdFilter"},
             "ignore_options": {"()": "app.core.logging.filters.IgnoreOptionsFilter"},
             "ignore_healthcheck": {"()": "app.core.logging.filters.IgnoreHealthcheckFilter"},
+            "ignore_metrics": {"()": "app.core.logging.filters.IgnoreMetricsFilter"},
         },
         "formatters": {
             "default": formatter_config,
@@ -107,7 +108,7 @@ def setup_logging() -> None:
             },
             "uvicorn.access": {
                 "handlers": ["console"],
-                "filters": ["ignore_options", "ignore_healthcheck"],
+                "filters": ["ignore_options", "ignore_healthcheck", "ignore_metrics"],
                 "level": "INFO",
                 "propagate": False,
             },
