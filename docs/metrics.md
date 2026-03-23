@@ -56,9 +56,26 @@ The `PrometheusMiddleware` is an ASGI middleware (outermost in the stack) that w
 |----------|---------|-------------|
 | `METRICS_ENABLED` | `true` | Enable/disable the metrics middleware and endpoint |
 
-## Prometheus scrape configuration
+## Quick start: Prometheus + Grafana
 
-Add this to your `prometheus.yml`:
+A pre-configured observability stack is included:
+
+```bash
+# Start Prometheus + Grafana (app must be running on port 8000)
+docker compose -f docker-compose.observability.yml up -d
+
+# Open Grafana (admin/admin)
+open http://localhost:3001
+```
+
+The "FastAPI Overview" dashboard is auto-provisioned with request rate, latency percentiles, throughput by endpoint, DB pool status, error rate, and pool saturation panels.
+
+- Prometheus UI: `http://localhost:9090`
+- Grafana: `http://localhost:3001` (admin / admin)
+
+### Custom Prometheus configuration
+
+If you need a standalone Prometheus, add this to your `prometheus.yml`:
 
 ```yaml
 scrape_configs:
@@ -91,15 +108,20 @@ items_created_total.labels(category="electronics").inc()
 
 Available types: `Counter` (monotonically increasing), `Histogram` (distributions), `Gauge` (current value), `Summary` (quantiles).
 
-## Grafana dashboard suggestions
+## Grafana dashboard
 
-Key panels to build:
+The auto-provisioned "FastAPI Overview" dashboard includes:
 
-- **Request rate**: `rate(http_requests_total[5m])` by status code
-- **P95 latency**: `histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))`
-- **Error rate**: `rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])`
-- **Pool saturation**: `db_pool_checked_out / db_pool_size`
-- **In-progress requests**: `http_requests_in_progress`
+| Panel | PromQL | Purpose |
+|-------|--------|---------|
+| Request Rate | `sum by (status) (rate(http_requests_total[1m]))` | Requests/s by status code |
+| Latency Percentiles | `histogram_quantile(0.95, ...)` | p50, p95, p99 latency |
+| Throughput by Endpoint | `sum by (path_template) (rate(http_requests_total[1m]))` | Per-endpoint traffic |
+| DB Connection Pool | `db_pool_checked_out`, `db_pool_size`, etc. | Pool utilization |
+| Error Rate | `sum(rate(...{status=~"5.."}[5m])) / sum(rate(...[5m]))` | 5xx percentage with thresholds |
+| Pool Saturation | `db_pool_checked_out / db_pool_size * 100` | Gauge with green/yellow/red |
+
+Dashboard source: `observability/grafana/dashboards/fastapi-overview.json`
 
 ## Limitations
 
