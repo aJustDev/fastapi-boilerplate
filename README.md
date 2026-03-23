@@ -8,6 +8,8 @@ A solid foundation for building production-grade backends that scale from small 
 - **Scheduled jobs** — Recurring tasks with `FOR UPDATE SKIP LOCKED` for multi-worker safety, no Redis or Celery required
 - **Configurable connection pool** — `pool_size`, `max_overflow`, `pool_timeout` via env vars, safe defaults for multi-worker deployments
 - **Structured logging + request tracing** — JSON logs in production, colored in development, per-request `request_id` across all layers. See `docs/logging.md`
+- **Rate limiting** — Two-tier throttling (`strict` for auth, `default` for general) via slowapi with in-memory storage
+- **Prometheus metrics** — Request count, latency histograms, DB pool health at `/v1/metrics`. See `docs/metrics.md`
 - **Repository pattern** — Generic `BaseRepo[T]` with offset and cursor pagination, filtering, and field mapping
 - **Use-case orchestration** — Thin use cases coordinate services and publish events, keeping business logic reusable
 - **SQL-first migrations** — No Alembic; plain SQL schema, deltas, and seeds managed via shell scripts

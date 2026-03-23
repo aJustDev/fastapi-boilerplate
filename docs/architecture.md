@@ -10,15 +10,16 @@ repos/         → Data access. BaseRepo[T] async with offset + cursor paginatio
 models/        → SQLAlchemy 2.x ORM. Mixins: IntPkMixin (BIGINT IDENTITY PK), AuditMixin (timestamps).
 schemas/       → Pydantic v2. Request/response validation. from_attributes=True.
 deps/          → FastAPI dependencies. get_session, get_repo(RepoClass), get_current_user, require_permissions.
-core/          → Config, DB engine, security (JWT+Argon2), logging, exceptions, lifespan, middleware.
+core/          → Config, DB engine, security (JWT+Argon2), logging, exceptions, lifespan, middleware, rate limiting.
 core/events/   → Transactional Outbox event bus: dispatcher, worker, handlers, cleanup.
 core/jobs/     → Scheduled jobs: registry, worker, handlers. FOR UPDATE SKIP LOCKED.
+core/metrics/  → Prometheus metrics: instruments, ASGI middleware, DB pool collector.
 ```
 
 ## Data flow
 
 ```
-Request → RequestIdMiddleware → Router → DI (auth + repo + event_bus) → UseCase → Service → Repo → ORM → DB
+Request → PrometheusMiddleware → RequestIdMiddleware → SlowAPIMiddleware → Router → DI → UseCase → Service → Repo → ORM → DB
                                                      │                              ↓
                                                      └→ EventBus.publish() ──→ outbox_events
                                                                                     ↓
@@ -38,6 +39,8 @@ Response ← Router ← Schema.model_validate(orm_obj) ←───────�
 - **Scheduled jobs**: Recurring tasks using `FOR UPDATE SKIP LOCKED` for multi-worker safety. Self-rescheduling with fixed intervals. See `docs/jobs.md`.
 - **Request tracing**: `RequestIdMiddleware` generates a unique `request_id` per request (via `ContextVar`), injected into every log line. Accepts `X-Request-ID` from client for end-to-end correlation. See `docs/logging.md`.
 - **Connection pool**: `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `DB_POOL_TIMEOUT` configurable via env vars. Max connections per worker = `pool_size + max_overflow`. Total = that × number of workers.
+- **Rate limiting**: Two-tier system via `slowapi`. Strict tier (`5/min`) for auth endpoints, default tier (`60/min`) for general public endpoints. In-memory storage, configurable via `RATE_LIMIT_ENABLED`, `RATE_LIMIT_STRICT`, `RATE_LIMIT_DEFAULT`.
+- **Prometheus metrics**: ASGI middleware records request count, latency, and in-progress gauges. DB pool stats exposed on `/v1/metrics`. See `docs/metrics.md`.
 
 ## Adding a new module
 
