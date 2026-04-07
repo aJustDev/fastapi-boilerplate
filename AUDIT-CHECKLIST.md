@@ -31,14 +31,14 @@ Checklist derivado de la [auditoria de calidad](notes/auditoria-calidad.md). Pun
 
 ## 1. Arquitectura y estructura (9/10)
 
-- [ ] Evaluar consolidar services/ y use_cases/ en una sola capa para CRUD simples, reservando use cases para orquestaciones multi-servicio
+- [x] Consolidar capas: use cases resuelven directamente (repo) para ops simples, servicios solo para logica compleja (auth). Eliminado ItemService.
 
 ## 2. Calidad del codigo (8/10)
 
 - [x] Reemplazar f-strings en logging por lazy formatting (`%s`) -- `app/services/auth.py:23,28-29`
-- [ ] Activar regla G (flake8-logging-format) en ruff
-- [ ] Loguear warning en `_apply_filters` cuando un campo de filtro es desconocido -- `app/repos/base.py:208-209`
-- [ ] Renombrar metodo `list()` a `list_paginated()` para eliminar el alias `_list = list` -- `app/repos/base.py:11`
+- [x] Activar regla G (flake8-logging-format) en ruff
+- [x] Loguear warning en `_apply_filters` cuando un campo de filtro es desconocido -- `app/repos/base.py`
+- [x] Renombrar metodo `list()` a `list_paginated()` para eliminar el alias `_list = list` -- `app/repos/base.py`
 
 ## 3. Tipado y contratos (8.5/10)
 
