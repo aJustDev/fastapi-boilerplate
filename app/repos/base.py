@@ -8,8 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import Base
 
-_list = list  # Alias to avoid shadowing by the `list()` method
-
 T = TypeVar("T", bound=Base)
 
 logger = logging.getLogger(__name__)
@@ -64,7 +62,7 @@ class BaseRepo(Generic[T]):
 
     # ── Offset pagination ─────────────────────────────────
 
-    async def list(
+    async def list_paginated(
         self,
         *,
         page: int = 1,
@@ -72,7 +70,7 @@ class BaseRepo(Generic[T]):
         order_by: str | None = None,
         order_dir: str = "asc",
         filters: dict[str, Any] | None = None,
-    ) -> tuple[_list[T], int]:
+    ) -> tuple[list[T], int]:
         stmt = self._base_select()
         stmt = self._apply_filters(stmt, filters)
         stmt = self._apply_ordering(stmt, order_by, order_dir)
@@ -83,7 +81,7 @@ class BaseRepo(Generic[T]):
         offset = (page - 1) * page_size
         stmt = stmt.offset(offset).limit(page_size)
         result = await self.session.execute(stmt)
-        items = _list(result.scalars().all())
+        items = list(result.scalars().all())
 
         return items, total
 
@@ -97,7 +95,7 @@ class BaseRepo(Generic[T]):
         order_by: str | None = None,
         order_dir: str = "asc",
         filters: dict[str, Any] | None = None,
-    ) -> tuple[_list[T], str | None, bool]:
+    ) -> tuple[list[T], str | None, bool]:
         """Returns (items, next_cursor, has_more).
 
         Supports sorting by any mapped/model field with id as tiebreaker.
@@ -120,7 +118,7 @@ class BaseRepo(Generic[T]):
 
         stmt = stmt.limit(limit + 1)
         result = await self.session.execute(stmt)
-        items = _list(result.scalars().all())
+        items = list(result.scalars().all())
 
         has_more = len(items) > limit
         if has_more:
@@ -207,6 +205,8 @@ class BaseRepo(Generic[T]):
                     stmt = stmt.where(column <= value)
             elif hasattr(self.model, key):
                 stmt = stmt.where(getattr(self.model, key) == value)
+            else:
+                logger.warning("Unknown filter field ignored: %s", key)
         return stmt
 
     def _apply_ordering(self, stmt: Select, order_by: str | None, order_dir: str) -> Select:

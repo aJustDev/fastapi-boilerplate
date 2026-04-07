@@ -125,7 +125,7 @@ class TestBaseRepoList:
 
         mock_session.execute.side_effect = [count_result, items_result]
 
-        items, total = await repo.list(page=1, page_size=20)
+        items, total = await repo.list_paginated(page=1, page_size=20)
 
         assert items == fake_items
         assert total == 2
@@ -142,7 +142,7 @@ class TestBaseRepoList:
 
         mock_session.execute.side_effect = [count_result, items_result]
 
-        items, total = await repo.list(page=3, page_size=10)
+        items, total = await repo.list_paginated(page=3, page_size=10)
 
         assert total == 50
         assert len(items) == 10
@@ -158,7 +158,7 @@ class TestBaseRepoList:
 
         mock_session.execute.side_effect = [count_result, items_result]
 
-        items, total = await repo.list()
+        items, total = await repo.list_paginated()
 
         assert total == 0
         assert items == []
