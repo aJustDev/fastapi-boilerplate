@@ -13,13 +13,13 @@ class UserRepo(BaseRepo[UserORM]):
     model = UserORM
 
     async def get_by_email(self, email: str) -> UserORM | None:
-        logger.debug(f"Executing get_by_email with email: {email}")
+        logger.debug("Querying user by email")
         stmt = select(UserORM).options(selectinload(UserORM.roles)).where(UserORM.email == email)
         result = await self.session.execute(stmt)
         return result.scalars().first()
 
     async def get_by_username(self, username: str) -> UserORM | None:
-        logger.debug(f"Executing get_by_username with username: {username}")
+        logger.debug("Querying user by username")
         stmt = (
             select(UserORM).options(selectinload(UserORM.roles)).where(UserORM.username == username)
         )
