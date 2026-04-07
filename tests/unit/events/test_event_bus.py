@@ -25,7 +25,7 @@ class TestEventBus:
         # Verify NOTIFY was sent
         mock_session.execute.assert_called_once()
         text_clause = mock_session.execute.call_args[0][0]
-        assert "NOTIFY" in str(text_clause)
+        assert "pg_notify" in str(text_clause)
 
         # Verify commit was NOT called
         mock_session.commit.assert_not_called()
