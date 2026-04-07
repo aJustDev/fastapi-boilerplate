@@ -66,7 +66,7 @@ class TestListItems:
         with (
             patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
             patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
-            patch("app.repos.items.item.ItemRepo.list", return_value=([fake_item], 1)),
+            patch("app.repos.items.item.ItemRepo.list_paginated", return_value=([fake_item], 1)),
         ):
             response = await client.get("/v1/items", headers=auth_headers)
 

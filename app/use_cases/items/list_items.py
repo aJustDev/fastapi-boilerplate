@@ -2,12 +2,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.models.items.item import ItemORM
-from app.services.items import ItemService
+from app.repos.items.item import ItemRepo
 
 
 @dataclass(slots=True)
 class ListItemsUseCase:
-    item_service: ItemService
+    item_repo: ItemRepo
 
     async def execute(
         self,
@@ -18,7 +18,7 @@ class ListItemsUseCase:
         order_dir: str = "asc",
         filters: dict[str, Any] | None = None,
     ) -> tuple[list[ItemORM], int]:
-        return await self.item_service.list_paginated(
+        return await self.item_repo.list_paginated(
             page=page,
             page_size=page_size,
             order_by=order_by,
@@ -29,7 +29,7 @@ class ListItemsUseCase:
 
 @dataclass(slots=True)
 class ListItemsCursorUseCase:
-    item_service: ItemService
+    item_repo: ItemRepo
 
     async def execute(
         self,
@@ -40,7 +40,7 @@ class ListItemsCursorUseCase:
         order_dir: str = "asc",
         filters: dict[str, Any] | None = None,
     ) -> tuple[list[ItemORM], str | None, bool]:
-        return await self.item_service.list_cursor(
+        return await self.item_repo.list_cursor(
             cursor=cursor,
             limit=limit,
             order_by=order_by,
