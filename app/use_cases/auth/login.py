@@ -12,5 +12,5 @@ class LoginUseCase:
     auth_service: AuthService
 
     async def execute(self, username: str, password: str) -> TokenResponse:
-        logger.info(f"Attempting login for user: {username}")
+        logger.info("Executing login use case")
         return await self.auth_service.login(username, password)

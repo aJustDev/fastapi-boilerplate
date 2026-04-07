@@ -39,9 +39,9 @@ class EventBus:
         await self.session.flush()
         await self.session.refresh(event)
 
-        event_id_str = str(event.id).replace("'", "''")
         await self.session.execute(
-            text(f"NOTIFY {CHANNEL}, '{event_id_str}'"),
+            text("SELECT pg_notify(:channel, :payload)"),
+            {"channel": CHANNEL, "payload": str(event.id)},
         )
         logger.info("Published event %s (id=%s)", event_type, event.id)
         return event

@@ -64,6 +64,7 @@ async def client():
 class TestListItems:
     async def test_list_items_success(self, client, fake_user, fake_item, auth_headers):
         with (
+            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
             patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
             patch("app.repos.items.item.ItemRepo.list", return_value=([fake_item], 1)),
         ):
@@ -81,6 +82,7 @@ class TestListItems:
 
     async def test_list_items_cursor_success(self, client, fake_user, fake_item, auth_headers):
         with (
+            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
             patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
             patch(
                 "app.repos.items.item.ItemRepo.list_cursor",
@@ -102,6 +104,7 @@ class TestListItems:
 class TestGetItem:
     async def test_get_item_success(self, client, fake_user, fake_item, auth_headers):
         with (
+            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
             patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
             patch("app.repos.items.item.ItemRepo.get_by_id", return_value=fake_item),
         ):
@@ -115,6 +118,7 @@ class TestGetItem:
 
     async def test_get_item_not_found(self, client, fake_user, auth_headers):
         with (
+            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
             patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
             patch("app.repos.items.item.ItemRepo.get_by_id", return_value=None),
         ):
@@ -126,6 +130,7 @@ class TestGetItem:
 class TestCreateItem:
     async def test_create_item_success(self, client, fake_user, fake_item, auth_headers):
         with (
+            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
             patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
             patch("app.repos.items.item.ItemRepo.create", return_value=fake_item),
         ):
@@ -161,6 +166,7 @@ class TestUpdateItem:
         updated_item.owner = None
 
         with (
+            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
             patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
             patch("app.repos.items.item.ItemRepo.get_by_id", return_value=fake_item),
             patch("app.repos.items.item.ItemRepo.update", return_value=updated_item),
@@ -179,6 +185,7 @@ class TestUpdateItem:
 class TestDeleteItem:
     async def test_delete_item_success(self, client, fake_user, fake_item, auth_headers):
         with (
+            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
             patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
             patch("app.repos.items.item.ItemRepo.get_by_id", return_value=fake_item),
             patch("app.repos.items.item.ItemRepo.delete", return_value=None),
@@ -189,6 +196,7 @@ class TestDeleteItem:
 
     async def test_delete_item_not_found(self, client, fake_user, auth_headers):
         with (
+            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
             patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
             patch("app.repos.items.item.ItemRepo.get_by_id", return_value=None),
         ):
@@ -200,6 +208,7 @@ class TestDeleteItem:
 class TestFilterOptions:
     async def test_get_filter_options(self, client, fake_user, auth_headers):
         with (
+            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
             patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
             patch(
                 "app.repos.items.item.ItemRepo.get_distinct_categories",

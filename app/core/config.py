@@ -61,6 +61,15 @@ class Settings(BaseSettings):
     JOB_HANDLER_TIMEOUT_SECONDS: int = 60
 
     @model_validator(mode="after")
+    def validate_secret_key(self) -> "Settings":
+        if self.ENVIRONMENT != "local" and self.SECRET_KEY == "change-me-in-production":
+            raise ValueError(
+                "SECRET_KEY must be changed from default in non-local environments. "
+                "Set the SECRET_KEY environment variable."
+            )
+        return self
+
+    @model_validator(mode="after")
     def build_database_url(self) -> "Settings":
         if not self.DATABASE_URL:
             self.DATABASE_URL = (

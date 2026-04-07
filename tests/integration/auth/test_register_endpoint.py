@@ -62,7 +62,7 @@ class TestRegisterEndpoint:
                 json={
                     "email": "existing@example.com",
                     "username": "newuser",
-                    "password": "pass123",
+                    "password": "pass1234",
                 },
             )
 
