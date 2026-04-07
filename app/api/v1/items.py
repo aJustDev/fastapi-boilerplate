@@ -9,7 +9,6 @@ from app.deps.repository import get_repo
 from app.repos.items.item import ItemRepo
 from app.schemas.items.item import ItemCategory, ItemCreate, ItemRead, ItemSortField, ItemUpdate
 from app.schemas.pagination import CursorPaginatedResponse, PaginatedResponse, SortDir
-from app.services.items import ItemService
 from app.use_cases.items.create_item import CreateItemUseCase
 from app.use_cases.items.delete_item import DeleteItemUseCase
 from app.use_cases.items.get_item import GetItemUseCase
@@ -18,25 +17,24 @@ from app.use_cases.items.update_item import UpdateItemUseCase
 
 router = APIRouter(prefix="/items", tags=["Items"])
 
-
-def _item_service(
-    item_repo: Annotated[ItemRepo, Depends(get_repo(ItemRepo))],
-) -> ItemService:
-    return ItemService(item_repo)
-
-
-ItemServiceDep = Annotated[ItemService, Depends(_item_service)]
+ItemRepoDep = Annotated[ItemRepo, Depends(get_repo(ItemRepo))]
 EventBusDep = Annotated[EventBus, Depends(get_event_bus)]
 
 
 @router.get("/filters")
-async def get_filter_options(service: ItemServiceDep, user: CurrentUser):
-    return await service.get_filter_options()
+async def get_filter_options(repo: ItemRepoDep, user: CurrentUser):
+    categories = await repo.get_distinct_categories()
+    priorities = await repo.get_distinct_priorities()
+    return {
+        "category": categories,
+        "priority": priorities,
+        "is_active": [True, False],
+    }
 
 
 @router.get("", response_model=PaginatedResponse[ItemRead])
 async def list_items(
-    service: ItemServiceDep,
+    repo: ItemRepoDep,
     user: CurrentUser,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -54,7 +52,7 @@ async def list_items(
     if is_active is not None:
         filters["is_active"] = is_active
 
-    uc = ListItemsUseCase(service)
+    uc = ListItemsUseCase(repo)
     items, total = await uc.execute(
         page=page,
         page_size=page_size,
@@ -72,7 +70,7 @@ async def list_items(
 
 @router.get("/cursor", response_model=CursorPaginatedResponse[ItemRead])
 async def list_items_cursor(
-    service: ItemServiceDep,
+    repo: ItemRepoDep,
     user: CurrentUser,
     cursor: str | None = None,
     limit: int = Query(20, ge=1, le=100),
@@ -90,7 +88,7 @@ async def list_items_cursor(
     if is_active is not None:
         filters["is_active"] = is_active
 
-    uc = ListItemsCursorUseCase(service)
+    uc = ListItemsCursorUseCase(repo)
     items, next_cursor, has_more = await uc.execute(
         cursor=cursor,
         limit=limit,
@@ -106,8 +104,8 @@ async def list_items_cursor(
 
 
 @router.get("/{item_id}", response_model=ItemRead)
-async def get_item(item_id: int, service: ItemServiceDep, user: CurrentUser):
-    uc = GetItemUseCase(service)
+async def get_item(item_id: int, repo: ItemRepoDep, user: CurrentUser):
+    uc = GetItemUseCase(repo)
     item = await uc.execute(item_id)
     return ItemRead.model_validate(item)
 
@@ -115,11 +113,11 @@ async def get_item(item_id: int, service: ItemServiceDep, user: CurrentUser):
 @router.post("", response_model=ItemRead, status_code=201)
 async def create_item(
     body: ItemCreate,
-    service: ItemServiceDep,
+    repo: ItemRepoDep,
     user: CurrentUser,
     event_bus: EventBusDep,
 ):
-    uc = CreateItemUseCase(service, event_bus)
+    uc = CreateItemUseCase(repo, event_bus)
     item = await uc.execute(body.name, user.id, body.description, body.category, body.priority)
     return ItemRead.model_validate(item)
 
@@ -128,11 +126,11 @@ async def create_item(
 async def update_item(
     item_id: int,
     body: ItemUpdate,
-    service: ItemServiceDep,
+    repo: ItemRepoDep,
     user: CurrentUser,
     event_bus: EventBusDep,
 ):
-    uc = UpdateItemUseCase(service, event_bus)
+    uc = UpdateItemUseCase(repo, event_bus)
     data = body.model_dump(exclude_unset=True)
     item = await uc.execute(item_id, data)
     return ItemRead.model_validate(item)
@@ -141,9 +139,9 @@ async def update_item(
 @router.delete("/{item_id}", status_code=204)
 async def delete_item(
     item_id: int,
-    service: ItemServiceDep,
+    repo: ItemRepoDep,
     user: CurrentUser,
     event_bus: EventBusDep,
 ):
-    uc = DeleteItemUseCase(service, event_bus)
+    uc = DeleteItemUseCase(repo, event_bus)
     await uc.execute(item_id)

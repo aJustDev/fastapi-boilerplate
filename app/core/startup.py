@@ -22,7 +22,7 @@ async def check_database(engine: AsyncEngine) -> str:
                 await conn.execute(text("SELECT 1"))
         return "OK"
     except Exception as e:
-        logger.warning(f"DB not available: {e!s}")
+        logger.warning("DB not available: %s", e)
         return "UNAVAILABLE"
 
 
@@ -93,22 +93,24 @@ async def log_system_info(
         jobs_label = f"{registered_jobs} registered"
         instances_label = f"{instances} instance{'s' if instances > 1 else ''}"
 
-        logger.info("========== SYSTEM CONFIGURATION ==========")
-        logger.info(f"Host     : {hostname:<27} | OS     : {os_info}")
-        logger.info(f"App      : {app_info:<27} | Env    : {env_info} ({log_level})")
         pool_info = f"{settings.DB_POOL_SIZE}+{settings.DB_MAX_OVERFLOW} (timeout {settings.DB_POOL_TIMEOUT}s)"
-
-        logger.info(f"DB       : {db_host:<27} | Status : {db_status}")
-        logger.info(f"Pool     : {pool_info:<27} | Pre-ping: ON")
         rate_limit = (
             f"strict={settings.RATE_LIMIT_STRICT}" if settings.RATE_LIMIT_ENABLED else "OFF"
         )
         metrics_status = "ON (/v1/metrics)" if settings.METRICS_ENABLED else "OFF"
 
-        logger.info(f"EventBus : {'LISTEN/NOTIFY':<27} | Status : {worker_status}")
-        logger.info(f"Jobs     : {jobs_label:<27} | Status : {job_worker_status}")
-        logger.info(f"RateLimit: {rate_limit:<27} | Metrics: {metrics_status}")
-        logger.info(f"Workers  : {instances_label:<27} |")
-        logger.info("===========================================")
+        banner = (
+            "========== SYSTEM CONFIGURATION ==========\n"
+            f"Host     : {hostname:<27} | OS     : {os_info}\n"
+            f"App      : {app_info:<27} | Env    : {env_info} ({log_level})\n"
+            f"DB       : {db_host:<27} | Status : {db_status}\n"
+            f"Pool     : {pool_info:<27} | Pre-ping: ON\n"
+            f"EventBus : {'LISTEN/NOTIFY':<27} | Status : {worker_status}\n"
+            f"Jobs     : {jobs_label:<27} | Status : {job_worker_status}\n"
+            f"RateLimit: {rate_limit:<27} | Metrics: {metrics_status}\n"
+            f"Workers  : {instances_label:<27} |\n"
+            "==========================================="
+        )
+        logger.info(banner)
 
     logger.info("Worker ready (PID=%d)", pid)

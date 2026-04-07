@@ -4,8 +4,6 @@ from sqlalchemy.orm import selectinload
 from app.models.items.item import ItemORM
 from app.repos.base import BaseRepo
 
-_list = list
-
 
 class ItemRepo(BaseRepo[ItemORM]):
     model = ItemORM
@@ -20,12 +18,12 @@ class ItemRepo(BaseRepo[ItemORM]):
     def _base_select(self) -> Select:
         return select(ItemORM).options(selectinload(ItemORM.owner))
 
-    async def get_distinct_categories(self) -> _list[str]:
+    async def get_distinct_categories(self) -> list[str]:
         stmt = select(distinct(ItemORM.category)).order_by(ItemORM.category)
         result = await self.session.execute(stmt)
-        return _list(result.scalars().all())
+        return list(result.scalars().all())
 
-    async def get_distinct_priorities(self) -> _list[int]:
+    async def get_distinct_priorities(self) -> list[int]:
         stmt = select(distinct(ItemORM.priority)).order_by(ItemORM.priority)
         result = await self.session.execute(stmt)
-        return _list(result.scalars().all())
+        return list(result.scalars().all())

@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from app.core.exceptions import AuthenticationError, ConflictError
 from app.core.security import (
@@ -83,7 +83,17 @@ class AuthService:
 
         return self._generate_tokens(user)
 
-    async def logout(self, jti: str, expires_at: datetime) -> None:
+    async def logout(self, token: str) -> None:
+        try:
+            payload = decode_token(token)
+        except Exception as e:
+            raise AuthenticationError("Invalid token") from e
+
+        jti = payload.get("jti")
+        if not jti:
+            raise AuthenticationError("Token missing jti claim")
+
+        expires_at = datetime.fromtimestamp(payload["exp"], tz=UTC)
         await self.revoked_token_repo.revoke(uuid.UUID(jti), expires_at)
 
     def _generate_tokens(self, user: UserORM) -> TokenResponse:

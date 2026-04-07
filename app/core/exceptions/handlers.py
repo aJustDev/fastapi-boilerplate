@@ -97,7 +97,7 @@ async def validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
     errors = [f"{'.'.join(str(loc) for loc in err['loc'])}: {err['msg']}" for err in exc.errors()]
-    logger.warning(f"Validation error on {request.method} {request.url.path}: {errors}")
+    logger.warning("Validation error on %s %s: %s", request.method, request.url.path, errors)
     return JSONResponse(
         status_code=422,
         content={"detail": "Validation error", "errors": errors},
@@ -106,7 +106,7 @@ async def validation_exception_handler(
 
 async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     retry_after = exc.detail.split()[-1] if exc.detail else ""
-    logger.warning(f"Rate limit exceeded: {request.method} {request.url.path} ({retry_after})")
+    logger.warning("Rate limit exceeded: %s %s (%s)", request.method, request.url.path, retry_after)
     return JSONResponse(
         status_code=429,
         content={"detail": "Too many requests"},
