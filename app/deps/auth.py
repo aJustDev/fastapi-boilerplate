@@ -1,3 +1,4 @@
+import uuid
 from typing import Annotated
 
 from fastapi import Depends
@@ -7,6 +8,7 @@ from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.core.security import decode_token
 from app.deps.repository import get_repo
 from app.models.auth.user import UserORM
+from app.repos.auth.revoked_token import RevokedTokenRepo
 from app.repos.auth.user import UserRepo
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/login")
@@ -15,6 +17,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/login")
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
     user_repo: Annotated[UserRepo, Depends(get_repo(UserRepo))],
+    revoked_token_repo: Annotated[RevokedTokenRepo, Depends(get_repo(RevokedTokenRepo))],
 ) -> UserORM:
     try:
         payload = decode_token(token)
@@ -23,6 +26,13 @@ async def get_current_user(
 
     if payload.get("type") != "access":
         raise AuthenticationError("Token is not an access token")
+
+    jti = payload.get("jti")
+    if not jti:
+        raise AuthenticationError("Invalid token payload")
+
+    if await revoked_token_repo.is_revoked(uuid.UUID(jti)):
+        raise AuthenticationError("Token has been revoked")
 
     user_id = payload.get("sub")
     if not user_id:

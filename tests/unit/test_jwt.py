@@ -21,7 +21,8 @@ class TestJWT:
 
         assert payload["sub"] == "42"
         assert payload["type"] == "refresh"
-        assert "scopes" not in payload
+        assert payload["scopes"] == []
+        assert "jti" in payload
 
     def test_decode_invalid_token_raises(self):
         with pytest.raises(jwt.PyJWTError):

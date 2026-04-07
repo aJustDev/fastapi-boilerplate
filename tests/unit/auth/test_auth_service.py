@@ -14,8 +14,15 @@ def user_repo() -> AsyncMock:
 
 
 @pytest.fixture
-def auth_service(user_repo: AsyncMock) -> AuthService:
-    return AuthService(user_repo)
+def revoked_token_repo() -> AsyncMock:
+    repo = AsyncMock()
+    repo.is_revoked.return_value = False
+    return repo
+
+
+@pytest.fixture
+def auth_service(user_repo: AsyncMock, revoked_token_repo: AsyncMock) -> AuthService:
+    return AuthService(user_repo, revoked_token_repo)
 
 
 @pytest.fixture

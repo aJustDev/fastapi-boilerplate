@@ -6,13 +6,15 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 from app.core.config import settings
 from app.core.ratelimit import limiter
-from app.deps.auth import CurrentUser
+from app.deps.auth import CurrentUser, oauth2_scheme
 from app.deps.repository import get_repo
+from app.repos.auth.revoked_token import RevokedTokenRepo
 from app.repos.auth.user import UserRepo
 from app.schemas.auth.token import RefreshRequest, RegisterRequest, TokenResponse
 from app.schemas.auth.user import UserRead
 from app.services.auth import AuthService
 from app.use_cases.auth.login import LoginUseCase
+from app.use_cases.auth.logout import LogoutUseCase
 from app.use_cases.auth.refresh_token import RefreshTokenUseCase
 from app.use_cases.auth.register import RegisterUseCase
 
@@ -23,8 +25,9 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 def _auth_service(
     user_repo: Annotated[UserRepo, Depends(get_repo(UserRepo))],
+    revoked_token_repo: Annotated[RevokedTokenRepo, Depends(get_repo(RevokedTokenRepo))],
 ) -> AuthService:
-    return AuthService(user_repo)
+    return AuthService(user_repo, revoked_token_repo)
 
 
 AuthServiceDep = Annotated[AuthService, Depends(_auth_service)]
@@ -37,8 +40,8 @@ async def login(
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
     service: AuthServiceDep,
 ):
+    logger.info("Login request received")
     uc = LoginUseCase(service)
-    logger.info(f"Attempting login for user: {form.username}")
     return await uc.execute(form.username, form.password)
 
 
@@ -55,6 +58,16 @@ async def register(request: Request, body: RegisterRequest, service: AuthService
 async def refresh(request: Request, body: RefreshRequest, service: AuthServiceDep):
     uc = RefreshTokenUseCase(service)
     return await uc.execute(body.refresh_token)
+
+
+@router.post("/logout", status_code=204)
+async def logout(
+    request: Request,
+    token: Annotated[str, Depends(oauth2_scheme)],
+    service: AuthServiceDep,
+):
+    uc = LogoutUseCase(service)
+    await uc.execute(token)
 
 
 @router.get("/me", response_model=UserRead)
