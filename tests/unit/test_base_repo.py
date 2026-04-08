@@ -4,7 +4,7 @@ from sqlalchemy import Text, asc, desc
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
-from app.repos.base import BaseRepo, decode_cursor, encode_cursor
+from app.repos.base import BaseRepo, FieldMapping, decode_cursor, encode_cursor
 
 
 class FakeModel(Base):
@@ -16,7 +16,7 @@ class FakeModel(Base):
 
 class FakeRepo(BaseRepo[FakeModel]):
     model = FakeModel
-    map_field = {
+    map_field: dict[str, FieldMapping] = {
         "name": {"column": FakeModel.name, "op": "ilike"},
         "priority": {"column": FakeModel.priority, "op": "eq"},
     }

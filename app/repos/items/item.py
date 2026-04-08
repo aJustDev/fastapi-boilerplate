@@ -2,12 +2,12 @@ from sqlalchemy import Select, distinct, select
 from sqlalchemy.orm import selectinload
 
 from app.models.items.item import ItemORM
-from app.repos.base import BaseRepo
+from app.repos.base import BaseRepo, FieldMapping
 
 
 class ItemRepo(BaseRepo[ItemORM]):
     model = ItemORM
-    map_field = {
+    map_field: dict[str, FieldMapping] = {
         "name": {"column": ItemORM.name, "op": "ilike"},
         "category": {"column": ItemORM.category, "op": "eq"},
         "priority": {"column": ItemORM.priority, "op": "eq"},

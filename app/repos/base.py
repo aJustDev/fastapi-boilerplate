@@ -1,7 +1,7 @@
 import base64
 import json
 import logging
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Literal, TypedDict, TypeVar
 
 from sqlalchemy import Select, asc, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +11,13 @@ from app.core.db import Base
 T = TypeVar("T", bound=Base)
 
 logger = logging.getLogger(__name__)
+
+FilterOp = Literal["eq", "ilike", "gte", "lte"]
+
+
+class FieldMapping(TypedDict):
+    column: Any
+    op: FilterOp
 
 
 def encode_cursor(values: dict[str, Any]) -> str:
@@ -27,7 +34,7 @@ class BaseRepo(Generic[T]):
     """Async generic repository with offset and cursor pagination."""
 
     model: type[T]
-    map_field: dict[str, dict[str, Any]] = {}
+    map_field: dict[str, FieldMapping] = {}
 
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -198,7 +205,7 @@ class BaseRepo(Generic[T]):
             field_config = self.map_field.get(key)
             if field_config:
                 column = field_config["column"]
-                op = field_config.get("op", "eq")
+                op = field_config["op"]
                 if op == "eq":
                     stmt = stmt.where(column == value)
                 elif op == "ilike":
