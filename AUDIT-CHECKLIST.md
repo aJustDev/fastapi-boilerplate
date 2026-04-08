@@ -78,11 +78,11 @@ Checklist derivado de la [auditoria de calidad](notes/auditoria-calidad.md). Pun
 
 ## 9. Configuracion y DevOps (8.5/10)
 
-- [ ] Añadir Dependabot o Renovate para actualizacion automatica de dependencias
-- [ ] Añadir paso de build de imagen Docker en CI (validar que compila)
-- [ ] Evaluar stage de deploy en CI
-- [ ] Considerar docker-compose para staging/production
-- [ ] Evaluar migracion a Alembic para tracking de migrations
+- [x] Añadir Dependabot o Renovate para actualizacion automatica de dependencias
+- [ ] ~~Añadir paso de build de imagen Docker en CI (validar que compila)~~ Evaluado: trivial y especifico de cada proyecto. No aporta valor didactico al boilerplate.
+- [ ] ~~Evaluar stage de deploy en CI~~ Evaluado: un boilerplate no tiene destino de deploy. Cada proyecto definira su propia infra.
+- [ ] ~~Considerar docker-compose para staging/production~~ Evaluado: produccion real usa orquestadores (K8s, ECS). El compose actual ya soporta ENVIRONMENT para cambiar env files.
+- [ ] ~~Evaluar migracion a Alembic para tracking de migrations~~ Evaluado: el proyecto usa SQL puro con asyncpg, no ORM. El sistema actual (schema.sql + deltas) es explicito y didactico. Si se adopta SQLAlchemy ORM, Alembic seria la eleccion natural.
 
 ## 10. Documentacion (8/10)
 
