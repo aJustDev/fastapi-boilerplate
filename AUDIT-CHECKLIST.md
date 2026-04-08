@@ -44,7 +44,7 @@ Checklist derivado de la [auditoria de calidad](notes/auditoria-calidad.md). Pun
 
 - [x] Usar EmailStr en RegisterRequest.email -- `app/schemas/auth/token.py:5`
 - [x] Crear TokenPayload (TypedDict o Pydantic model) para el retorno de decode_token -- `app/core/security/jwt.py:33`
-- [ ] Tipar mejor `_apply_filters` (dict[str, Any] sin restriccion)
+- [x] Tipar mejor `_apply_filters` (dict[str, Any] sin restriccion)
 
 ## 4. Gestion de errores (9/10)
 
@@ -73,8 +73,8 @@ Checklist derivado de la [auditoria de calidad](notes/auditoria-calidad.md). Pun
 
 ## 8. API Design (9/10)
 
-- [ ] Verificar que login cumple OAuth2 form standard (application/x-www-form-urlencoded)
-- [ ] Evaluar incluir _links (next/prev/self) en respuestas paginadas
+- [x] Verificar que login cumple OAuth2 form standard (application/x-www-form-urlencoded)
+- [x] ~~Evaluar incluir _links (next/prev/self) en respuestas paginadas~~ Evaluado: las respuestas ya incluyen los campos necesarios para construir URLs (page/page_size/total_pages para offset; next_cursor para cursor). Agregar _links requiere inyectar Request en la capa de schemas, rompiendo la separacion actual. HATEOAS nivel 3 no justifica la complejidad en un boilerplate.
 
 ## 9. Configuracion y DevOps (8.5/10)
 
