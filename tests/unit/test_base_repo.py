@@ -112,35 +112,37 @@ class TestBaseRepoList:
     def _make_repo(self, session: AsyncMock) -> FakeRepo:
         return FakeRepo(session)
 
+    def _make_rows(self, items: list, total: int) -> list:
+        """Build fake Row objects with (entity, _total_count)."""
+        rows = []
+        for item in items:
+            row = MagicMock()
+            row.__getitem__ = MagicMock(side_effect=lambda i, it=item: it if i == 0 else None)
+            row._total_count = total
+            rows.append(row)
+        return rows
+
     async def test_list_returns_items_and_total(self, mock_session: AsyncMock):
         repo = self._make_repo(mock_session)
         fake_items = [MagicMock(spec=FakeModel), MagicMock(spec=FakeModel)]
 
-        # session.execute is called twice: once for count, once for items
-        count_result = MagicMock()
-        count_result.scalar.return_value = 2
-
-        items_result = MagicMock()
-        items_result.scalars.return_value.all.return_value = fake_items
-
-        mock_session.execute.side_effect = [count_result, items_result]
+        result_mock = MagicMock()
+        result_mock.all.return_value = self._make_rows(fake_items, 2)
+        mock_session.execute.return_value = result_mock
 
         items, total = await repo.list_paginated(page=1, page_size=20)
 
         assert items == fake_items
         assert total == 2
-        assert mock_session.execute.await_count == 2
+        assert mock_session.execute.await_count == 1
 
     async def test_list_with_page_and_page_size(self, mock_session: AsyncMock):
         repo = self._make_repo(mock_session)
+        page_items = [MagicMock(spec=FakeModel)] * 10
 
-        count_result = MagicMock()
-        count_result.scalar.return_value = 50
-
-        items_result = MagicMock()
-        items_result.scalars.return_value.all.return_value = [MagicMock()] * 10
-
-        mock_session.execute.side_effect = [count_result, items_result]
+        result_mock = MagicMock()
+        result_mock.all.return_value = self._make_rows(page_items, 50)
+        mock_session.execute.return_value = result_mock
 
         items, total = await repo.list_paginated(page=3, page_size=10)
 
@@ -150,13 +152,9 @@ class TestBaseRepoList:
     async def test_list_total_zero(self, mock_session: AsyncMock):
         repo = self._make_repo(mock_session)
 
-        count_result = MagicMock()
-        count_result.scalar.return_value = None  # triggers `or 0`
-
-        items_result = MagicMock()
-        items_result.scalars.return_value.all.return_value = []
-
-        mock_session.execute.side_effect = [count_result, items_result]
+        result_mock = MagicMock()
+        result_mock.all.return_value = []
+        mock_session.execute.return_value = result_mock
 
         items, total = await repo.list_paginated()
 

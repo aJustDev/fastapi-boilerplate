@@ -68,8 +68,8 @@ Checklist derivado de la [auditoria de calidad](notes/auditoria-calidad.md). Pun
 
 ## 7. Rendimiento (8.5/10)
 
-- [ ] Considerar COUNT(*) OVER() window function o count estimado para offset pagination en tablas grandes -- `app/repos/base.py:80-81`
-- [ ] Evaluar cache (aiocache o Redis) para endpoints de lectura frecuente
+- [x] Considerar COUNT(*) OVER() window function o count estimado para offset pagination en tablas grandes -- `app/repos/base.py:80-81`
+- [ ] ~~Evaluar cache (aiocache o Redis) para endpoints de lectura frecuente~~ Evaluado: pospuesto hasta que Redis entre al stack (ver 5.4). Cache HTTP headers son opcion stack-neutral pero el beneficio es didactico, no practico para el boilerplate.
 
 ## 8. API Design (9/10)
 

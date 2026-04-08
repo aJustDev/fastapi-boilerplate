@@ -75,13 +75,17 @@ class BaseRepo(Generic[T]):
         stmt = self._apply_filters(stmt, filters)
         stmt = self._apply_ordering(stmt, order_by, order_dir)
 
-        count_stmt = select(func.count()).select_from(stmt.subquery())
-        total = (await self.session.execute(count_stmt)).scalar() or 0
-
         offset = (page - 1) * page_size
+        stmt = stmt.add_columns(func.count().over().label("_total_count"))
         stmt = stmt.offset(offset).limit(page_size)
         result = await self.session.execute(stmt)
-        items = list(result.scalars().all())
+        rows = result.all()
+
+        if not rows:
+            return [], 0
+
+        items = [row[0] for row in rows]
+        total = rows[0]._total_count
 
         return items, total
 
