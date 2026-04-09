@@ -50,6 +50,7 @@ def fake_item() -> MagicMock:
 @pytest.fixture
 async def client():
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()
 
     async def _override():
         yield mock_session

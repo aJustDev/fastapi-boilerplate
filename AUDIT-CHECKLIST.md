@@ -24,7 +24,7 @@ Checklist derivado de la [auditoria de calidad](notes/auditoria-calidad.md). Pun
 - [x] **[Critico]** Validar SECRET_KEY en produccion (`app/core/config.py`)
 - [x] **[Alto]** Implementar token revocation + endpoint POST /v1/auth/logout
 - [x] **[Alto]** Validacion de password (min_length=8 + complejidad)
-- [ ] **[Alto]** Tests de integracion con DB real (testcontainers-python)
+- [x] **[Alto]** Tests de integracion con DB real (testcontainers-python)
 - [x] **[Medio]** Validar email con EmailStr en RegisterRequest (`app/schemas/auth/token.py`)
 
 ---
@@ -61,10 +61,10 @@ Checklist derivado de la [auditoria de calidad](notes/auditoria-calidad.md). Pun
 
 ## 6. Testing (7.5/10)
 
-- [ ] Tests de integracion reales con testcontainers-python o PostgreSQL en CI
-- [ ] Configurar --cov-fail-under=80 en CI
-- [ ] Renombrar tests/integration/ a tests/functional/ para evitar confusion semantica
-- [ ] Evaluar property-based testing con hypothesis para validaciones complejas (cursores, filtros)
+- [x] Tests de integracion reales con testcontainers-python (52 tests en `tests/integration/repos/`). Repos testeados contra PostgreSQL 16 real: CRUD, offset/cursor pagination, filtering, ordering, constraints, relationships.
+- [x] Configurar --cov-fail-under=80 en CI -- `pyproject.toml [tool.coverage.report]`
+- [x] Renombrar tests/integration/ a tests/functional/ -- tests de contrato HTTP se mantienen (22 tests), nuevo `tests/integration/` para tests con DB real
+- [x] ~~Evaluar property-based testing con hypothesis~~ Evaluado: input space de cursores y filtros es acotado, cubierto con tests explicitos + integracion real. hypothesis anade complejidad no justificada en un boilerplate.
 
 ## 7. Rendimiento (8.5/10)
 
