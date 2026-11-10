@@ -51,12 +51,18 @@ Handle it in the context that reacts, and import the module in `app/db_registry.
 ```python
 # app/<context>/event_handlers/<name>.py
 @dispatcher.register("item.created")
-async def notify_owner(payload: dict) -> None:
-    ...
+async def notify_owner(payload: dict, event_id: uuid.UUID) -> None:
+    response = await client.post(url, json=payload, headers={"Idempotency-Key": str(event_id)})
+    response.raise_for_status()
 ```
 
-A handler receives the payload only. It must be idempotent (see the limits) and should read the
-current state of the entity from the database instead of trusting the payload.
+A handler receives the payload and the id of the event, and has two duties:
+
+- **Raise unless the work was done.** A handler that returns is marked as done for good; one that
+  raises is retried with backoff. An HTTP answer is not a delivery: check the status.
+- **Be idempotent** (see the limits). The event id is the same on every attempt: pass it as the
+  idempotency key of external calls, or record it. Read the current state of the entity from the
+  database instead of trusting the payload.
 
 ## Configuration
 
@@ -90,7 +96,9 @@ Neither runs on a schedule: call them from a job (`docs/jobs.md`) or a script.
   `item.created`. A handler that depends on another event raises, and the retry gives it time.
 - A handler that outlives its timeout is cancelled; protect external calls that must not be
   repeated with `asyncio.shield()` and record their result.
-- `handler_state` is keyed by function name: renaming a handler re-runs it on pending retries.
+- `handler_state` is keyed by the module and qualified name of each handler, so two contexts may
+  name their handlers alike. Moving or renaming a handler re-runs it on pending retries, and
+  registering the same handler twice for an event fails at import.
 - Each process keeps one extra connection for `LISTEN`, checked with `SELECT 1` on every cycle
   and reopened with backoff (up to 60 s) when it fails.
 

@@ -142,6 +142,7 @@ class OutboxWorker:
         dispatch_result = await dispatcher.dispatch(
             event.event_type,
             event.payload,
+            event_id=event.id,
             completed_handlers=completed,
         )
 

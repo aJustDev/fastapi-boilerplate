@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import traceback
+import uuid
 from collections import defaultdict
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
@@ -10,7 +11,19 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-HandlerFunc = Callable[[dict[str, Any]], Coroutine[Any, Any, None]]
+# A handler receives the payload and the id of the event. The id is what makes it
+# idempotent: delivery is at least once, and the id is the same on every attempt.
+HandlerFunc = Callable[[dict[str, Any], uuid.UUID], Coroutine[Any, Any, None]]
+
+
+def handler_key(func: HandlerFunc) -> str:
+    """Identity of a handler in `handler_state`: its module and qualified name.
+
+    The bare function name is not enough: two contexts that react to the same event
+    with a function of the same name would share one entry, and the success of one
+    would hide the failure of the other.
+    """
+    return f"{func.__module__}.{func.__qualname__}"
 
 
 @dataclass
@@ -45,14 +58,18 @@ class DispatchResult:
 
 class EventDispatcher:
     def __init__(self) -> None:
-        self._handlers: dict[str, list[HandlerFunc]] = defaultdict(list)
+        # event type -> {handler key -> handler}, in registration order
+        self._handlers: dict[str, dict[str, HandlerFunc]] = defaultdict(dict)
 
     def register(self, event_type: str) -> Callable[[HandlerFunc], HandlerFunc]:
         """Decorator to register a handler for an event type."""
 
         def decorator(func: HandlerFunc) -> HandlerFunc:
-            self._handlers[event_type].append(func)
-            logger.info("Registered handler %s for %s", func.__name__, event_type)
+            key = handler_key(func)
+            if key in self._handlers[event_type]:
+                raise ValueError(f"handler {key} is already registered for {event_type}")
+            self._handlers[event_type][key] = func
+            logger.info("Registered handler %s for %s", key, event_type)
             return func
 
         return decorator
@@ -62,51 +79,42 @@ class EventDispatcher:
         event_type: str,
         payload: dict[str, Any],
         *,
+        event_id: uuid.UUID,
         completed_handlers: set[str] | None = None,
     ) -> DispatchResult:
         """Execute all handlers for an event type with isolation and timeout.
 
         Each handler runs in its own try/except so a failure in one does not
-        block the others.  Handlers whose names appear in *completed_handlers*
-        are skipped (marked as ``skipped=True`` in the result).
+        block the others.  Handlers whose keys (`handler_key`) appear in
+        *completed_handlers* are skipped (marked as ``skipped=True`` in the result).
 
         Zero registered handlers is an error, not a no-op: the result carries
         ``no_handlers=True`` so the caller retries instead of acknowledging.
 
         Returns a DispatchResult with per-handler outcomes.
         """
-        handlers = self._handlers.get(event_type, [])
+        handlers = self._handlers.get(event_type, {})
         if not handlers:
             logger.critical("No handlers registered for event_type=%s", event_type)
             return DispatchResult(no_handlers=True)
 
         completed = completed_handlers or set()
         result = DispatchResult()
-        for handler in handlers:
-            if handler.__name__ in completed:
-                result.results.append(
-                    HandlerResult(handler.__name__, success=True, skipped=True),
-                )
+        for key, handler in handlers.items():
+            if key in completed:
+                result.results.append(HandlerResult(key, success=True, skipped=True))
                 continue
 
             try:
                 await asyncio.wait_for(
-                    handler(payload),
+                    handler(payload, event_id),
                     timeout=settings.OUTBOX_HANDLER_TIMEOUT_SECONDS,
                 )
-                result.results.append(
-                    HandlerResult(handler.__name__, success=True),
-                )
+                result.results.append(HandlerResult(key, success=True))
             except Exception:
                 tb = traceback.format_exc()
-                logger.exception(
-                    "Handler %s failed for event_type=%s",
-                    handler.__name__,
-                    event_type,
-                )
-                result.results.append(
-                    HandlerResult(handler.__name__, success=False, error=tb),
-                )
+                logger.exception("Handler %s failed for event_type=%s", key, event_type)
+                result.results.append(HandlerResult(key, success=False, error=tb))
 
         return result
 
