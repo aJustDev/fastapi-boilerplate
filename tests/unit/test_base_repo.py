@@ -1,13 +1,17 @@
 from unittest.mock import AsyncMock, MagicMock
 
 from sqlalchemy import Text, asc, desc
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from app.core.db import Base
 from app.repos.base import BaseRepo, FieldMapping, decode_cursor, encode_cursor
 
 
-class FakeModel(Base):
+class _FakeBase(DeclarativeBase):
+    """Own metadata: a table on the app's Base would leak into Base.metadata and look
+    like a model without migration."""
+
+
+class FakeModel(_FakeBase):
     __tablename__ = "fake"
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(Text)

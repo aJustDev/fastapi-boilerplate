@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, Integer, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -35,7 +35,7 @@ class ScheduledJobORM(Base):
     )
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
     run_count: Mapped[int] = mapped_column(default=0, server_default="0")
-    claimed_by: Mapped[str | None] = mapped_column(String(255), default=None)
+    claimed_by: Mapped[str | None] = mapped_column(Text, default=None)
     lease_until: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         default=None,
@@ -51,8 +51,9 @@ class ScheduledJobORM(Base):
     )
 
     __table_args__ = (
+        CheckConstraint("status IN ('PENDING', 'RUNNING', 'DISABLED')", name="status"),
         Index(
-            "scheduled_jobs_pending_idx",
+            "ix_scheduled_jobs_pending",
             "next_run_at",
             postgresql_where=(status == "PENDING"),
         ),
