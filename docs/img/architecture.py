@@ -36,7 +36,7 @@ def request():
             {"title": "5 - Repository", "sub": "queries through BaseRepo; flush, never commit"},
             {
                 "title": "6 - get_session commits or rolls back",
-                "sub": "the response is built from the schemas",
+                "sub": "before the response is sent",
                 "tone": "done",
             },
         ],

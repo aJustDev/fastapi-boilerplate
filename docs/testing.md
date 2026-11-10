@@ -8,6 +8,7 @@ infrastructure), plus meta-tests that check rules over the whole code base.
 | Unit | `tests/unit/` | Services, use cases, repos and core modules in isolation | Mocked |
 | Functional | `tests/functional/` | HTTP behavior through the real app and middleware: status, body, headers, auth | Mocked session |
 | Integration | `tests/integration/` | SQL, workers, migrations | PostgreSQL 18 in a testcontainer |
+| Integration, API | `tests/integration/api/` | Whole requests: HTTP, the real `get_session`, real SQL | The same container |
 
 ## How it works
 
@@ -20,6 +21,11 @@ infrastructure), plus meta-tests that check rules over the whole code base.
   commits by itself (workers, separate transactions) and empties the tables listed by the
   module's `committing_tables` fixture before and after the test. `seed_user` inserts a user for
   foreign keys.
+- `api_client` (same conftest) is an `httpx.AsyncClient` over the real app with nothing
+  overridden: it points the app's own `async_session_factory` at the container, so a request
+  runs the real `get_session` and commits. The rows a request can write are truncated after each
+  test; reference data from the migrations stays. `tests/integration/api/helpers.py` has the
+  steps every flow starts with (`register`, `login`, `signed_up`).
 - Async fixtures and integration modules use `loop_scope="session"`, so the session-scoped engine
   and the tests share one event loop.
 
@@ -38,6 +44,9 @@ uv run pytest --cov=app                # with coverage
 - Integration: `tests/integration/<context>/` with
   `pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]`, a real
   repository on `db_session`.
+- Integration, API: `tests/integration/api/` with the same `pytestmark` and `api_client`. This is
+  the level for anything that depends on the request as a whole: what is stored after a 2xx, who
+  may touch whose data, what a malformed input answers. A mocked session cannot show any of it.
 - A test for a bug must fail against the code before the fix: run it once without the fix.
 
 ## Meta-tests

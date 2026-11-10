@@ -1,13 +1,19 @@
+from collections.abc import AsyncGenerator
+
 import pytest
 import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
 
 import app.db_registry  # noqa: F401 -- register all ORM models in Base.metadata
 from app.auth.models.user import UserORM
-from app.core.db import Base
+from app.core.db import Base, async_session_factory
+from app.core.db import engine as app_engine
 from app.core.security import hash_password
+from main import app
 from tests.integration.alembic_helpers import run_alembic
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
@@ -84,6 +90,33 @@ async def committing_factory(pg_url, async_engine, committing_tables):
     yield async_sessionmaker(engine, expire_on_commit=False)
     await _clean()
     await engine.dispose()
+
+
+# What a request can write. Reference data (roles, permissions, scheduled_jobs) comes
+# from the migrations and stays; CASCADE reaches user_roles and the tables owned by users.
+_API_TABLES = "users, revoked_tokens, outbox_events"
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def api_client(pg_url, async_engine) -> AsyncGenerator[AsyncClient]:
+    """HTTP client over the real app, with the app's own session factory on the test database.
+
+    Nothing is overridden: the request runs the real `get_session`, so commits, rollbacks
+    and constraint errors are the ones production has. `configure(bind=...)` re-points the
+    factory object every module already imported. Rows are removed after the test.
+    `raise_app_exceptions=False` makes the client see the 500 a real client would get.
+    """
+    engine = create_async_engine(pg_url, poolclass=NullPool)
+    async_session_factory.configure(bind=engine)
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            yield client
+    finally:
+        async_session_factory.configure(bind=app_engine)
+        async with engine.begin() as conn:
+            await conn.execute(text(f"TRUNCATE {_API_TABLES} RESTART IDENTITY CASCADE"))
+        await engine.dispose()
 
 
 @pytest_asyncio.fixture(loop_scope="session")

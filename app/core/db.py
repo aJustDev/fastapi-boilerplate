@@ -100,6 +100,11 @@ class AuditMixin:
 
 
 async def get_session() -> AsyncGenerator[AsyncSession]:
+    """One session per request: commit if the endpoint returned, roll back if it raised.
+
+    Declare it as `Depends(get_session, scope="function")` (app/deps does): the commit is
+    then part of the request, so its failure reaches the client as an error.
+    """
     async with async_session_factory() as session:
         try:
             yield session

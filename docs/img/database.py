@@ -28,7 +28,7 @@ def session():
                 ),
             },
             {
-                "title": "4 - Commit",
+                "title": "4 - Commit, then the response is sent",
                 "sub": "every change and event of the request, or none",
                 "tone": "done",
             },

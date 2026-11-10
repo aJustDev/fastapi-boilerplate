@@ -15,6 +15,11 @@ shows what happens to the changes of one request.
 - `get_session` commits when the endpoint finished without error and rolls back otherwise.
   Events published with `EventBus` live in the same session, so a failed request publishes
   nothing.
+- The commit is part of the request: it runs before the response is sent, so a commit that fails
+  reaches the client as an error and a 2xx means the data is stored. That is what
+  `scope="function"` does in `Depends(get_session, scope="function")` (`app/deps/repository.py`,
+  `app/deps/events.py`); with FastAPI's default scope the code after `yield` runs once the
+  response is gone. Both places must use the same scope, or a request gets two sessions.
 - Code that runs outside a request (workers, jobs, scripts) opens its own session with
   `async_session_factory()` and commits it explicitly.
 
