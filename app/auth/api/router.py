@@ -66,6 +66,7 @@ async def refresh(request: Request, body: RefreshRequest, service: AuthServiceDe
 
 
 @router.post("/logout", status_code=204)
+@limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def logout(
     request: Request,
     token: Annotated[str, Depends(oauth2_scheme)],
@@ -77,5 +78,6 @@ async def logout(
 
 
 @router.get("/me", response_model=UserRead)
-async def me(user: CurrentUser):
+@limiter.limit(settings.RATE_LIMIT_DEFAULT)
+async def me(request: Request, user: CurrentUser):
     return UserRead.model_validate(user)
