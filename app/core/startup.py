@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import logging
 import os
 import platform
@@ -6,6 +7,7 @@ import socket
 import time
 
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.core.config import settings
@@ -14,7 +16,17 @@ logger = logging.getLogger(__name__)
 
 # Short on purpose: startup only decides whether to start the workers.
 STARTUP_DB_CHECK_SECONDS = 3
-_BANNER_LOCK_ID = 2026_03_22  # arbitrary advisory lock ID
+
+
+def _banner_lock_id() -> int:
+    """Advisory lock id shared by the sibling processes of one server, and only by them.
+
+    The lock is taken on a pooled connection and lives as long as that connection: with
+    one fixed id for everybody, the first process to start would silence the banner of
+    every later one, the next deployment included.
+    """
+    siblings = f"{socket.gethostname()}:{os.getppid()}".encode()
+    return int.from_bytes(hashlib.sha256(siblings).digest()[:8], "big", signed=True)
 
 
 def check_utc_timezone() -> None:
@@ -99,7 +111,7 @@ async def log_system_info(
         try:
             async with engine.connect() as conn:
                 result = await conn.execute(
-                    text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": _BANNER_LOCK_ID}
+                    text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": _banner_lock_id()}
                 )
                 is_banner_leader = bool(result.scalar())
         # The lock only decides who prints the banner; if it fails, every process
@@ -114,11 +126,10 @@ async def log_system_info(
         env_info = settings.ENVIRONMENT.capitalize()
         log_level = settings.LOG_LEVEL.upper()
 
-        db_host = (
-            settings.DATABASE_URL.split("@")[-1].split("/")[0]
-            if "@" in settings.DATABASE_URL
-            else "unknown"
-        )
+        db_url = make_url(settings.DATABASE_URL)
+        db_host = db_url.host or "unknown"
+        if db_url.port:
+            db_host = f"{db_host}:{db_url.port}"
 
         jobs_label = f"{registered_jobs} registered"
         instances_label = f"{instances} instance{'s' if instances > 1 else ''}"
