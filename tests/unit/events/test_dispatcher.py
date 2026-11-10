@@ -90,10 +90,13 @@ class TestEventDispatcher:
         assert len(result.results) == 2
         assert call_order == ["a", "b"]
 
-    async def test_no_handlers_returns_empty_result(self, fresh_dispatcher: EventDispatcher):
+    async def test_no_handlers_is_not_a_success(self, fresh_dispatcher: EventDispatcher):
+        # An event nobody handles must be retried, not acknowledged as processed.
         result = await fresh_dispatcher.dispatch("nonexistent.event", {})
-        assert result.all_succeeded is True
+        assert result.no_handlers is True
+        assert result.all_succeeded is False
         assert result.results == []
+        assert "no handlers" in result.errors_summary
 
     async def test_handler_failure_is_isolated(self, fresh_dispatcher: EventDispatcher):
         call_order: list[str] = []

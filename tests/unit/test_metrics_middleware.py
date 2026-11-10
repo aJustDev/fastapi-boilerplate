@@ -1,6 +1,23 @@
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
-from app.core.metrics.middleware import PrometheusMiddleware
+from fastapi.routing import APIRoute
+
+from app.core.metrics.middleware import UNMATCHED_PATH, PrometheusMiddleware
+
+
+async def _endpoint() -> None:
+    return None
+
+
+def _routed_app(path: str):
+    """Inner ASGI app that behaves like the router: stores the matched route in the scope."""
+
+    async def inner_app(scope, receive, send):
+        scope["route"] = APIRoute(path, _endpoint)
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    return inner_app
 
 
 class TestPrometheusMiddleware:
@@ -11,11 +28,7 @@ class TestPrometheusMiddleware:
             method="GET", path_template="/v1/items", status="200"
         )._value.get()
 
-        async def inner_app(scope, receive, send):
-            await send({"type": "http.response.start", "status": 200, "headers": []})
-            await send({"type": "http.response.body", "body": b"ok"})
-
-        mw = PrometheusMiddleware(inner_app)
+        mw = PrometheusMiddleware(_routed_app("/v1/items"))
         scope = {"type": "http", "method": "GET", "path": "/v1/items"}
         await mw(scope, AsyncMock(), AsyncMock())
 
@@ -31,11 +44,7 @@ class TestPrometheusMiddleware:
             method="POST", path_template="/v1/items"
         )._sum.get()
 
-        async def inner_app(scope, receive, send):
-            await send({"type": "http.response.start", "status": 200, "headers": []})
-            await send({"type": "http.response.body", "body": b""})
-
-        mw = PrometheusMiddleware(inner_app)
+        mw = PrometheusMiddleware(_routed_app("/v1/items"))
         scope = {"type": "http", "method": "POST", "path": "/v1/items"}
         await mw(scope, AsyncMock(), AsyncMock())
 
@@ -82,27 +91,8 @@ class TestPrometheusMiddleware:
         inner.assert_called_once()
 
     async def test_resolves_path_template_from_route(self):
-        async def inner_app(scope, receive, send):
-            await send({"type": "http.response.start", "status": 200, "headers": []})
-            await send({"type": "http.response.body", "body": b""})
-
-        # Mock a route that matches
-        from starlette.routing import Match
-
-        mock_route = MagicMock()
-        mock_route.matches.return_value = (Match.FULL, {})
-        mock_route.path = "/v1/items/{item_id}"
-
-        mock_app = MagicMock()
-        mock_app.routes = [mock_route]
-
-        mw = PrometheusMiddleware(inner_app)
-        scope = {
-            "type": "http",
-            "method": "GET",
-            "path": "/v1/items/42",
-            "app": mock_app,
-        }
+        mw = PrometheusMiddleware(_routed_app("/v1/items/{item_id}"))
+        scope = {"type": "http", "method": "GET", "path": "/v1/items/42"}
         await mw(scope, AsyncMock(), AsyncMock())
 
         from app.core.metrics.instruments import http_requests_total
@@ -111,3 +101,38 @@ class TestPrometheusMiddleware:
         metric_paths = [s.labels.get("path_template") for s in samples]
         assert "/v1/items/{item_id}" in metric_paths
         assert "/v1/items/42" not in metric_paths
+
+    async def test_unmatched_request_never_labels_raw_path(self):
+        # A scanner probing made-up URLs must not create one series per URL.
+        async def inner_app(scope, receive, send):
+            await send({"type": "http.response.start", "status": 404, "headers": []})
+            await send({"type": "http.response.body", "body": b""})
+
+        mw = PrometheusMiddleware(inner_app)
+        scope = {"type": "http", "method": "GET", "path": "/wp-admin/setup.php"}
+        await mw(scope, AsyncMock(), AsyncMock())
+
+        from app.core.metrics.instruments import http_requests_total
+
+        samples = list(http_requests_total.collect()[0].samples)
+        metric_paths = [s.labels.get("path_template") for s in samples]
+        assert UNMATCHED_PATH in metric_paths
+        assert "/wp-admin/setup.php" not in metric_paths
+
+    async def test_options_counts_but_does_not_observe_duration(self):
+        from app.core.metrics.instruments import (
+            http_request_duration_seconds,
+            http_requests_total,
+        )
+
+        labels = {"method": "OPTIONS", "path_template": "/v1/items"}
+        count_before = http_requests_total.labels(**labels, status="200")._value.get()
+        sum_before = http_request_duration_seconds.labels(**labels)._sum.get()
+
+        mw = PrometheusMiddleware(_routed_app("/v1/items"))
+        await mw(
+            {"type": "http", "method": "OPTIONS", "path": "/v1/items"}, AsyncMock(), AsyncMock()
+        )
+
+        assert http_requests_total.labels(**labels, status="200")._value.get() == count_before + 1
+        assert http_request_duration_seconds.labels(**labels)._sum.get() == sum_before

@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     # Jobs
     JOB_POLL_INTERVAL_SECONDS: int = 15
     JOB_HANDLER_TIMEOUT_SECONDS: int = 60
+    # How long a claimed job stays owned by its worker. Past it, any worker may take
+    # it back (the owner is assumed dead). Must outlive the handler timeout.
+    JOB_LEASE_SECONDS: int = 120
 
     @model_validator(mode="after")
     def validate_secret_key(self) -> "Settings":
@@ -67,6 +70,14 @@ class Settings(BaseSettings):
                 "SECRET_KEY must be changed from default in non-local environments. "
                 "Set the SECRET_KEY environment variable."
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_job_lease(self) -> "Settings":
+        # A lease shorter than a running handler would let another worker recover the
+        # job while it is still running and execute it twice.
+        if self.JOB_LEASE_SECONDS < 2 * self.JOB_HANDLER_TIMEOUT_SECONDS:
+            raise ValueError("JOB_LEASE_SECONDS must be at least 2 * JOB_HANDLER_TIMEOUT_SECONDS.")
         return self
 
     @model_validator(mode="after")

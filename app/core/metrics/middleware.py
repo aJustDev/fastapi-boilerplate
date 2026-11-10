@@ -1,6 +1,6 @@
 import time
 
-from starlette.routing import Match
+from fastapi.routing import APIRoute
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.metrics.instruments import (
@@ -11,6 +11,14 @@ from app.core.metrics.instruments import (
 
 # Paths excluded from metrics to avoid self-referential noise.
 _EXCLUDED_PREFIXES = ("/v1/metrics", "/v1/health/")
+
+# OPTIONS (CORS preflights) and HEAD are not API work: they still count in
+# http_requests_total but do not observe latency.
+_METHODS_WITHOUT_DURATION = frozenset({"OPTIONS", "HEAD"})
+
+# Single label for requests that match no route. Never the raw path: every URL a
+# scanner makes up would become its own series and cardinality would be unbounded.
+UNMATCHED_PATH = "__unmatched__"
 
 
 class PrometheusMiddleware:
@@ -30,7 +38,6 @@ class PrometheusMiddleware:
             return
 
         method = scope.get("method", "UNKNOWN")
-        path_template = self._resolve_path_template(scope)
         status_code = "500"  # default if we never see http.response.start
 
         http_requests_in_progress.labels(method=method).inc()
@@ -46,28 +53,25 @@ class PrometheusMiddleware:
             await self.app(scope, receive, send_wrapper)
         finally:
             duration = time.monotonic() - start
+            # After the call, not before: the router stores the matched route in the scope.
+            path_template = self._path_template(scope)
             http_requests_in_progress.labels(method=method).dec()
             http_requests_total.labels(
                 method=method, path_template=path_template, status=status_code
             ).inc()
-            http_request_duration_seconds.labels(
-                method=method, path_template=path_template
-            ).observe(duration)
+            if method not in _METHODS_WITHOUT_DURATION:
+                http_request_duration_seconds.labels(
+                    method=method, path_template=path_template
+                ).observe(duration)
 
     @staticmethod
-    def _resolve_path_template(scope: Scope) -> str:
-        """Extract the route template (e.g. /v1/items/{item_id}) from the ASGI scope.
+    def _path_template(scope: Scope) -> str:
+        """Route template (e.g. /v1/items/{item_id}) of the route that served the request.
 
-        Falls back to the raw path if no matching route is found.
+        FastAPI's router sets `scope["route"]` when a path matches (also on a 405 for a
+        wrong method); no route means the path matched nothing (404).
         """
-        app = scope.get("app")
-        if app is None:
-            return scope.get("path", "/")
-
-        routes = getattr(app, "routes", [])
-        for route in routes:
-            match, _ = route.matches(scope)
-            if match == Match.FULL:
-                return getattr(route, "path", scope.get("path", "/"))
-
-        return scope.get("path", "/")
+        route = scope.get("route")
+        if isinstance(route, APIRoute):
+            return route.path
+        return UNMATCHED_PATH

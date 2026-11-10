@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.config import settings
-from app.core.db import async_session_factory
+from app.core.db import async_session_factory, build_asyncpg_dsn
 from app.core.events.dispatcher import dispatcher
 from app.models.events.outbox import OutboxEventORM
 
@@ -22,21 +22,15 @@ MAX_BACKOFF_HOURS = 1
 MAX_RECONNECT_DELAY = 60
 
 
-def _build_asyncpg_dsn() -> str:
-    """Build a plain PostgreSQL DSN from settings for the raw asyncpg connection."""
-    return (
-        f"postgresql://{settings.DB_USER}:{settings.DB_PASSWORD}"
-        f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
-    )
-
-
 class OutboxWorker:
     def __init__(self) -> None:
         self._task: asyncio.Task[None] | None = None
         self._shutdown_event = asyncio.Event()
+        self._wake_event = asyncio.Event()
 
     async def start(self) -> None:
         self._shutdown_event.clear()
+        self._wake_event.clear()
         self._task = asyncio.create_task(self._run(), name="outbox-worker")
         logger.debug("Outbox worker started")
 
@@ -56,27 +50,29 @@ class OutboxWorker:
         while not self._shutdown_event.is_set():
             conn: asyncpg.Connection | None = None
             try:
-                conn = await asyncpg.connect(_build_asyncpg_dsn())
+                conn = await asyncpg.connect(build_asyncpg_dsn())
                 await conn.add_listener(CHANNEL, self._on_notify)
                 reconnect_attempt = 0
 
                 while not self._shutdown_event.is_set():
-                    # Wait for notification or poll timeout
-                    try:
+                    # Woken up by NOTIFY; the poll timeout is the fallback
+                    # for notifications lost while the listener was reconnecting.
+                    with contextlib.suppress(TimeoutError):
                         await asyncio.wait_for(
-                            self._shutdown_event.wait(),
+                            self._wake_event.wait(),
                             timeout=settings.OUTBOX_POLL_INTERVAL_SECONDS,
                         )
-                        # If we get here, shutdown was requested
+                    # Clear before processing: a NOTIFY that arrives during the batch
+                    # triggers another round instead of being lost.
+                    self._wake_event.clear()
+                    if self._shutdown_event.is_set():
                         break
-                    except TimeoutError:
-                        pass
 
                     # Heartbeat: verify connection is alive
                     try:
                         await conn.execute("SELECT 1")
                     except Exception:
-                        logger.warning("Heartbeat failed, reconnecting...")
+                        logger.warning("Heartbeat failed, reconnecting...", exc_info=True)
                         break
 
                     await self._process_batch()
@@ -106,28 +102,28 @@ class OutboxWorker:
     ) -> None:
         """Callback for LISTEN notifications. Triggers batch processing."""
         logger.debug("Received NOTIFY on %s: %s", channel, payload)
+        self._wake_event.set()
 
     # ── Batch processing ──────────────────────────────────
 
     async def _process_batch(self) -> None:
-        async with async_session_factory() as session:
-            stmt = (
-                select(OutboxEventORM)
-                .where(OutboxEventORM.status == "PENDING")
-                .where(OutboxEventORM.scheduled_at <= datetime.now(UTC))
-                .order_by(OutboxEventORM.scheduled_at)
-                .limit(BATCH_SIZE)
-                .with_for_update(skip_locked=True)
-            )
-            result = await session.execute(stmt)
-            events = list(result.scalars().all())
-
-            if not events:
-                return
-
-            logger.info("Processing %d outbox events", len(events))
-
-            for event in events:
+        # One event per transaction: the FOR UPDATE SKIP LOCKED lock lives until the
+        # commit of THAT event. Locking the whole batch and committing inside the loop
+        # released the locks of the rows still pending after the first commit, and a
+        # second worker (--workers N, replicas, rolling deploy) dispatched them again.
+        for _ in range(BATCH_SIZE):
+            async with async_session_factory() as session:
+                stmt = (
+                    select(OutboxEventORM)
+                    .where(OutboxEventORM.status == "PENDING")
+                    .where(OutboxEventORM.scheduled_at <= datetime.now(UTC))
+                    .order_by(OutboxEventORM.scheduled_at)
+                    .limit(1)
+                    .with_for_update(skip_locked=True)
+                )
+                event = (await session.execute(stmt)).scalars().first()
+                if event is None:
+                    return
                 await self._handle_event(session, event)
                 await session.commit()
 

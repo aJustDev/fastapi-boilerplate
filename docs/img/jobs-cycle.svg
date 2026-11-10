@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-3 -3 766 324" width="766" height="324" font-family="Liberation Sans, DejaVu Sans, Arial, sans-serif">
+<g class="jobs-f1">
+<rect x="40" y="0" width="320" height="46" rx="8" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.4"/>
+<text x="200.0" y="19" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="12.5">1 - Every poll, each worker lists due jobs</tspan></text>
+<text x="200.0" y="36" text-anchor="middle"><tspan fill="#6b7785" font-size="11">a plain SELECT of ids, no locks held</tspan></text>
+<polyline points="360.0,23.0 434.0,23.0" fill="none" stroke="#6b7785" stroke-width="1.6" stroke-dasharray="4 3"/>
+<polygon points="440,23.0 432.9,26.8 432.9,19.2" fill="#6b7785"/>
+<rect x="440" y="0" width="320" height="46" rx="6" fill="#f2f5f9" stroke="#6b7785" stroke-width="1.2"/>
+<text x="452" y="19" text-anchor="start"><tspan fill="#222" font-size="11.5">First it frees RUNNING jobs whose lease expired:</tspan></text>
+<text x="452" y="33" text-anchor="start"><tspan fill="#222" font-size="11.5">their worker died.</tspan></text>
+<polyline points="200.0,46.0 200.0,60.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
+<polygon points="200.0,66 196.2,58.9 203.8,58.9" fill="#6b7785"/>
+<rect x="40" y="66" width="320" height="46" rx="22" fill="#fff3dc" stroke="#a35f00" stroke-width="1.4"/>
+<text x="200.0" y="94" text-anchor="middle"><tspan font-weight="bold" fill="#a35f00" font-size="12.5">2 - Did this worker win the claim?</tspan></text>
+<polyline points="360.0,89.0 434.0,89.0" fill="none" stroke="#b03a2e" stroke-width="1.6"/>
+<polygon points="440,89.0 432.9,92.8 432.9,85.2" fill="#b03a2e"/>
+<text x="400.0" y="83.0" text-anchor="middle"><tspan font-weight="bold" fill="#b03a2e" font-size="11">no</tspan></text>
+<rect x="440" y="66" width="320" height="46" rx="6" fill="#fbeaea" stroke="#b03a2e" stroke-width="1.2"/>
+<text x="452" y="93" text-anchor="start"><tspan fill="#222" font-size="11.5">Another worker moved it to RUNNING first: skip it.</tspan></text>
+<polyline points="200.0,112.0 200.0,126.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
+<polygon points="200.0,132 196.2,124.9 203.8,124.9" fill="#6b7785"/>
+<text x="208.0" y="126" text-anchor="start"><tspan font-weight="bold" fill="#6b7785" font-size="11">yes</tspan></text>
+<rect x="40" y="132" width="320" height="46" rx="8" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.4"/>
+<text x="200.0" y="151" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="12.5">3 - Run the handler, with a timeout</tspan></text>
+<text x="200.0" y="168" text-anchor="middle"><tspan fill="#6b7785" font-size="11">no transaction open while it runs</tspan></text>
+<polyline points="360.0,155.0 434.0,155.0" fill="none" stroke="#6b7785" stroke-width="1.6" stroke-dasharray="4 3"/>
+<polygon points="440,155.0 432.9,158.8 432.9,151.2" fill="#6b7785"/>
+<rect x="440" y="132" width="320" height="46" rx="6" fill="#f2f5f9" stroke="#6b7785" stroke-width="1.2"/>
+<text x="452" y="151" text-anchor="start"><tspan fill="#222" font-size="11.5">If the worker dies here, the lease runs out and</tspan></text>
+<text x="452" y="165" text-anchor="start"><tspan fill="#222" font-size="11.5">another worker frees the job.</tspan></text>
+<polyline points="200.0,178.0 200.0,192.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
+<polygon points="200.0,198 196.2,190.9 203.8,190.9" fill="#6b7785"/>
+<rect x="40" y="198" width="320" height="46" rx="8" fill="#e8f3e9" stroke="#2e7d32" stroke-width="1.4"/>
+<text x="200.0" y="217" text-anchor="middle"><tspan font-weight="bold" fill="#2e7d32" font-size="12.5">4 - Reschedule in one UPDATE</tspan></text>
+<text x="200.0" y="234" text-anchor="middle"><tspan fill="#6b7785" font-size="11">PENDING, next run = now + interval, lease cleared</tspan></text>
+<rect x="0" y="266" width="760" height="52" rx="6" fill="#f2f5f9" stroke="#c9d3df" stroke-width="1"/>
+<text x="14" y="289" text-anchor="start"><tspan fill="#222" font-size="12">The claim is a conditional UPDATE from PENDING to RUNNING that also sets the lease: PostgreSQL lets exactly one worker change</tspan></text>
+<text x="14" y="305" text-anchor="start"><tspan fill="#222" font-size="12">the row.</tspan></text>
+</g>
+</svg>

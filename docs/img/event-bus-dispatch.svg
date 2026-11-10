@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-3 -3 766 440" width="766" height="440" font-family="Liberation Sans, DejaVu Sans, Arial, sans-serif">
+<g class="eb-f1">
+<rect x="40" y="0" width="320" height="46" rx="8" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.4"/>
+<text x="200.0" y="19" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="12.5">1 - A use case publishes the event</tspan></text>
+<text x="200.0" y="36" text-anchor="middle"><tspan fill="#6b7785" font-size="11">same transaction as the business change</tspan></text>
+<polyline points="200.0,46.0 200.0,60.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
+<polygon points="200.0,66 196.2,58.9 203.8,58.9" fill="#6b7785"/>
+<rect x="40" y="66" width="320" height="46" rx="8" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.4"/>
+<text x="200.0" y="85" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="12.5">2 - The request transaction commits</tspan></text>
+<text x="200.0" y="102" text-anchor="middle"><tspan fill="#6b7785" font-size="11">PostgreSQL sends a NOTIFY to the workers</tspan></text>
+<polyline points="360.0,89.0 434.0,89.0" fill="none" stroke="#6b7785" stroke-width="1.6" stroke-dasharray="4 3"/>
+<polygon points="440,89.0 432.9,92.8 432.9,85.2" fill="#6b7785"/>
+<rect x="440" y="66" width="320" height="46" rx="6" fill="#f2f5f9" stroke="#6b7785" stroke-width="1.2"/>
+<text x="452" y="85" text-anchor="start"><tspan fill="#222" font-size="11.5">If the NOTIFY is lost, the periodic poll finds the</tspan></text>
+<text x="452" y="99" text-anchor="start"><tspan fill="#222" font-size="11.5">event (30 s by default).</tspan></text>
+<polyline points="200.0,112.0 200.0,126.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
+<polygon points="200.0,132 196.2,124.9 203.8,124.9" fill="#6b7785"/>
+<rect x="40" y="132" width="320" height="46" rx="8" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.4"/>
+<text x="200.0" y="151" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="12.5">3 - A worker locks one pending event</tspan></text>
+<text x="200.0" y="168" text-anchor="middle"><tspan fill="#6b7785" font-size="11">SKIP LOCKED: other workers take the next one</tspan></text>
+<polyline points="200.0,178.0 200.0,192.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
+<polygon points="200.0,198 196.2,190.9 203.8,190.9" fill="#6b7785"/>
+<rect x="40" y="198" width="320" height="46" rx="22" fill="#fff3dc" stroke="#a35f00" stroke-width="1.4"/>
+<text x="200.0" y="226" text-anchor="middle"><tspan font-weight="bold" fill="#a35f00" font-size="12.5">4 - Any handler for this event type?</tspan></text>
+<polyline points="360.0,221.0 434.0,221.0" fill="none" stroke="#b03a2e" stroke-width="1.6"/>
+<polygon points="440,221.0 432.9,224.8 432.9,217.2" fill="#b03a2e"/>
+<text x="400.0" y="215.0" text-anchor="middle"><tspan font-weight="bold" fill="#b03a2e" font-size="11">no</tspan></text>
+<rect x="440" y="198" width="320" height="46" rx="6" fill="#fbeaea" stroke="#b03a2e" stroke-width="1.2"/>
+<text x="452" y="217" text-anchor="start"><tspan fill="#222" font-size="11.5">Critical log and retry; it ends as failed and can be</tspan></text>
+<text x="452" y="231" text-anchor="start"><tspan fill="#222" font-size="11.5">replayed.</tspan></text>
+<polyline points="200.0,244.0 200.0,258.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
+<polygon points="200.0,264 196.2,256.9 203.8,256.9" fill="#6b7785"/>
+<text x="208.0" y="258" text-anchor="start"><tspan font-weight="bold" fill="#6b7785" font-size="11">yes</tspan></text>
+<rect x="40" y="264" width="320" height="46" rx="22" fill="#fff3dc" stroke="#a35f00" stroke-width="1.4"/>
+<text x="200.0" y="292" text-anchor="middle"><tspan font-weight="bold" fill="#a35f00" font-size="12.5">5 - Did every handler succeed?</tspan></text>
+<polyline points="360.0,287.0 434.0,287.0" fill="none" stroke="#b03a2e" stroke-width="1.6"/>
+<polygon points="440,287.0 432.9,290.8 432.9,283.2" fill="#b03a2e"/>
+<text x="400.0" y="281.0" text-anchor="middle"><tspan font-weight="bold" fill="#b03a2e" font-size="11">no</tspan></text>
+<rect x="440" y="264" width="320" height="46" rx="6" fill="#fbeaea" stroke="#b03a2e" stroke-width="1.2"/>
+<text x="452" y="283" text-anchor="start"><tspan fill="#222" font-size="11.5">Retry with backoff; handlers that already succeeded</tspan></text>
+<text x="452" y="297" text-anchor="start"><tspan fill="#222" font-size="11.5">are skipped.</tspan></text>
+<polyline points="200.0,310.0 200.0,324.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
+<polygon points="200.0,330 196.2,322.9 203.8,322.9" fill="#6b7785"/>
+<text x="208.0" y="324" text-anchor="start"><tspan font-weight="bold" fill="#6b7785" font-size="11">yes</tspan></text>
+<rect x="40" y="330" width="320" height="46" rx="8" fill="#e8f3e9" stroke="#2e7d32" stroke-width="1.4"/>
+<text x="200.0" y="349" text-anchor="middle"><tspan font-weight="bold" fill="#2e7d32" font-size="12.5">6 - Marked as processed and committed</tspan></text>
+<text x="200.0" y="366" text-anchor="middle"><tspan fill="#6b7785" font-size="11">the lock on the event ends with this commit</tspan></text>
+<rect x="0" y="398" width="760" height="36" rx="6" fill="#f2f5f9" stroke="#c9d3df" stroke-width="1"/>
+<text x="14" y="421" text-anchor="start"><tspan fill="#222" font-size="12">Each event is handled and committed in its own transaction, so no other worker can take it while it is being dispatched.</tspan></text>
+</g>
+</svg>

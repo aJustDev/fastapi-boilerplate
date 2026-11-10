@@ -70,6 +70,8 @@ app/
 
 Persistent event bus using the **Transactional Outbox** pattern with PostgreSQL `LISTEN/NOTIFY`. Events are inserted atomically in the same DB transaction as business data and processed asynchronously by a background worker.
 
+- One event per transaction: safe with several workers or replicas
+- Woken up by NOTIFY on commit, with polling as fallback
 - Per-handler isolation with timeout and exponential backoff
 - Succeeded handlers are skipped on retry (no duplicate side effects)
 - Cleanup and replay utilities for production operations
@@ -78,11 +80,11 @@ See `docs/event-bus.md` for the full guide.
 
 ## Scheduled jobs
 
-Recurring task scheduler using `FOR UPDATE SKIP LOCKED` for multi-worker safety. Each job is a single row in `scheduled_jobs` that self-reschedules after execution.
+Recurring task scheduler where each job is a single row in `scheduled_jobs` that self-reschedules after execution. Jobs are claimed with an atomic conditional update, so only one worker runs each due job.
 
 - Works with `uvicorn --workers N` — only one process runs each job per cycle
 - Fixed interval scheduling with automatic rescheduling
-- Stale recovery on startup (crashed `RUNNING` jobs reset to `PENDING`)
+- Lease per claimed job: jobs of a crashed worker are recovered once the lease expires
 
 See `docs/jobs.md` for the full guide.
 

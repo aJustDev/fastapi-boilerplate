@@ -1,6 +1,9 @@
 from unittest.mock import patch
 
+import pytest
+
 from app.core.config import Settings
+from app.core.db import build_asyncpg_dsn
 
 
 class TestPoolSettings:
@@ -23,3 +26,20 @@ class TestPoolSettings:
             assert s.DB_POOL_SIZE == 20
             assert s.DB_MAX_OVERFLOW == 15
             assert s.DB_POOL_TIMEOUT == 60
+
+
+class TestAsyncpgDsn:
+    def test_listener_dsn_follows_database_url(self):
+        # Set directly (pgbouncer, managed provider), DATABASE_URL must win over the
+        # DB_* defaults, or LISTEN would connect to a different database than the pool.
+        with patch(
+            "app.core.db.settings.DATABASE_URL",
+            "postgresql+asyncpg://user:secret@pgbouncer:6432/prod",
+        ):
+            assert build_asyncpg_dsn() == "postgresql://user:secret@pgbouncer:6432/prod"
+
+
+class TestJobLeaseSetting:
+    def test_lease_shorter_than_twice_the_handler_timeout_is_rejected(self):
+        with pytest.raises(ValueError, match="JOB_LEASE_SECONDS"):
+            Settings(JOB_LEASE_SECONDS=100, JOB_HANDLER_TIMEOUT_SECONDS=60)

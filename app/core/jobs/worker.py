@@ -4,9 +4,10 @@ import logging
 import os
 import socket
 import traceback
+import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 
 from app.core.config import settings
 from app.core.db import async_session_factory
@@ -40,10 +41,9 @@ class JobWorker:
     # ── Main loop ─────────────────────────────────────────
 
     async def _run(self) -> None:
-        await self._recover_stale_jobs()
-
         while not self._shutdown_event.is_set():
             try:
+                await self._recover_stale_jobs()
                 await self._process_due_jobs()
             except asyncio.CancelledError:
                 raise
@@ -60,13 +60,21 @@ class JobWorker:
                 pass
 
     # ── Stale recovery ────────────────────────────────────
+    # Frees RUNNING rows whose lease expired (the worker that claimed them died).
+    # A row with a valid lease belongs to a worker that is still running it.
 
     async def _recover_stale_jobs(self) -> None:
         async with async_session_factory() as session:
             stmt = (
                 update(ScheduledJobORM)
                 .where(ScheduledJobORM.status == "RUNNING")
-                .values(status="PENDING")
+                .where(
+                    or_(
+                        ScheduledJobORM.lease_until.is_(None),
+                        ScheduledJobORM.lease_until < datetime.now(UTC),
+                    )
+                )
+                .values(status="PENDING", claimed_by=None, lease_until=None)
             )
             result = await session.execute(stmt)
             await session.commit()
@@ -74,43 +82,54 @@ class JobWorker:
                 logger.warning("Recovered %d stale RUNNING jobs", result.rowcount)
 
     # ── Job processing ────────────────────────────────────
+    # Lightweight SELECT of candidate ids without locks; each job is claimed
+    # atomically in its own transaction by `_execute_job`.
 
     async def _process_due_jobs(self) -> None:
         async with async_session_factory() as session:
             stmt = (
-                select(ScheduledJobORM)
+                select(ScheduledJobORM.id)
                 .where(ScheduledJobORM.status == "PENDING")
                 .where(ScheduledJobORM.next_run_at <= datetime.now(UTC))
                 .order_by(ScheduledJobORM.next_run_at)
                 .limit(BATCH_SIZE)
-                .with_for_update(skip_locked=True)
             )
-            result = await session.execute(stmt)
-            jobs = list(result.scalars().all())
+            candidate_ids = list((await session.execute(stmt)).scalars().all())
 
-            if not jobs:
-                return
+        for job_id in candidate_ids:
+            await self._execute_job(job_id)
 
-            for job in jobs:
-                await self._execute_job(session, job)
+    async def _execute_job(self, job_id: uuid.UUID) -> None:
+        # Phase 1: atomic claim. The conditional UPDATE ... RETURNING lets only one
+        # worker move the row from PENDING to RUNNING; no row back means another
+        # worker took it between the candidate SELECT and here.
+        async with async_session_factory() as session:
+            now = datetime.now(UTC)
+            claim_stmt = (
+                update(ScheduledJobORM)
+                .where(ScheduledJobORM.id == job_id)
+                .where(ScheduledJobORM.status == "PENDING")
+                .where(ScheduledJobORM.next_run_at <= now)
+                .values(
+                    status="RUNNING",
+                    claimed_by=self._worker_id,
+                    lease_until=now + timedelta(seconds=settings.JOB_LEASE_SECONDS),
+                    updated_at=now,
+                )
+                .returning(ScheduledJobORM.job_name, ScheduledJobORM.interval_seconds)
+            )
+            row = (await session.execute(claim_stmt)).one_or_none()
+            await session.commit()
+        if row is None:
+            return
+        job_name, interval_seconds = row
 
-    async def _execute_job(
-        self,
-        session: "asyncio.AbstractEventLoop",
-        job: ScheduledJobORM,
-    ) -> None:
-        # Phase 1: claim the job
-        job.status = "RUNNING"
-        job.claimed_by = self._worker_id
-        job.updated_at = datetime.now(UTC)
-        await session.commit()
-
-        # Phase 2: execute the handler
-        handler = job_registry.get(job.job_name)
+        # Phase 2: execute the handler, with no transaction open.
+        handler = job_registry.get(job_name)
         error: str | None = None
 
         if handler is None:
-            error = f"No handler registered for job '{job.job_name}'"
+            error = f"No handler registered for job '{job_name}'"
             logger.warning(error)
         else:
             start = datetime.now(UTC)
@@ -122,19 +141,30 @@ class JobWorker:
                 elapsed_ms = (datetime.now(UTC) - start).total_seconds() * 1000
                 logger.info(
                     "Job '%s' done (%.0fms, PID=%d)",
-                    job.job_name,
+                    job_name,
                     elapsed_ms,
                     os.getpid(),
                 )
             except Exception:
                 error = traceback.format_exc()
-                logger.exception("Job '%s' failed (PID=%d)", job.job_name, os.getpid())
+                logger.exception("Job '%s' failed (PID=%d)", job_name, os.getpid())
 
-        # Phase 3: reschedule
-        job.status = "PENDING"
-        job.next_run_at = datetime.now(UTC) + timedelta(seconds=job.interval_seconds)
-        job.last_run_at = datetime.now(UTC)
-        job.run_count += 1
-        job.last_error = error[-500:] if error else None
-        job.updated_at = datetime.now(UTC)
-        await session.commit()
+        # Phase 3: reschedule. run_count is incremented in SQL to avoid lost updates.
+        async with async_session_factory() as session:
+            now = datetime.now(UTC)
+            reschedule_stmt = (
+                update(ScheduledJobORM)
+                .where(ScheduledJobORM.id == job_id)
+                .values(
+                    status="PENDING",
+                    claimed_by=None,
+                    lease_until=None,
+                    next_run_at=now + timedelta(seconds=interval_seconds),
+                    last_run_at=now,
+                    run_count=ScheduledJobORM.run_count + 1,
+                    last_error=error[-500:] if error else None,
+                    updated_at=now,
+                )
+            )
+            await session.execute(reschedule_stmt)
+            await session.commit()
