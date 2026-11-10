@@ -1,15 +1,14 @@
 from datetime import datetime
 
-from pydantic import EmailStr
+from pydantic import Field
 
 from app.core.schema import BaseSchema
 
 
-class UserCreate(BaseSchema):
-    email: EmailStr
-    username: str
-    password: str
-    full_name: str | None = None
+class RoleRead(BaseSchema):
+    id: int
+    name: str = Field(examples=["user"])
+    description: str | None
 
 
 class UserRead(BaseSchema):
@@ -17,18 +16,8 @@ class UserRead(BaseSchema):
     email: str
     username: str
     full_name: str | None
-    is_active: bool
+    is_active: bool = Field(description="An inactive account cannot log in or use its tokens")
     created_at: datetime
-    roles: list["RoleRead"] = []
-
-
-class RoleRead(BaseSchema):
-    id: int
-    name: str
-    description: str | None
-
-
-class PermissionRead(BaseSchema):
-    id: int
-    name: str
-    description: str | None
+    roles: list[RoleRead] = Field(
+        default=[], description="Roles; their permissions guard the routes"
+    )

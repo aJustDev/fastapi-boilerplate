@@ -14,7 +14,7 @@ class ErrorResponse(BaseModel):
 
     model_config = ConfigDict(
         extra="forbid",
-        json_schema_extra={"example": {"detail": "Item not found", "code": "not_found"}},
+        json_schema_extra={"examples": [{"detail": "Item not found", "code": "not_found"}]},
     )
 
     detail: str
@@ -27,17 +27,71 @@ class ValidationErrorResponse(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
         json_schema_extra={
-            "example": {
-                "detail": "Validation error",
-                "code": "validation_error",
-                "errors": ["body.name: Field required"],
-            }
+            "examples": [
+                {
+                    "detail": "Validation error",
+                    "code": "validation_error",
+                    "errors": ["body.name: Field required"],
+                }
+            ]
         },
     )
 
     detail: str
     code: str
     errors: list[str]
+
+
+def _error(description: str, code: str, detail: str) -> dict[str, object]:
+    return {
+        "model": ErrorResponse,
+        "description": description,
+        "content": {"application/json": {"example": {"detail": detail, "code": code}}},
+    }
+
+
+# What a route can answer besides its success, to declare where it applies:
+# `APIRouter(responses={**UNAUTHENTICATED, **RATE_LIMITED})` for a whole router,
+# `@router.get(..., responses={**NOT_FOUND})` for one route. The handlers produce these
+# bodies; tests/functional/test_openapi_contract.py checks that the routes declare them.
+Responses = dict[int | str, dict[str, object]]
+
+BAD_REQUEST: Responses = {
+    400: _error("The request is not acceptable", "invalid_cursor", "Invalid pagination cursor")
+}
+UNAUTHENTICATED: Responses = {
+    401: _error(
+        "Missing, invalid, expired or revoked credentials",
+        "unauthenticated",
+        "Invalid or expired token",
+    )
+}
+FORBIDDEN: Responses = {
+    403: _error(
+        "The user lacks the permission of this route",
+        "forbidden",
+        "Permission 'items:write' required",
+    )
+}
+NOT_FOUND: Responses = {
+    404: _error(
+        "No such resource, or not one the caller may see", "not_found", "Item not found (ID: 42)"
+    )
+}
+CONFLICT: Responses = {
+    409: _error("Conflict with what is already stored", "conflict", "Conflict on User: email taken")
+}
+RATE_LIMITED: Responses = {
+    429: {
+        **_error("Rate limit of the route exceeded", "rate_limited", "Too many requests"),
+        "headers": {
+            "Retry-After": {
+                "description": "Seconds until the limit opens again",
+                "schema": {"type": "integer"},
+            }
+        },
+    }
+}
 
 
 # Applied to every operation from main.py. The 500 holds for any route; the 422 is also

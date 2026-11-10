@@ -36,17 +36,19 @@ docker run --env-file .env.prod -p 8000:8000 app                 # the API
 docker run --env-file .env.prod --entrypoint alembic app upgrade head   # the migrations
 ```
 
-Local development with compose:
+Local development with compose. Every service reads `.env.local` (`.env.<ENVIRONMENT>`), so
+create it first:
 
 ```bash
-docker compose up db -d        # PostgreSQL 18 on localhost:${DB_PORT:-5434}
+cp .env.example .env.local
+docker compose up db -d        # PostgreSQL 18 on 127.0.0.1:5434
 docker compose up --build      # db, then migrate (alembic upgrade head), then api
 docker compose exec api python scripts/seed_dev.py
 ```
 
 | Service | Role |
 |---|---|
-| `db` | `postgres:18-alpine`, volume `pgdata18`, healthcheck with `pg_isready` |
+| `db` | `postgres:18-alpine`, volume `pgdata18`, healthcheck with `pg_isready`, published on loopback only. Its user, password and database are `DB_USER`, `DB_PASSWORD` and `DB_NAME` of the env file, the same values the API connects with |
 | `migrate` | The API image running `alembic upgrade head`, then exits |
 | `api` | Starts after `migrate` succeeded; mounts the repo and runs uvicorn with `--reload` |
 
@@ -62,6 +64,11 @@ not obvious.
 - CI lints the Dockerfile with hadolint; Dependabot proposes base image updates weekly.
 - The volume name carries the PostgreSQL major version: a volume created by another major
   version cannot be reused.
+- The database keeps the credentials it was created with: after changing `DB_PASSWORD` in the env
+  file, recreate the volume (`docker compose down -v`) or change the password in PostgreSQL.
+- The host port of `db` is `${DB_PORT:-5434}` from the shell, not from the env file: when
+  changing it, export `DB_PORT` for compose and set the same value in `.env.local`.
+- A bare `.env` is git-ignored like every `.env.*` except the template.
 - The image does not run the migrations on start; run them as a separate step (`docs/migrations.md`).
 - uvicorn starts with `--no-proxy-headers` and `--no-server-header`: forwarded headers are read
   by the app from `FORWARDED_ALLOW_IPS` (`docs/security.md`), and the `Server` header is not sent.

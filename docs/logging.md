@@ -23,7 +23,7 @@ module of the logger.
 |---|---|---|
 | `auto` | colored text | JSON |
 | `json` | JSON | JSON |
-| `text` | plain text | plain text |
+| `text` | colored text | plain text |
 
 - The `uvicorn.access` logger drops OPTIONS requests, `/v1/health/liveness` and `/v1/metrics`.
   The filters compare the method and the path of the access record, never its text: the query

@@ -31,9 +31,20 @@ global exception handlers, and the shape is published in OpenAPI. Clients branch
 | `Host` header not in `ALLOWED_HOSTS` (answered by the middleware) | 400 | `invalid_host` |
 | Any other exception | 500 | `internal_error`; the message is logged, never returned |
 
-Domain exceptions declare `status_code` and `code` as class attributes. `main.py` declares
-`ErrorResponse` and `ValidationErrorResponse` (`app/core/exceptions/schemas.py`,
-`extra="forbid"`) for every operation.
+Domain exceptions declare `status_code` and `code` as class attributes.
+
+In OpenAPI, `main.py` declares the 422 and the 500 for every operation, and each router declares
+the errors its routes can answer with the constants of `app/core/exceptions/schemas.py`
+(`extra="forbid"` on both models):
+
+```python
+router = APIRouter(prefix="/items", responses={**UNAUTHENTICATED, **FORBIDDEN, **RATE_LIMITED})
+
+@router.get("/{item_id}", response_model=ItemRead, responses={**NOT_FOUND})
+```
+
+`BAD_REQUEST`, `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT` and `RATE_LIMITED` (with its
+`Retry-After` header) are the declarations available.
 
 ## Usage
 
@@ -67,6 +78,9 @@ and its log line (class, SQLSTATE and constraint, never the values) says which.
 - `tests/functional/test_error_contract.py` validates every registered handler and real requests
   against the schemas, fails when a handler is added without being checked, and checks the
   OpenAPI references.
+- `tests/functional/test_openapi_contract.py` walks the generated document: a protected operation
+  declares 401, one on a resource 404, every rate-limited one 429; every operation has a
+  description and a typed success response; every field of a request body is described.
 - A 500 never exposes the exception message; the traceback goes to the log with the request id.
 - An exception no handler knows is answered by `UnhandledErrorMiddleware`
   (`app/core/exceptions/middleware.py`), the innermost middleware. The 500 is built inside the

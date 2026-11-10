@@ -44,7 +44,7 @@ and it wins; the LISTEN connections of the event bus derive from it too. For TLS
 | `SECRET_KEY` has at least 32 bytes | outside `local` | HS256 needs a key as long as its output (RFC 7518, 3.2) |
 | `JOB_LEASE_SECONDS >= 2 * JOB_HANDLER_TIMEOUT_SECONDS` | always | a shorter lease lets another worker recover a job that is still running |
 | `ALLOWED_HOSTS` explicit, no `*` | outside `local` | requests for any host would be served |
-| `ALLOWED_ORIGINS` explicit, no `*` | outside `local` | any site could call the API with the user's credentials |
+| `ALLOWED_ORIGINS` is set (`[]` for an API no browser calls), no `*` | outside `local` | any site could call the API with the user's credentials; the default is the localhost frontends of development |
 | `FORWARDED_ALLOW_IPS` not `*` | outside `local` | any client could forge its IP (see `docs/security.md`) |
 | `FORWARDED_ALLOW_IPS` is set (empty means no proxy) | outside `local` | behind an unlisted proxy every client shares one rate limit |
 | `DATABASE_URL` has no `sslmode=` | always | the driver would fail on the first connection; it takes `ssl=` |

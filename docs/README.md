@@ -21,6 +21,7 @@ configuration, guarantees and limits, and its files. Diagrams are generated from
 
 ## Operations
 
+- [deployment.md](deployment.md): required settings, migrations, first admin, what goes in front
 - [operations.md](operations.md): health endpoints, the command line, running the workers
 - [logging.md](logging.md): JSON and colored logs, request ids
 - [metrics.md](metrics.md): Prometheus metrics and dashboards

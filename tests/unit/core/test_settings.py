@@ -30,58 +30,66 @@ class TestEnvironment:
         assert Settings().SECRET_KEY.startswith("change-me")
 
 
+# Everything production has to state, valid. A test changes or drops one of them.
+PRODUCTION = {
+    "ENVIRONMENT": "prod",
+    "SECRET_KEY": "x" * 32,
+    "ALLOWED_HOSTS": ["api.example.com"],
+    "ALLOWED_ORIGINS": ["https://app.example.com"],
+    "FORWARDED_ALLOW_IPS": "10.0.0.0/8",
+}
+
+
+def _without(key: str) -> dict:
+    return {k: v for k, v in PRODUCTION.items() if k != key}
+
+
 class TestSecretKey:
     def test_placeholder_is_rejected_outside_local(self):
         with pytest.raises(ValueError, match="changed from default"):
-            Settings(ENVIRONMENT="prod")
+            Settings(**_without("SECRET_KEY"))
 
     def test_short_key_is_rejected_outside_local(self):
         with pytest.raises(ValueError, match="at least 32 bytes"):
-            Settings(ENVIRONMENT="prod", SECRET_KEY="x" * 31)
+            Settings(**PRODUCTION | {"SECRET_KEY": "x" * 31})
 
     def test_long_random_key_is_accepted(self):
-        s = Settings(
-            ENVIRONMENT="prod",
-            SECRET_KEY="x" * 32,
-            ALLOWED_HOSTS=["api.example.com"],
-            FORWARDED_ALLOW_IPS="",
-        )
-        assert s.SECRET_KEY == "x" * 32
+        assert Settings(**PRODUCTION).SECRET_KEY == "x" * 32
 
 
 class TestNetworkExposure:
-    prod = {"ENVIRONMENT": "prod", "SECRET_KEY": "x" * 32}
+    def test_explicit_values_are_accepted(self):
+        assert Settings(**PRODUCTION).ALLOWED_HOSTS == ["api.example.com"]
 
     def test_wildcard_hosts_are_rejected_outside_local(self):
         with pytest.raises(ValueError, match="ALLOWED_HOSTS"):
-            Settings(**self.prod, ALLOWED_HOSTS=["*"])
+            Settings(**PRODUCTION | {"ALLOWED_HOSTS": ["*"]})
 
     def test_wildcard_origins_are_rejected_outside_local(self):
         with pytest.raises(ValueError, match="ALLOWED_ORIGINS"):
-            Settings(**self.prod, ALLOWED_HOSTS=["api.example.com"], ALLOWED_ORIGINS=["*"])
+            Settings(**PRODUCTION | {"ALLOWED_ORIGINS": ["*"]})
+
+    def test_origins_must_be_stated_outside_local(self):
+        # The default is the localhost frontends of development: in production they
+        # would be allowed origins nobody chose.
+        with pytest.raises(ValueError, match="ALLOWED_ORIGINS must be set"):
+            Settings(**_without("ALLOWED_ORIGINS"))
+
+    def test_an_api_without_browser_clients_states_no_origins(self):
+        assert Settings(**PRODUCTION | {"ALLOWED_ORIGINS": []}).ALLOWED_ORIGINS == []
 
     def test_trusting_every_proxy_is_rejected_outside_local(self):
         with pytest.raises(ValueError, match="FORWARDED_ALLOW_IPS"):
-            Settings(**self.prod, ALLOWED_HOSTS=["api.example.com"], FORWARDED_ALLOW_IPS="*")
-
-    def test_explicit_values_are_accepted(self):
-        s = Settings(
-            **self.prod,
-            ALLOWED_HOSTS=["api.example.com"],
-            ALLOWED_ORIGINS=["https://app.example.com"],
-            FORWARDED_ALLOW_IPS="10.0.0.0/8",
-        )
-        assert s.ALLOWED_HOSTS == ["api.example.com"]
+            Settings(**PRODUCTION | {"FORWARDED_ALLOW_IPS": "*"})
 
     def test_trusted_proxies_must_be_stated_outside_local(self):
         # Behind a proxy that is not listed every client has the proxy's address: one rate
         # limit for everybody, and five bad logins a minute lock all of them out.
         with pytest.raises(ValueError, match="FORWARDED_ALLOW_IPS must be set"):
-            Settings(**self.prod, ALLOWED_HOSTS=["api.example.com"])
+            Settings(**_without("FORWARDED_ALLOW_IPS"))
 
     def test_no_proxy_is_a_valid_statement(self):
-        s = Settings(**self.prod, ALLOWED_HOSTS=["api.example.com"], FORWARDED_ALLOW_IPS="")
-        assert s.FORWARDED_ALLOW_IPS == ""
+        assert Settings(**PRODUCTION | {"FORWARDED_ALLOW_IPS": ""}).FORWARDED_ALLOW_IPS == ""
 
     def test_local_keeps_the_permissive_defaults(self):
         assert Settings(ENVIRONMENT="local").ALLOWED_HOSTS == ["*"]

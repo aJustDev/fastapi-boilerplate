@@ -39,5 +39,5 @@ Versions are kept at the latest release; Dependabot proposes updates weekly.
 - One database to back up and monitor; the event and job throughput is bounded by PostgreSQL,
   which is enough for the target size and documented in `docs/event-bus.md` and `docs/jobs.md`.
 - Async everywhere: CPU-bound work (Argon2) must go through `run_blocking`.
-- Staying on latest versions means absorbing breaking changes early (FastAPI 0.140 changed how
+- Staying on latest versions means absorbing breaking changes early (FastAPI 0.137 changed how
   included routers expose paths, see `docs/metrics.md`).

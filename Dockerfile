@@ -1,14 +1,15 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1
 
 # -- Builder --------------------------------------------------
-FROM python:3.14-slim AS builder
+# Pinned by digest: the tag moves, the digest is what was tested. Dependabot bumps it.
+FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /build
 
-COPY --from=ghcr.io/astral-sh/uv:0.11.29 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /usr/local/bin/uv
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
@@ -19,7 +20,7 @@ COPY app ./app
 RUN uv pip install --no-deps . --python /build/.venv/bin/python
 
 # -- Runtime --------------------------------------------------
-FROM python:3.14-slim AS runtime
+FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -29,6 +30,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app
 
 WORKDIR /app
+
+# The base image is pinned by digest, so its system packages are as old as that digest.
+# Security fixes Debian has published since are applied here; the daily audit workflow
+# fails on any that is still missing.
+# hadolint ignore=DL3005
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
 
 # Nothing installs packages at runtime: pip only widens the attack surface.
 RUN python -m pip uninstall -y pip setuptools wheel

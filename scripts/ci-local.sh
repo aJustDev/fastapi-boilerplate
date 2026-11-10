@@ -46,11 +46,12 @@ if [ "${SKIP_INTEGRATION:-0}" = "1" ]; then
   step "Tests (unit + functional)" uv run pytest --ignore=tests/integration
 else
   step "Tests (unit, functional and integration)" uv run pytest --cov=app
+  step "Docker image builds" docker build -q -t app:ci-local .
 fi
 
 echo ""
 if [ "$failed" = "0" ]; then
-  echo "ALL GREEN: same checks as CI (hadolint runs only in CI)."
+  echo "ALL GREEN: same checks as CI (hadolint and the image start-up checks run only in CI)."
 else
   echo "FAILURES: do not merge."
   exit 1

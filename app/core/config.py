@@ -31,7 +31,6 @@ class Settings(BaseSettings):
     APP_NAME: str = "FastAPI App"
     APP_VERSION: str = _APP_VERSION
     APP_DESCRIPTION: str = ""
-    ROOT_PATH: str = ""
 
     # Database — individual vars or full URL
     DB_HOST: str = "localhost"
@@ -146,8 +145,11 @@ class Settings(BaseSettings):
             raise ValueError(
                 "ALLOWED_HOSTS must be an explicit list outside local; '*' is not allowed."
             )
-        if not self.ALLOWED_ORIGINS or "*" in self.ALLOWED_ORIGINS:
-            raise ValueError("ALLOWED_ORIGINS must list the exact frontend origins outside local.")
+        if "*" in self.ALLOWED_ORIGINS or "ALLOWED_ORIGINS" not in self.model_fields_set:
+            raise ValueError(
+                "ALLOWED_ORIGINS must be set outside local to the exact frontend origins "
+                "(or to [] for an API no browser calls); '*' is not allowed."
+            )
         if self.FORWARDED_ALLOW_IPS.strip() == "*":
             raise ValueError(
                 'FORWARDED_ALLOW_IPS must not be "*" outside local: any client could forge '

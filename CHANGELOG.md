@@ -12,6 +12,10 @@ not count.
 
 ### Added
 
+- Docs: deployment guide (required settings, migrations, first admin, what goes in front of the API) (#26).
+- CI `image` job: builds the image, checks that it refuses to start unconfigured and that it becomes healthy with production settings. The daily audit also scans the image for vulnerabilities with a fix (#26).
+- OpenAPI: each route declares the errors it answers (401, 403, 404, 409, 429 with `Retry-After`), endpoints and request fields are described, and the health and filter responses are typed (#26).
+- A context may keep its exceptions in `app/<context>/exceptions.py` (layers contract) (#26).
 - `python -m app.cli`: `create-admin`, `outbox replay`, `outbox cleanup` and `worker` (the outbox and job workers without the API). `OUTBOX_WORKER_ENABLED` and `JOB_WORKER_ENABLED` turn them off in the API process (#25).
 - `outbox_cleanup` daily job, and counters `outbox_events_processed_total` and `outbox_events_failed_total` (#25).
 - `DOCS_ENABLED` (off by default; Swagger UI, ReDoc and `/openapi.json`) and `METRICS_TOKEN` (bearer token for `/v1/metrics`) (#25).
@@ -34,6 +38,11 @@ not count.
 
 ### Changed
 
+- `fastapi` without the `standard` extra, plus `python-multipart` and `email-validator`: 46 runtime packages instead of 78 (#26).
+- Outside local `ALLOWED_ORIGINS` must be set; `[]` is valid for an API that no browser calls (#26).
+- Compose: the `db` service takes its credentials from the env file the API reads; PostgreSQL, Prometheus and Grafana are published on loopback only (#26).
+- The base image is pinned by digest with Debian security updates applied at build time; GitHub Actions are pinned by commit; workflows declare `permissions: contents: read`; `main` is a protected branch (#26).
+- Meta-tests: the SQL scanner follows variables and more calls; rate limits are checked for tier and for the decorator really wrapping the route; public and exempt routes are listed by method and path; the drift test compares CHECK constraints and index predicates (#26).
 - Event handlers receive `(payload, event_id)`, and their retry state is keyed by module and qualified name. Events pending during the upgrade run their handlers once more (#25).
 - `OUTBOX_MAX_RETRIES` defaults to 12 (a little over an hour of retries) instead of 5 (about 30 s) (#25).
 - Outside local `FORWARDED_ALLOW_IPS` must be set (empty for no proxy), and uvicorn runs with `--no-proxy-headers` (#25).
@@ -54,6 +63,8 @@ not count.
 
 ### Removed
 
+- The `ROOT_PATH` setting (`FastAPI(root_path=...)` is deprecated): give the prefix to the server with `uvicorn --root-path` (#26).
+- Unused schemas `UserCreate` and `PermissionRead` (#26).
 - `SlowAPIMiddleware`: it does nothing for routes of an included router; the endpoint decorators are the rate limit (#25).
 - The partial index `ix_users_is_active` (#25).
 - `app/deps/database.py`, an unused re-export of `get_session` (#24).
@@ -63,6 +74,10 @@ not count.
 
 ### Fixed
 
+- The first command of the quick start failed on a fresh clone: compose needs `.env.local` and no step created it (#26).
+- A `DB_PASSWORD` changed in `.env.local` reached the API and not the database container (#26).
+- Deprecation warnings raised in integration tests were not turned into errors (missing `tests/integration/__init__.py`) (#26).
+- Docs: jobs do not use `SKIP LOCKED`, `LOG_FORMAT=text` is colored in local, FastAPI changed router flattening in 0.137, and other statements the code did not back (#26).
 - Two event handlers with the same function name shared one retry state: when one failed and the other succeeded, the event was marked processed and the failed handler never ran again (#25).
 - The example webhook handler reported a 500 from the receiver as a delivery, so it was never retried (#25).
 - An instance that started while the database was unreachable never became ready and never started its workers (#25).

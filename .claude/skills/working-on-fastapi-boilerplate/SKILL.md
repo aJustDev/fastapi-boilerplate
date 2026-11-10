@@ -18,7 +18,8 @@ description: Orientation and workflow for the FastAPI boilerplate. Use at the st
 
 1. Read `docs/architecture.md` and the doc of the piece you will touch (index: `docs/README.md`).
 2. Copy the closest existing pattern: `app/auth/` (services, rotation, own transaction on
-   reuse), `app/items/` (plain CRUD with events).
+   reuse), `app/items/` (CRUD with events, permission guards on the routes, ownership in
+   `services/access.py`).
 3. Create a branch before the first change.
 
 ## While coding
@@ -27,9 +28,14 @@ description: Orientation and workflow for the FastAPI boilerplate. Use at the st
   the rules. Contexts do not import each other; `app/core` imports no context.
 - Register new models and handlers in `app/db_registry.py`.
 - Domain exceptions with a `code`, never `HTTPException` below the router.
+- A route gets a permission guard, a rate limit under the `@router` decorator and its error
+  responses; a use case that takes an id checks who owns it (`docs/security.md`).
+- Request schemas use the bounded types of `app/core/schema.py`, never bare `str` or `int`.
 - A model change comes with its Alembic migration, reviewed by hand (`docs/migrations.md`).
 - A new setting goes to `Settings` and `.env.example`.
-- Tests at the right level, with a negative control for bug fixes (`docs/testing.md`).
+- Tests at the right level, with a negative control for bug fixes (`docs/testing.md`). What is
+  stored, who may touch it and malformed input belong in `tests/integration/api/` (real
+  PostgreSQL); a new resource goes in `RESOURCES` of `test_authorization.py`.
 - Update the doc of the piece, with diagrams from the `esquemas-svg` skill reviewed as PNG.
 
 ## Before committing

@@ -51,21 +51,26 @@ uv run pytest --cov=app                # with coverage
 
 ## Meta-tests
 
-Each one has a `test_scanner_sees_...` canary that fails if it finds nothing to check. Exemptions
-go in the list at the top of the file, each with its reason.
+A test that scans the code has a `test_scanner_sees_...` canary that fails if it finds nothing to
+check, and `test_detector_...` cases with the forms it must catch. Exemptions go in the list at
+the top of the file, each with its reason, keyed by method and path where routes are listed.
 
 | Test | Rule |
 |---|---|
-| `tests/functional/test_auth_required_on_all_endpoints.py` | Every route answers 401 without a token, except `PUBLIC` |
-| `tests/unit/test_every_endpoint_has_a_rate_limit.py` | Every endpoint declares a rate limit, except `EXEMPT` |
-| `tests/unit/test_api_endpoint_single_use_case.py` | An endpoint runs at most one use case |
+| `tests/functional/test_auth_required_on_all_endpoints.py` | Every route answers 401 without a token and to a token that is not one, except `PUBLIC` |
+| `tests/integration/api/test_authorization.py` | No route with a path id serves the resource of another user |
+| `tests/unit/test_every_endpoint_has_a_rate_limit.py` | Every endpoint is limited at its tier, and the route runs the limited function, except `EXEMPT` |
+| `tests/unit/test_api_endpoint_single_use_case.py` | No function of a router module runs more than one use case |
 | `tests/functional/test_error_contract.py` | Error bodies match the published schemas |
-| `tests/unit/test_no_interpolated_sql.py` | No SQL in `app/` is built from strings |
+| `tests/functional/test_openapi_contract.py` | Each operation declares the errors it answers and is described |
+| `tests/unit/test_no_interpolated_sql.py` | No SQL in `app/` is built from strings, directly or through a variable |
 | `tests/unit/core/events/test_published_event_types_have_handlers.py` | Every published event type has a handler |
-| `tests/unit/core/test_register_middleware.py` | Middleware stack and order |
+| `tests/integration/core/test_job_rows.py` | Every job handler has its row and every row its handler |
+| `tests/unit/core/test_register_middleware.py` | Middleware stack and order; the paths exempt from the host check are the probes |
+| `tests/functional/test_middleware_behaviour.py` | Hosts, origins and trusted proxies let through what the settings say |
 | `tests/unit/core/test_env_example_sync.py` | `.env.example` lists every setting |
 | `tests/unit/test_dockerfile_runtime_copy.py` | The image copies an allow-list |
-| `tests/integration/test_migrations.py` | Models match the migrations; downgrades work |
+| `tests/integration/test_migrations.py` | Models match the migrations, CHECK constraints and index predicates included; downgrades work |
 
 Meta-tests that walk the API use `tests/_routes.py` (`iter_api_routes`), not `app.routes`.
 

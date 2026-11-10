@@ -16,7 +16,6 @@ htmlcov/
 .claude/
 .github/
 scripts/
-sql/
 notes/
 observability/
 .editorconfig

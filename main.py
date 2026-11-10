@@ -16,7 +16,6 @@ def create_app() -> FastAPI:
         title=settings.APP_NAME,
         version=settings.APP_VERSION,
         description=settings.APP_DESCRIPTION,
-        root_path=settings.ROOT_PATH,
         lifespan=lifespan,
         responses=ERROR_RESPONSES,
         openapi_url="/openapi.json" if settings.DOCS_ENABLED else None,

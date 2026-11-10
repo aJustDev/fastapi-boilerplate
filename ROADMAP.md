@@ -1,35 +1,36 @@
 # Roadmap
 
-Current state of the boilerplate and what comes next. Items are grouped by priority based on production impact. Contributions are welcome — pick any item, open an issue to discuss the approach, and submit a PR.
+Current state of the boilerplate and what comes next. Contributions are welcome — pick any item, open an issue to discuss the approach, and submit a PR.
 
 ## Done
 
 - [x] Bounded contexts with layers inside (router -> use case -> service -> repo -> model), enforced by import-linter
-- [x] Async SQLAlchemy 2.x + asyncpg
-- [x] Domain exception hierarchy with global HTTP handlers
+- [x] Async SQLAlchemy 2.x + asyncpg, with the commit as part of the request
+- [x] Domain exception hierarchy with global HTTP handlers; unhandled errors answered inside the middleware stack
 - [x] CORS configuration
 - [x] Alembic migrations (async env, reference data as migrations, drift test)
-- [x] Health check endpoints (used by Docker and scheduled jobs)
-- [x] JWT auth with access + refresh tokens, Argon2 hashing, permission guards
-- [x] Repository pattern with offset + cursor pagination and field filtering
-- [x] Unit and integration test structure
-- [x] Docker + docker-compose
-- [x] Pre-commit hooks (ruff check + format)
-- [x] Transactional Outbox event bus with PostgreSQL LISTEN/NOTIFY
+- [x] Health endpoints that follow the database, exempt from the host check
+- [x] JWT auth with access + single-use refresh tokens, reuse detection, Argon2 hashing
+- [x] Authorization: a permission on every route, ownership on every resource, tested with two users
+- [x] Repository pattern with offset + cursor pagination and declared filters
+- [x] Tests at four levels (unit, functional, integration, whole requests on PostgreSQL) and meta-tests
+- [x] Docker (multi-stage, non-root, pinned by digest) + docker-compose
+- [x] Pre-commit hooks (ruff check + format); `main` protected, CI required
+- [x] Transactional Outbox event bus with PostgreSQL LISTEN/NOTIFY, daily cleanup and replay command
 - [x] Scheduled jobs claimed with a lease (multi-worker safe)
 - [x] Configurable connection pool (`pool_size`, `max_overflow`, `pool_timeout` via env vars)
-- [x] Structured JSON logging with per-request `request_id` tracing
-- [x] Error contract (`{detail, code}`) published in OpenAPI
-- [x] HTTP hardening: security headers, trusted hosts and proxies, database timeouts
-- [x] Strict tooling: mypy, import-linter, pip-audit, hadolint, meta-tests
+- [x] Structured JSON logging with per-request `request_id` tracing, carried into event handlers
+- [x] Error contract (`{detail, code}`) declared per route in OpenAPI
+- [x] HTTP hardening: security headers, trusted hosts and proxies, bounded input, database timeouts
+- [x] Fail-closed configuration: no default environment, validators outside local
+- [x] Rate limiting: a limit on every endpoint via slowapi (strict for auth, default for the rest), in memory per process
+- [x] Prometheus-compatible `/v1/metrics`: HTTP, DB pool and outbox metrics
+- [x] Operations: `python -m app.cli` (first admin, outbox, worker process), deployment guide
+- [x] Strict tooling: mypy, import-linter, pip-audit, hadolint, image build and scan in CI
 - [x] Docs per feature with generated diagrams; Claude Code rules and skills in `.claude/`
 
-## P1 - Hardening
+## Next
 
-- [x] Rate limiting: a limit on every endpoint via slowapi (strict for auth, default for the rest), in memory per process
-- [x] Observability (metrics) — Prometheus-compatible `/v1/metrics` endpoint with HTTP request metrics and DB pool gauges
-
-## P2 - Nice to have
 
 ### Observability (traces)
 
@@ -38,7 +39,8 @@ multiprocess mode for `--workers N`.
 
 ### Shared rate limit storage
 
-A Redis or memcached storage for slowapi, so limits hold across processes and restarts.
+Limits that hold across processes and restarts. slowapi is barely maintained and offers Redis
+or memcached; a limiter with a PostgreSQL store would keep the stack to one database.
 
 ### API versioning strategy
 

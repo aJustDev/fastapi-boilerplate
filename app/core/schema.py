@@ -61,7 +61,7 @@ class PaginatedResponse[T](BaseModel):
     """Classic offset-based pagination."""
 
     items: list[T]
-    total: int
+    total: int = Field(description="Rows that match the filters, over every page")
     page: int
     page_size: int
 
@@ -74,5 +74,7 @@ class CursorPaginatedResponse[T](BaseModel):
     """Cursor-based pagination for large datasets."""
 
     items: list[T]
-    next_cursor: str | None = None
+    next_cursor: str | None = Field(
+        default=None, description="Pass it as `cursor` to get the next page; `null` on the last"
+    )
     has_more: bool = False

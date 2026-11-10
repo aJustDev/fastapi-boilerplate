@@ -12,20 +12,21 @@
 ```bash
 git clone <repo-url>
 cd fastapi
+cp .env.example .env.local
 uv sync
 bash scripts/install-hooks.sh
 
 docker compose up db -d
 uv run alembic upgrade head
 uv run python scripts/seed_dev.py
-ENVIRONMENT=local uv run uvicorn main:app --reload
+uv run uvicorn main:app --reload
 ```
 
 ## Workflow
 
 1. Create a branch from `main`: `git switch -c feat/my-change`
 2. Implement following the layer rules (see `docs/architecture.md`)
-3. Add unit and/or integration tests
+3. Add tests at the level that can see the change (see `docs/testing.md`)
 4. Atomic commits grouped by responsibility (see commits section)
 5. Open a PR against `main`
 
@@ -39,9 +40,12 @@ Types:
 - `feat` — new functionality
 - `fix` — bug fix
 - `refactor` — restructuring with no behavior change
+- `perf` — a change made for speed or resource use
 - `test` — new or modified tests
 - `docs` — documentation
-- `chore` — configuration, dependencies, CI
+- `build` — dependencies, the image
+- `ci` — workflows
+- `chore` — configuration and housekeeping
 
 Common scopes: a context (`auth`, `items`) or a piece of infrastructure (`core`, `db`, `events`, `jobs`, `metrics`, `logging`, `migrations`, `deps`, `docker`)
 
@@ -68,20 +72,19 @@ the rules are in `docs/architecture.md`; the short version:
 ## Testing
 
 ```bash
-# Unit (no DB, mocks)
-uv run pytest tests/unit -v
-
-# Integration (no real DB, session override)
-uv run pytest tests/integration -v
-
-# With coverage
+uv run pytest tests/unit -v          # no I/O: collaborators mocked
+uv run pytest tests/functional -v    # HTTP through the app, session mocked
+uv run pytest tests/integration -v   # real PostgreSQL (Docker): SQL, workers, whole requests
 uv run pytest --cov=app --cov-report=term-missing
 ```
 
-Guidelines:
+Guidelines (`docs/testing.md` has the fixtures of each level):
 - Unit: mock repos with `AsyncMock`, test services and use cases in isolation
-- Integration: `httpx.AsyncClient` + `ASGITransport`, override `get_session`
-- Naming: `test_{feature}_{scenario}`
+- Functional: `client` (`httpx.AsyncClient` + `ASGITransport`), patch repository methods
+- Integration: a real repository on `db_session`; a whole request with `api_client` in
+  `tests/integration/api/`, the level for anything about what is stored or who may touch it
+- A test for a bug fails against the code before the fix: check it once
+- Naming: `test_{what_must_hold}`
 
 ## Adding a new module
 

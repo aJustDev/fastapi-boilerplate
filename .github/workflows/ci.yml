@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# Nothing here writes to the repository: the token only reads it.
+permissions:
+  contents: read
+
 # A new push to the same branch cancels the run that is now stale.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -17,10 +21,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.7"
 
       - name: Lockfile up to date
         run: uv lock --check
@@ -70,7 +76,7 @@ jobs:
         run: uv run pip-audit --skip-editable
 
       - name: Lint Dockerfile
-        uses: hadolint/hadolint-action@v3.5.0
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
         with:
           dockerfile: Dockerfile
           failure-threshold: warning
@@ -84,13 +90,55 @@ jobs:
       # Same time zone as the image, so naive datetimes mean the same in tests and prod.
       TZ: UTC
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.7"
 
       - name: Install dependencies
         run: uv sync --frozen
 
       - name: Run tests (unit, functional and integration)
         run: uv run pytest --cov=app --cov-report=term-missing
+
+  image:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # hadolint reads the Dockerfile; only a build shows that it works.
+      - name: Build the image
+        run: docker build -t app:ci .
+
+      # As shipped the image is ENVIRONMENT=production with the placeholder key: it has to
+      # refuse to start, not serve requests signed with a key everybody knows.
+      - name: The image refuses to start unconfigured
+        run: |
+          if docker run --rm app:ci 2> startup.log; then
+            echo "::error::the image started without a SECRET_KEY"
+            exit 1
+          fi
+          grep -q "SECRET_KEY must be changed" startup.log
+
+      # With the settings production requires, and no database: it starts, and its own
+      # HEALTHCHECK passes under an explicit ALLOWED_HOSTS.
+      - name: The image starts and is healthy with production settings
+        run: |
+          docker run -d --name app \
+            -e SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')" \
+            -e 'ALLOWED_HOSTS=["api.example.com"]' \
+            -e 'ALLOWED_ORIGINS=[]' \
+            -e FORWARDED_ALLOW_IPS= \
+            app:ci
+          for _ in $(seq 1 40); do
+            status="$(docker inspect --format '{{.State.Health.Status}}' app)"
+            if [ "$status" = "healthy" ]; then exit 0; fi
+            sleep 2
+          done
+          docker logs app
+          echo "::error::the container did not become healthy (last status: $status)"
+          exit 1

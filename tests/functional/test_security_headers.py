@@ -1,6 +1,6 @@
 from httpx import ASGITransport, AsyncClient
 
-from app.core.security.headers import CSP, SecurityHeadersMiddleware
+from app.core.security.headers import CSP, PERMISSIONS_POLICY, SecurityHeadersMiddleware
 
 
 async def test_api_responses_carry_the_hardening_headers(client: AsyncClient):
@@ -10,6 +10,7 @@ async def test_api_responses_carry_the_hardening_headers(client: AsyncClient):
     assert response.headers["X-Frame-Options"] == "DENY"
     assert response.headers["Referrer-Policy"] == "no-referrer"
     assert response.headers["Content-Security-Policy"] == CSP
+    assert response.headers["Permissions-Policy"] == PERMISSIONS_POLICY
     assert "Strict-Transport-Security" not in response.headers  # HSTS off by default
 
 
