@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from app.core.schema import BaseSchema, Int32, LongText, ShortText
 
@@ -24,20 +24,22 @@ class ItemSortField(StrEnum):
 
 
 class ItemCreate(BaseSchema):
-    name: ShortText
-    description: LongText | None = None
-    category: ItemCategory = ItemCategory.GENERAL
-    priority: Int32 = 0
+    name: ShortText = Field(description="1 to 200 characters", examples=["Desk lamp"])
+    description: LongText | None = Field(default=None, description="Up to 10 000 characters")
+    category: ItemCategory = Field(default=ItemCategory.GENERAL, description="One of the listed")
+    priority: Int32 = Field(default=0, description="Any integer; lists can be sorted by it")
 
 
 class ItemUpdate(BaseSchema):
     """Partial update: a field that is absent is left as it is."""
 
-    name: ShortText | None = None
-    description: LongText | None = None
-    category: ItemCategory | None = None
-    priority: Int32 | None = None
-    is_active: bool | None = None
+    name: ShortText | None = Field(default=None, description="1 to 200 characters")
+    description: LongText | None = Field(
+        default=None, description="Up to 10 000 characters; `null` clears it"
+    )
+    category: ItemCategory | None = Field(default=None, description="One of the listed")
+    priority: Int32 | None = Field(default=None, description="Any integer")
+    is_active: bool | None = Field(default=None, description="Inactive items stay listed")
 
     @field_validator("name", "category", "priority", "is_active", mode="before")
     @classmethod
@@ -56,9 +58,9 @@ class ItemRead(BaseSchema):
     category: str
     priority: int
     is_active: bool
-    owner_id: int
+    owner_id: int = Field(description="Id of the user who created it")
     created_at: datetime
-    updated_at: datetime | None
+    updated_at: datetime | None = Field(description="`null` until the first change")
 
 
 class ItemFilterOptions(BaseSchema):

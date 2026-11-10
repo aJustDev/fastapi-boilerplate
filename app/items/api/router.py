@@ -5,6 +5,13 @@ from fastapi import APIRouter, Depends, Request
 
 from app.core.config import settings
 from app.core.events.bus import EventBus
+from app.core.exceptions.schemas import (
+    BAD_REQUEST,
+    FORBIDDEN,
+    NOT_FOUND,
+    RATE_LIMITED,
+    UNAUTHENTICATED,
+)
 from app.core.ratelimit import limiter
 from app.core.schema import (
     CursorPaginatedResponse,
@@ -36,7 +43,11 @@ from app.items.use_cases.get_item import GetItemUseCase
 from app.items.use_cases.list_items import ListItemsCursorUseCase, ListItemsUseCase
 from app.items.use_cases.update_item import UpdateItemUseCase
 
-router = APIRouter(prefix="/items", tags=["Items"])
+router = APIRouter(
+    prefix="/items",
+    tags=["Items"],
+    responses={**UNAUTHENTICATED, **FORBIDDEN, **RATE_LIMITED},
+)
 
 ItemRepoDep = Annotated[ItemRepo, Depends(get_repo(ItemRepo))]
 EventBusDep = Annotated[EventBus, Depends(get_event_bus)]
@@ -78,6 +89,7 @@ def _filters(
 @router.get("/filters", response_model=ItemFilterOptions)
 @limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def get_filter_options(request: Request, repo: ItemRepoDep, actor: Reader):
+    """The values present in the caller's items, to build filter controls."""
     return await GetFilterOptionsUseCase(repo).execute(actor)
 
 
@@ -95,6 +107,10 @@ async def list_items(
     category: ItemCategory | None = None,
     is_active: bool | None = None,
 ):
+    """The caller's items, by page number, with the total. `name` is a "contains" filter.
+
+    A holder of `items:manage` gets the items of every owner.
+    """
     uc = ListItemsUseCase(repo)
     items, total = await uc.execute(
         actor,
@@ -112,7 +128,7 @@ async def list_items(
     )
 
 
-@router.get("/cursor", response_model=CursorPaginatedResponse[ItemRead])
+@router.get("/cursor", response_model=CursorPaginatedResponse[ItemRead], responses={**BAD_REQUEST})
 @limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def list_items_cursor(
     request: Request,
@@ -126,6 +142,11 @@ async def list_items_cursor(
     category: ItemCategory | None = None,
     is_active: bool | None = None,
 ):
+    """The caller's items by cursor: pass `next_cursor` of a page to get the next one.
+
+    Keep `order_by` and the filters the same between pages; a cursor issued for another
+    order answers 400 `invalid_cursor`.
+    """
     uc = ListItemsCursorUseCase(repo)
     items, next_cursor, has_more = await uc.execute(
         actor,
@@ -142,9 +163,10 @@ async def list_items_cursor(
     )
 
 
-@router.get("/{item_id}", response_model=ItemRead)
+@router.get("/{item_id}", response_model=ItemRead, responses={**NOT_FOUND})
 @limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def get_item(request: Request, item_id: IdPath, repo: ItemRepoDep, actor: Reader):
+    """One item. 404 also for an item that belongs to someone else."""
     uc = GetItemUseCase(repo)
     item = await uc.execute(item_id, actor)
     return ItemRead.model_validate(item)
@@ -159,6 +181,7 @@ async def create_item(
     actor: Writer,
     event_bus: EventBusDep,
 ):
+    """Create an item owned by the caller. Publishes `item.created`."""
     uc = CreateItemUseCase(repo, event_bus)
     item = await uc.execute(
         body.name, actor.user_id, body.description, body.category, body.priority
@@ -166,7 +189,7 @@ async def create_item(
     return ItemRead.model_validate(item)
 
 
-@router.patch("/{item_id}", response_model=ItemRead)
+@router.patch("/{item_id}", response_model=ItemRead, responses={**NOT_FOUND})
 @limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def update_item(
     request: Request,
@@ -176,13 +199,14 @@ async def update_item(
     actor: Writer,
     event_bus: EventBusDep,
 ):
+    """Change the fields sent; the others stay as they are. Publishes `item.updated`."""
     uc = UpdateItemUseCase(repo, event_bus)
     data = body.model_dump(exclude_unset=True)
     item = await uc.execute(item_id, data, actor)
     return ItemRead.model_validate(item)
 
 
-@router.delete("/{item_id}", status_code=204)
+@router.delete("/{item_id}", status_code=204, responses={**NOT_FOUND})
 @limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def delete_item(
     request: Request,
@@ -191,5 +215,6 @@ async def delete_item(
     actor: Deleter,
     event_bus: EventBusDep,
 ):
+    """Delete an item. Publishes `item.deleted`."""
     uc = DeleteItemUseCase(repo, event_bus)
     await uc.execute(item_id, actor)

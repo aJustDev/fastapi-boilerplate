@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 from fastapi import APIRouter, Request
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from starlette.responses import JSONResponse
 
@@ -12,8 +13,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Health"])
 
 
-@router.get("/health/liveness")
+class HealthStatus(BaseModel):
+    status: str = Field(description="`alive`, `ready`, `not ready` or `database unavailable`")
+
+
+@router.get("/health/liveness", response_model=HealthStatus)
 async def liveness():
+    """The process is up and serving requests. It does not look at the database."""
     return {"status": "alive"}
 
 
@@ -22,7 +28,11 @@ async def liveness():
 READINESS_DB_CHECK_SECONDS = 2
 
 
-@router.get("/health/readiness")
+@router.get(
+    "/health/readiness",
+    response_model=HealthStatus,
+    responses={503: {"model": HealthStatus, "description": "Not ready to serve requests"}},
+)
 async def readiness(request: Request):
     """Whether this instance can serve requests right now.
 
