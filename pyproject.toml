@@ -27,6 +27,8 @@ dependencies = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# The default pytest-asyncio is moving to; integration modules ask for "session" explicitly.
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 addopts = ["--strict-markers"]
 # pytest applies the last matching filter: the blanket ignore goes first so that
@@ -61,7 +63,7 @@ select = [
     # failure. The rule exempts the ones that do, so a `noqa` here is a written decision.
     "BLE",  # flake8-blind-except
     "SIM",  # flake8-simplify
-    "TCH",  # flake8-type-checking
+    "TC",   # flake8-type-checking
     "G",    # flake8-logging-format
     "S",    # flake8-bandit (security)
     "TID251",  # flake8-tidy-imports: banned-api only (see the block below)

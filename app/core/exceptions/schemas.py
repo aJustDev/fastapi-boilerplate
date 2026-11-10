@@ -14,7 +14,7 @@ class ErrorResponse(BaseModel):
 
     model_config = ConfigDict(
         extra="forbid",
-        json_schema_extra={"example": {"detail": "Item not found", "code": "not_found"}},
+        json_schema_extra={"examples": [{"detail": "Item not found", "code": "not_found"}]},
     )
 
     detail: str
@@ -27,11 +27,13 @@ class ValidationErrorResponse(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
         json_schema_extra={
-            "example": {
-                "detail": "Validation error",
-                "code": "validation_error",
-                "errors": ["body.name: Field required"],
-            }
+            "examples": [
+                {
+                    "detail": "Validation error",
+                    "code": "validation_error",
+                    "errors": ["body.name: Field required"],
+                }
+            ]
         },
     )
 

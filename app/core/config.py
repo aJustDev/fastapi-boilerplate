@@ -31,7 +31,6 @@ class Settings(BaseSettings):
     APP_NAME: str = "FastAPI App"
     APP_VERSION: str = _APP_VERSION
     APP_DESCRIPTION: str = ""
-    ROOT_PATH: str = ""
 
     # Database — individual vars or full URL
     DB_HOST: str = "localhost"
