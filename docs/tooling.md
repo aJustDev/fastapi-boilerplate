@@ -24,7 +24,7 @@ flowchart LR
 |---|---|
 | `pre-commit` hook | `ruff check` and `ruff format --check` on staged Python files |
 | `pre-push` hook | Blocks direct pushes to `main` (`git push --no-verify` to bypass once) |
-| CI `lint` job | `uv lock --check`, ruff, mypy, diagrams up to date, pip-audit (warning only), hadolint |
+| CI `lint` job | `uv lock --check`, ruff, mypy, a single Alembic head, diagrams up to date, pip-audit (warning only), hadolint |
 | CI `test` job | The whole suite (unit, functional, integration with testcontainers) with coverage >= 80% |
 | `audit` workflow | pip-audit on the full dependency tree, daily; this one fails |
 | Dependabot | `uv`, GitHub Actions and the Docker base image, weekly and grouped |

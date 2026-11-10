@@ -82,14 +82,20 @@ import app.core.jobs.handlers.heartbeat  # noqa: F401
 
 ### 3. Insert the job row
 
-A job runs only if its row exists. Add it to the seeds for new databases and as a delta for
-existing ones:
+A job runs only if its row exists. Rows are reference data, so they come with a migration
+(see `migrations/versions/0002_seed_reference_data.py`):
 
-```sql
--- sql/deltas/00N_daily_cleanup_job.sql
-INSERT INTO scheduled_jobs (job_name, description, interval_seconds, next_run_at)
-VALUES ('daily_cleanup', 'Removes stale temp data', 86400, now())
-ON CONFLICT (job_name) DO NOTHING;
+```python
+def upgrade() -> None:
+    op.execute(
+        "INSERT INTO scheduled_jobs (job_name, description, interval_seconds) "
+        "VALUES ('daily_cleanup', 'Removes stale temp data', 86400) "
+        "ON CONFLICT (job_name) DO NOTHING"
+    )
+
+
+def downgrade() -> None:
+    op.execute("DELETE FROM scheduled_jobs WHERE job_name = 'daily_cleanup'")
 ```
 
 A row whose handler is not registered is still claimed and rescheduled, with

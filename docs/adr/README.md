@@ -12,3 +12,4 @@ with the next number.
 | ADR | Title | Status |
 |---|---|---|
 | [001](001-stack.md) | Base stack | accepted |
+| [002](002-alembic.md) | Schema migrations with Alembic | accepted |

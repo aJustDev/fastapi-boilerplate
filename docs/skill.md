@@ -1,6 +1,6 @@
 ---
 name: development
-description: Development workflow for the FastAPI boilerplate project. Use when writing code, adding features, creating modules, fixing bugs, or making any changes to the codebase. Covers layer responsibilities, coding conventions, SQL migration workflow, testing strategy, exception handling, and event bus usage.
+description: Development workflow for the FastAPI boilerplate project. Use when writing code, adding features, creating modules, fixing bugs, or making any changes to the codebase. Covers layer responsibilities, coding conventions, Alembic migration workflow, testing strategy, exception handling, and event bus usage.
 ---
 
 # Development
@@ -26,11 +26,11 @@ description: Development workflow for the FastAPI boilerplate project. Use when 
 - Never raise `HTTPException` from services/repos — global handlers convert domain exceptions to HTTP responses
 - Custom exceptions: subclass `UseCaseException` (400-level) or `DomainException` (500-level)
 
-## SQL changes
+## Schema changes
 
-1. Update `sql/schema.sql` with the new DDL (source of truth for fresh installs)
-2. Create `sql/deltas/NNN_description.sql` with the ALTER/CREATE statements
-3. **Always** apply via `bash sql/apply.sh` — never use `psql` or `docker exec` directly, as that bypasses `_schema_migrations` tracking
+1. Change the models, then draft the migration: `uv run alembic revision --autogenerate --rev-id NNNN -m "..."`
+2. Review the draft (renames, data, CONCURRENTLY and NOT VALID are not detected) and write a real `downgrade()`
+3. Never edit an applied migration; never change the schema with `psql` directly. See `docs/migrations.md`
 
 ## Testing
 
@@ -53,5 +53,5 @@ description: Development workflow for the FastAPI boilerplate project. Use when 
 
 ## References
 
-- **Architecture and layers**: See [references/architecture.md](references/architecture.md) for full layer spec, data flow, key patterns, adding a new module checklist, and SQL management
+- **Architecture and layers**: See [references/architecture.md](references/architecture.md) for full layer spec, data flow, key patterns, adding a new module checklist, and schema management
 - **Event bus**: See [references/event-bus.md](references/event-bus.md) for the Transactional Outbox pattern, publishing events, creating handlers, retry/backoff, cleanup, and known limitations

@@ -66,19 +66,20 @@ Registered in `pyproject.toml` under `[tool.pytest.ini_options]`.
 
 | Fixture | Scope | Description |
 |---------|-------|-------------|
-| `pg_container` | session | Starts `postgres:16-alpine` via testcontainers. One container per test session. |
+| `pg_container` | session | Starts `postgres:18-alpine` via testcontainers. One container per test session. |
 | `pg_url` | session | Async connection URL from the container. |
-| `async_engine` | session | SQLAlchemy async engine. Runs `Base.metadata.create_all` once. |
+| `async_engine` | session | SQLAlchemy async engine on a database built by `alembic upgrade head` (never `create_all`). |
 | `session_factory` | session | `async_sessionmaker` bound to the test engine. |
 | `db_session` | function | `AsyncSession` that is rolled back after each test. |
 | `seed_user` | function | Inserts a `UserORM` record for tests that need a valid `owner_id` FK. |
+| `committing_factory` | function | Session factory whose commits are real (NullPool engine), for workers and anything that must survive a request rollback. Override `committing_tables` in the module to list the tables it empties. |
 
 ### Isolation pattern
 
 Each integration test gets a fresh `AsyncSession`. After the test, `session.rollback()` discards all changes. This works because repos call `flush()` -- never `commit()` -- so all writes stay in the uncommitted transaction.
 
 ```
-Session scope:  pg_container --> async_engine --> create_all (DDL once)
+Session scope:  pg_container --> async_engine --> alembic upgrade head (DDL once)
 Function scope: db_session --> yield session --> rollback
 ```
 

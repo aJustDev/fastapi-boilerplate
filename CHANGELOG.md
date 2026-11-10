@@ -12,6 +12,7 @@ not count.
 
 ### Added
 
+- Alembic migrations: async `env.py`, baseline equal to the previous SQL schema, reference data as a migration, `migrate` compose service, drift and round-trip tests; `scripts/seed_dev.py` for development data.
 - Hourly `revoked_tokens_cleanup` job (#14).
 - `scripts/install-hooks.sh` (pre-commit and a pre-push hook that blocks pushes to `main`) and `scripts/ci-local.sh`.
 - mypy, pip-audit, hadolint and a generated-diagrams check in CI; daily dependency audit workflow.
@@ -19,6 +20,7 @@ not count.
 
 ### Changed
 
+- PostgreSQL 18 in compose and in the integration tests (volume `pgdata18`).
 - Python 3.14 and every dependency on its latest release (FastAPI 0.162, SQLAlchemy 2.1).
 - Dev dependencies live in the `dev` dependency group (`uv sync`, no `--extra dev`).
 - The Docker image copies an allow-list (`main.py`, `app/`), runs in UTC and ships without pip.
@@ -26,8 +28,13 @@ not count.
 - Outside `local`, `SECRET_KEY` must have at least 32 bytes.
 - Dependabot uses the `uv` ecosystem, so its PRs update `uv.lock`.
 
+### Removed
+
+- `sql/` (schema, deltas, seeds and their shell scripts), replaced by the migrations.
+
 ### Fixed
 
+- ORM models now declare the database defaults, partial and case-insensitive indexes and CHECK constraints that only the SQL schema had.
 - Outbox events were dispatched more than once with several workers; NOTIFY now wakes the worker (#13).
 - Events with no registered handler were marked processed and lost (#13).
 - Jobs could run twice with several workers, and a starting worker reset jobs other workers were running (#13).

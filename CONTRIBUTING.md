@@ -5,7 +5,7 @@
 - Python 3.14 (`uv` installs it from `.python-version`)
 - [uv](https://docs.astral.sh/uv/)
 - Docker and docker-compose
-- PostgreSQL 16 (or use the container)
+- PostgreSQL 18 (or use the container)
 
 ## Environment setup
 
@@ -16,7 +16,8 @@ uv sync
 bash scripts/install-hooks.sh
 
 docker compose up db -d
-bash sql/reset.sh
+uv run alembic upgrade head
+uv run python scripts/seed_dev.py
 ENVIRONMENT=local uv run uvicorn main:app --reload
 ```
 
@@ -92,14 +93,16 @@ Follow the checklist in `docs/architecture.md` section "Adding a new module":
 5. Use cases in `app/use_cases/{domain}/`
 6. Router in `app/api/v1/{domain}.py`
 7. Register router in `app/api/v1/__init__.py`
-8. DDL in `sql/schema.sql` + delta in `sql/deltas/`
+8. Migration in `migrations/versions/` (`uv run alembic revision --autogenerate`), reviewed by hand
 9. Tests in `tests/unit/{domain}/` and `tests/integration/{domain}/`
 
-## SQL changes
+## Schema changes
 
-1. Update `sql/schema.sql` (source of truth)
-2. Create delta in `sql/deltas/NNN_description.sql`
-3. Test with `bash sql/reset.sh` (clean environment) and `bash sql/apply.sh` (incremental)
+1. Change the models
+2. `uv run alembic revision --autogenerate --rev-id NNNN -m "describe change"` and review the draft
+3. Run the integration tests: they fail if models and migrations differ or a downgrade is broken
+
+See `docs/migrations.md` for the rules on tables with data.
 
 ## Dependencies
 
