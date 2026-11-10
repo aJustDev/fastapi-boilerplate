@@ -29,13 +29,24 @@ jobs:
         run: uv sync --frozen
 
       - name: Ruff check
-        run: uv run ruff check app/ tests/ main.py docs/img/
+        run: uv run ruff check app/ tests/ migrations/ scripts/ main.py docs/img/
 
       - name: Ruff format check
-        run: uv run ruff format --check app/ tests/ main.py docs/img/
+        run: uv run ruff format --check app/ tests/ migrations/ scripts/ main.py docs/img/
 
       - name: Mypy
         run: uv run mypy app/ main.py
+
+      # Two branches whose migrations share a parent pass separately and leave two heads
+      # once merged; upgrade would then refuse to run.
+      - name: Single Alembic head
+        run: |
+          n="$(uv run alembic heads | grep -c '(head)')"
+          if [ "$n" != "1" ]; then
+            uv run alembic heads
+            echo "::error::$n Alembic heads; merge the revisions"
+            exit 1
+          fi
 
       # The SVGs in docs/img are generated: an edited script whose figures were not
       # regenerated, or a hand-edited SVG, shows up here.

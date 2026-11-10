@@ -30,9 +30,14 @@ diagrams_up_to_date() {
 }
 
 step "Lockfile up to date" uv lock --check
-step "Ruff check" uv run ruff check app/ tests/ main.py docs/img/
-step "Ruff format check" uv run ruff format --check app/ tests/ main.py docs/img/
+step "Ruff check" uv run ruff check app/ tests/ migrations/ scripts/ main.py docs/img/
+step "Ruff format check" uv run ruff format --check app/ tests/ migrations/ scripts/ main.py docs/img/
 step "Mypy" uv run mypy app/ main.py
+
+single_alembic_head() {
+  [ "$(uv run alembic heads | grep -c '(head)')" = "1" ]
+}
+step "Single Alembic head" single_alembic_head
 step "Diagrams up to date" diagrams_up_to_date
 step "Dependency CVE audit" uv run pip-audit --skip-editable
 
