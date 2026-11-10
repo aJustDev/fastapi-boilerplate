@@ -24,13 +24,21 @@ class HandlerResult:
 @dataclass
 class DispatchResult:
     results: list[HandlerResult] = field(default_factory=list)
+    no_handlers: bool = False
 
     @property
     def all_succeeded(self) -> bool:
+        # `all([])` is True: without this guard an event with no registered handler
+        # (typo in the event_type, handler module never imported) would be marked
+        # PROCESSED and its side effects silently lost.
+        if self.no_handlers:
+            return False
         return all(r.success for r in self.results)
 
     @property
     def errors_summary(self) -> str:
+        if self.no_handlers:
+            return "no handlers registered for this event_type"
         failed = [r for r in self.results if not r.success]
         return "\n---\n".join(f"[{r.handler_name}] {r.error}" for r in failed)
 
@@ -62,12 +70,15 @@ class EventDispatcher:
         block the others.  Handlers whose names appear in *completed_handlers*
         are skipped (marked as ``skipped=True`` in the result).
 
+        Zero registered handlers is an error, not a no-op: the result carries
+        ``no_handlers=True`` so the caller retries instead of acknowledging.
+
         Returns a DispatchResult with per-handler outcomes.
         """
         handlers = self._handlers.get(event_type, [])
         if not handlers:
-            logger.warning("No handlers registered for event_type=%s", event_type)
-            return DispatchResult()
+            logger.critical("No handlers registered for event_type=%s", event_type)
+            return DispatchResult(no_handlers=True)
 
         completed = completed_handlers or set()
         result = DispatchResult()
