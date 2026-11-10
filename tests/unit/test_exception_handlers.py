@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
@@ -6,6 +6,7 @@ from starlette.datastructures import URL
 
 from app.core.exceptions import AuthenticationError, ConflictError, NotFoundError
 from app.core.exceptions.handlers import (
+    _format_log,
     domain_exception_handler,
     unhandled_exception_handler,
     validation_exception_handler,
@@ -79,3 +80,27 @@ class TestUnhandledExceptionHandler:
 
         assert response.status_code == 500
         assert b"Internal server error" in response.body
+
+
+class TestLogColors:
+    def _ctx(self) -> dict:
+        return {
+            "exc_name": "NotFoundError",
+            "message": "Item not found",
+            "filename": "app/x.py",
+            "lineno": 1,
+            "func": "f",
+            "method": "GET",
+            "path": "/v1/items/1",
+            "status_code": 404,
+        }
+
+    def test_no_ansi_codes_when_logging_json(self):
+        # The message is built before the formatter runs, so JSON logs would carry
+        # the escape codes inside the `message` field.
+        with patch("app.core.exceptions.handlers.ansi_enabled", return_value=False):
+            assert "\033" not in _format_log(self._ctx())
+
+    def test_ansi_codes_when_console_supports_color(self):
+        with patch("app.core.exceptions.handlers.ansi_enabled", return_value=True):
+            assert "\033" in _format_log(self._ctx())

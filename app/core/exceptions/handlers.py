@@ -8,6 +8,7 @@ from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
 from app.core.exceptions.exceptions import AuthException, DomainException
+from app.core.logging.config import ansi_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -63,14 +64,24 @@ def _extract_context(request: Request, exc: Exception) -> dict:
 
 def _format_log(ctx: dict) -> str:
     method = ctx["method"]
-    mc = _METHOD_COLORS.get(method, _DIM)
-    sc = _status_color(ctx["status_code"])
+    # Color is decided here, not in a Formatter, because this message is already
+    # built when the formatter runs: JSONFormatter would ship the escape codes
+    # inside the `message` field.
+    codes = (
+        _DIM,
+        _RESET,
+        _CYAN,
+        _YELLOW,
+        _METHOD_COLORS.get(method, _DIM),
+        _status_color(ctx["status_code"]),
+    )
+    dim, reset, cyan, yellow, mc, sc = codes if ansi_enabled() else ("",) * len(codes)
     return (
         f"{ctx['exc_name']}: {ctx['message']}\n"
-        f"  {_DIM}Location:{_RESET} {_CYAN}{ctx['filename']}:{ctx['lineno']}{_RESET}"
-        f" in {_YELLOW}{ctx['func']}(){_RESET}\n"
-        f"  {_DIM}Request:{_RESET}  {mc}{method}{_RESET} {ctx['path']}\n"
-        f"  {_DIM}Status:{_RESET}   {sc}{ctx['status_code']}{_RESET}"
+        f"  {dim}Location:{reset} {cyan}{ctx['filename']}:{ctx['lineno']}{reset}"
+        f" in {yellow}{ctx['func']}(){reset}\n"
+        f"  {dim}Request:{reset}  {mc}{method}{reset} {ctx['path']}\n"
+        f"  {dim}Status:{reset}   {sc}{ctx['status_code']}{reset}"
     )
 
 

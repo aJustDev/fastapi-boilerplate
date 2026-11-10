@@ -32,13 +32,28 @@ class JSONFormatter(logging.Formatter):
         return json.dumps(entry, default=str)
 
 
-def setup_logging() -> None:
+def _resolve_format() -> tuple[bool, bool]:
+    """(use_json, use_color) from ENVIRONMENT and LOG_FORMAT."""
     env = settings.ENVIRONMENT.lower()
     log_format = settings.LOG_FORMAT.lower()
 
     use_json = env not in ("local", "dev") if log_format == "auto" else log_format == "json"
-
     use_color = not use_json and _has_colorlog and env in ("local", "dev")
+    return use_json, use_color
+
+
+def ansi_enabled() -> bool:
+    """Whether log output accepts ANSI escape codes.
+
+    Used by code that builds a colored message before any Formatter runs (the
+    exception handlers): JSONFormatter serializes `record.getMessage()` as is, so a
+    color code added there would end up inside the JSON `message` field.
+    """
+    return _resolve_format()[1]
+
+
+def setup_logging() -> None:
+    use_json, use_color = _resolve_format()
 
     if use_json:
         formatter_config: dict = {

@@ -24,6 +24,11 @@ Every HTTP request is assigned a unique `request_id` that is injected into every
 | `json` | JSON output | JSON output |
 | `text` | Plain text (no color) | Plain text (no color) |
 
+Color is only emitted when the output is the colored console. The exception handlers build
+their multi-line message before any formatter runs, so they ask `ansi_enabled()`
+(`app/core/logging/config.py`) and drop the escape codes otherwise: JSON logs never carry ANSI
+sequences inside the `message` field.
+
 ## Request tracing
 
 ### How it works
