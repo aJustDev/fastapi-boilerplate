@@ -4,7 +4,12 @@ version = "0.1.0"
 description = "FastAPI boilerplate"
 requires-python = ">=3.14"
 dependencies = [
-    "fastapi[standard]>=0.162.2",
+    # No extras: fastapi[standard] adds the dev server CLI, a cloud CLI, an OpenTelemetry
+    # exporter and a template engine to the production image. The two packages FastAPI
+    # needs at runtime here are listed explicitly: form parsing (login) and EmailStr.
+    "fastapi>=0.162.2",
+    "python-multipart>=0.0.33",
+    "email-validator>=2.3",
     "uvicorn[standard]>=0.54",
     "sqlalchemy[asyncio]>=2.1.8",
     "asyncpg>=0.32",
