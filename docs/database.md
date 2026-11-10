@@ -60,9 +60,9 @@ classDiagram
         created_at, updated_at
         created_by, updated_by
     }
-    Base <|-- ItemORM
-    IntPkMixin <|-- ItemORM
-    AuditMixin <|-- ItemORM
+    Base <|-- WorkshopORM
+    IntPkMixin <|-- WorkshopORM
+    AuditMixin <|-- WorkshopORM
 ```
 
 - **`Base`** gives every table the naming convention (`ix_`, `uq_`, `ck_`, `fk_`, `pk_`) that the
@@ -82,17 +82,36 @@ pagination (`list_paginated`, with the total from a window function in the same 
 pagination (`list_cursor`). A repository declares which query parameters it accepts as filters:
 
 ```python
-class ItemRepo(BaseRepo[ItemORM]):
-    model = ItemORM
+class WorkshopRepo(BaseRepo[WorkshopORM]):
+    model = WorkshopORM
     map_field: dict[str, FieldMapping] = {
-        "name": {"column": ItemORM.name, "op": "ilike"},
-        "category": {"column": ItemORM.category, "op": "eq"},
+        "status": {"column": WorkshopORM.status, "op": "eq"},
+        "title": {"column": WorkshopORM.title, "op": "ilike"},
+        "starts_after": {"column": WorkshopORM.starts_at, "op": "gte"},
     }
 ```
 
 Only the keys in `map_field` are filters; any other key is ignored and logged at warning level.
-An `ilike` filter is a case-insensitive "contains" of the text as sent: `%` and `_` are escaped.
-Inject a repository in a router with `Annotated[ItemRepo, Depends(get_repo(ItemRepo))]`.
+The operators are `eq`, `ilike`, `gte` and `lte`. An `ilike` filter is a case-insensitive
+"contains" of the text as sent: `%` and `_` are escaped. Inject a repository in a router with
+`Annotated[WorkshopRepo, Depends(get_repo(WorkshopRepo))]`.
+
+Filters are what the client asked for. What the caller may see at all is a different thing and
+has its own argument: both list methods take `scope`, a condition written by the repository
+that is added to every query, the count included, and that no filter can widen:
+
+```python
+scope = or_(WorkshopORM.status != "draft", WorkshopORM.organizer_id == viewer_id)
+await self.list_cursor(cursor=cursor, filters=filters, scope=scope)
+```
+
+A repository overrides `_base_select()` to say how its entity is loaded. `EnrollmentRepo` joins
+the workshop of each enrollment there, and the relationship is `lazy="raise"`: in async code a
+relationship is loaded by the query, never by touching the attribute.
+
+A change that must not interleave with another one on the same row reads it with
+`SELECT ... FOR UPDATE` (`WorkshopRepo.get_for_update`): the second transaction waits for the
+first to end, up to `DB_LOCK_TIMEOUT_MS`, after which the request answers 503 `busy`.
 
 Both paginations order by the requested field and then by `id`, so the order is total and pages
 never repeat or skip a row when many rows share the sort value. `list_paginated` returns the total

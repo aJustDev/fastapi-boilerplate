@@ -18,6 +18,7 @@ A solid foundation for building production-grade backends that scale from small 
 - **Bounded contexts** — `app/<context>/` with its own layers; use cases orchestrate services; import-linter enforces the boundaries
 - **Alembic migrations** — Async `env.py`, reference data as migrations, applied by a separate `migrate` step; tests fail if the models and the migrated schema drift apart
 - **Tests at four levels** — Unit, functional, integration on real PostgreSQL, and whole requests against it; meta-tests keep the rules above true
+- **An example worth reading** — Workshops with limited seats and a waiting list: a state machine, a multi-row transaction under a row lock tested with simultaneous requests, idempotent enrollment, events and jobs. See `docs/workshops.md`, and how to remove it in `docs/architecture.md`
 
 ## Stack
 
@@ -68,7 +69,7 @@ app/
   deps/          FastAPI dependencies shared by every context (session, repos, current user)
   api/v1/        Composes the context routers, plus health and metrics
   auth/          Context: users, roles, permissions, tokens
-  items/         Context: example CRUD with events
+  workshops/     Context: the example (seats, waiting list, events, jobs)
   db_registry.py Imports every model and handler module
   cli.py         python -m app.cli: first admin, outbox maintenance, worker process
 migrations/      Alembic revisions
@@ -149,7 +150,7 @@ See `docs/testing.md` and `docs/tooling.md`.
 
 ```bash
 uv run alembic upgrade head                                  # apply pending migrations
-uv run alembic revision --autogenerate --rev-id 0008 -m "describe change"  # draft the next one
+uv run alembic revision --autogenerate --rev-id 0010 -m "describe change"  # draft the next one
 ```
 
 See `docs/migrations.md`.
@@ -158,7 +159,8 @@ See `docs/architecture.md` for the full guide on adding a new module.
 
 ## Docs
 
-- `docs/architecture.md`: layers and how to add a module
+- `docs/architecture.md`: layers, how to add a context and how to replace the example
+- `docs/workshops.md`: the example context
 - `docs/database.md`, `docs/migrations.md`: sessions, models, repositories and schema changes
 - `docs/configuration.md`: settings, env files and validators
 - `docs/auth.md`, `docs/event-bus.md`, `docs/jobs.md`, `docs/logging.md`, `docs/metrics.md`

@@ -27,6 +27,7 @@ Current state of the boilerplate and what comes next. Contributions are welcome 
 - [x] Prometheus-compatible `/v1/metrics`: HTTP, DB pool and outbox metrics
 - [x] Operations: `python -m app.cli` (first admin, outbox, worker process), deployment guide
 - [x] Strict tooling: mypy, import-linter, pip-audit, hadolint, image build and scan in CI
+- [x] An example context that uses every piece: workshops with seats, a waiting list, events and jobs
 - [x] Docs per feature with generated diagrams; Claude Code rules and skills in `.claude/`
 
 ## Next

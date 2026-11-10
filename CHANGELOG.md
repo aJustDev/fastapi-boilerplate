@@ -12,6 +12,11 @@ not count.
 
 ### Added
 
+- Example context `workshops`: workshops with limited seats and a waiting list. Eleven routes with a permission each and visibility rules, a state machine, enrollment under a row lock (idempotent, tested with simultaneous requests), a `version` on edits, four events and two jobs. Guide in `docs/workshops.md` (#27).
+- `BaseRepo.list_paginated` and `list_cursor` take `scope`: what the caller may see, apart from the filters the client sends (#27).
+- `EventBus.publish_many`: one event per recipient, stored in one batch (#27).
+- `Timestamp` input type in `app/core/schema.py`: a date with its UTC offset, within a range every layer can handle (#27).
+- Docs: "Replacing the example context" in `docs/architecture.md` (#27).
 - Docs: deployment guide (required settings, migrations, first admin, what goes in front of the API) (#26).
 - CI `image` job: builds the image, checks that it refuses to start unconfigured and that it becomes healthy with production settings. The daily audit also scans the image for vulnerabilities with a fix (#26).
 - OpenAPI: each route declares the errors it answers (401, 403, 404, 409, 429 with `Retry-After`), endpoints and request fields are described, and the health and filter responses are typed (#26).
@@ -38,6 +43,8 @@ not count.
 
 ### Changed
 
+- A lock that is not granted within `DB_LOCK_TIMEOUT_MS`, a deadlock or a serialization failure answers 503 `busy` with `Retry-After` instead of 500 (#27).
+- Tests of the infrastructure no longer depend on the example context: the repository tests use a model of their own (#27).
 - `fastapi` without the `standard` extra, plus `python-multipart` and `email-validator`: 46 runtime packages instead of 78 (#26).
 - Outside local `ALLOWED_ORIGINS` must be set; `[]` is valid for an API that no browser calls (#26).
 - Compose: the `db` service takes its credentials from the env file the API reads; PostgreSQL, Prometheus and Grafana are published on loopback only (#26).
@@ -63,6 +70,7 @@ not count.
 
 ### Removed
 
+- The `items` example context, with its table and its permissions (migration 0009). `workshops` takes its place (#27).
 - The `ROOT_PATH` setting (`FastAPI(root_path=...)` is deprecated): give the prefix to the server with `uvicorn --root-path` (#26).
 - Unused schemas `UserCreate` and `PermissionRead` (#26).
 - `SlowAPIMiddleware`: it does nothing for routes of an included router; the endpoint decorators are the rate limit (#25).

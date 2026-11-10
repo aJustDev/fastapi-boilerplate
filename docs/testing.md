@@ -1,6 +1,6 @@
 # Testing
 
-pytest with three levels, each split by context like `app/` (`auth/`, `items/`, `core/` for
+pytest with four levels, each split by context like `app/` (`auth/`, `workshops/`, `core/` for
 infrastructure), plus meta-tests that check rules over the whole code base.
 
 | Level | Directory | Tests | Database |
@@ -25,7 +25,12 @@ infrastructure), plus meta-tests that check rules over the whole code base.
   overridden: it points the app's own `async_session_factory` at the container, so a request
   runs the real `get_session` and commits. The rows a request can write are truncated after each
   test; reference data from the migrations stays. `tests/integration/api/helpers.py` has the
-  steps every flow starts with (`register`, `login`, `signed_up`).
+  steps every flow starts with (`register`, `login`, `signed_up`), and `workshops.py` the steps
+  on the example context.
+- Tests of the infrastructure do not depend on the example context. The repository and its
+  pagination are tested against `SampleORM` (`tests/integration/core/sample.py`), a model of the
+  tests' own whose table lives in a separate schema, created by the `sample_table` fixture: the
+  tests that compare the models with the migrations look at `public` only.
 - Async fixtures and integration modules use `loop_scope="session"`, so the session-scoped engine
   and the tests share one event loop.
 
@@ -47,6 +52,11 @@ uv run pytest --cov=app                # with coverage
 - Integration, API: `tests/integration/api/` with the same `pytestmark` and `api_client`. This is
   the level for anything that depends on the request as a whole: what is stored after a 2xx, who
   may touch whose data, what a malformed input answers. A mocked session cannot show any of it.
+- Concurrency: several requests at once with `asyncio.gather` over `api_client`. Each request
+  gets its own connection, so they interleave in PostgreSQL like requests of different
+  processes. Assert what must hold however they interleave, not an order
+  (`tests/integration/api/test_workshop_concurrency.py`).
+- Events stored by one transaction share its timestamp: find them by type, not by position.
 - A test for a bug must fail against the code before the fix: run it once without the fix.
 
 ## Meta-tests

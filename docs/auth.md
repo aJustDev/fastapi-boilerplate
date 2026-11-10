@@ -43,18 +43,21 @@ which returns the user too:
 ```python
 from app.deps.auth import CurrentUser, User, require_permissions
 
+
 @router.get("/me")
 async def me(request: Request, user: CurrentUser): ...
 
-Deleter = Annotated[User, Depends(require_permissions(permission="items:delete"))]
 
-@router.delete("/items/{item_id}")
-async def delete_item(request: Request, item_id: IdPath, user: Deleter): ...
+Organizer = Annotated[User, Depends(require_permissions(permission="workshops:create"))]
+
+
+@router.post("/workshops/{workshop_id}/cancel")
+async def cancel_workshop(request: Request, workshop_id: IdPath, user: Organizer): ...
 ```
 
 `require_permissions(role=...)` or `(permission=...)` answers 403 (`forbidden`) when missing. It
-is the first of two checks: the permission says the user may delete items, and the use case then
-checks that this item is the user's (`docs/security.md`).
+is the first of two checks: the permission says the user may run workshops, and the use case then
+checks that this workshop is the user's (`docs/security.md`).
 
 Users have roles (`user_roles`) and roles have permissions (`role_permissions`). Both are read
 from the database on every request, with the user: one query for the revocation list, one for
@@ -63,8 +66,8 @@ migrations:
 
 | Role | Permissions |
 |---|---|
-| `user` | `users:read`, `items:read`, `items:write`, `items:delete`: its own items |
-| `admin` | every permission, including `items:manage`: the items of any owner |
+| `user` | `users:read`, `workshops:read`, `workshops:create`, `workshops:enroll`: the workshops it organizes, its own enrollments |
+| `admin` | every permission, including `workshops:moderate`: the workshops of any organizer |
 
 An account that registers gets the `user` role. Any other role is assigned by a migration or by
 an administrator; `scripts/seed_dev.py` creates the local admin.

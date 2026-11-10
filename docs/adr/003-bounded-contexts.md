@@ -36,5 +36,7 @@ domain code (ORM models, the item event handlers).
 - A feature lives in one folder; adding a context means a router line, registry imports and a
   contract update (see `docs/architecture.md`).
 - `ItemORM.owner` (a relationship into `auth`) was removed: items expose `owner_id` only.
+  (The `items` example was later replaced by `workshops`, which references users the same
+  way: `organizer_id` and `attendee_id`, no relationship.)
 - Exceptions to the import rules must be written in `.importlinter` with a reason; if the same
   kind keeps appearing, this decision is revisited.

@@ -18,8 +18,9 @@ description: Orientation and workflow for the FastAPI boilerplate. Use at the st
 
 1. Read `docs/architecture.md` and the doc of the piece you will touch (index: `docs/README.md`).
 2. Copy the closest existing pattern: `app/auth/` (services, rotation, own transaction on
-   reuse), `app/items/` (CRUD with events, permission guards on the routes, ownership in
-   `services/access.py`).
+   reuse), `app/workshops/` (`docs/workshops.md`: permission guards on the routes, visibility
+   and ownership in `services/access.py`, a state machine, a transaction under a row lock,
+   events, jobs).
 3. Create a branch before the first change.
 
 ## While coding

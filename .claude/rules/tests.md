@@ -15,7 +15,8 @@ Guide: `docs/testing.md`.
   from `alembic upgrade head`), and `integration/api/` (whole requests with `api_client`: the
   real `get_session` on that database). Each split by context; infrastructure under `core/`.
 - What a mocked session cannot show goes in `integration/api/`: what is stored after a 2xx, who
-  may touch whose data, what malformed input answers.
+  may touch whose data, what malformed input answers, what holds under simultaneous requests.
+- Tests of `app/core` do not import a context: use `tests/integration/core/sample.py`.
 - `db_session` rolls back after each test; code that commits by itself (workers, anything that
   must survive a request rollback) uses `committing_factory` and overrides `committing_tables`.
 - `TestClient` is banned (ruff `TID251`): it runs the app in another thread and event loop.
