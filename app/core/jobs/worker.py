@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import or_, select, update
 
 from app.core.config import settings
-from app.core.db import async_session_factory
+from app.core.db import async_session_factory, rowcount
 from app.core.jobs.registry import job_registry
 from app.models.jobs.scheduled_job import ScheduledJobORM
 
@@ -76,10 +76,10 @@ class JobWorker:
                 )
                 .values(status="PENDING", claimed_by=None, lease_until=None)
             )
-            result = await session.execute(stmt)
+            recovered = rowcount(await session.execute(stmt))
             await session.commit()
-            if result.rowcount:
-                logger.warning("Recovered %d stale RUNNING jobs", result.rowcount)
+            if recovered:
+                logger.warning("Recovered %d stale RUNNING jobs", recovered)
 
     # ── Job processing ────────────────────────────────────
     # Lightweight SELECT of candidate ids without locks; each job is claimed

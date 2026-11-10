@@ -16,8 +16,8 @@ A solid foundation for building production-grade backends that scale from small 
 
 ## Stack
 
-- Python 3.13+ / FastAPI / Pydantic v2
-- SQLAlchemy 2.x async + asyncpg + PostgreSQL 16
+- Python 3.14 / FastAPI / Pydantic v2
+- SQLAlchemy 2.1 async + asyncpg + PostgreSQL 16
 - JWT (PyJWT) + Argon2 password hashing
 - Docker + docker-compose
 
@@ -30,11 +30,11 @@ docker compose up db -d
 # 2. Create schema and seed initial data
 bash sql/reset.sh
 
-# 3. Install dependencies
-uv sync --extra dev
+# 3. Install dependencies (dev group included)
+uv sync
 
-# 4. Install pre-commit hooks
-uv run pre-commit install
+# 4. Install git hooks (pre-commit + pre-push)
+bash scripts/install-hooks.sh
 
 # 5. Start the API
 ENVIRONMENT=local uv run uvicorn main:app --reload
@@ -121,15 +121,15 @@ See `docs/auth.md` for rotation, reuse detection and the rest of the session mod
 ## Tests
 
 ```bash
-# Unit tests (no DB)
-pytest tests/unit
+uv run pytest tests/unit          # unit: no DB, no HTTP
+uv run pytest tests/functional    # functional: HTTP through the app, DB mocked
+uv run pytest tests/integration   # integration: real PostgreSQL via testcontainers (Docker)
+uv run pytest                     # all of them
 
-# Integration tests (no real DB, mocks)
-pytest tests/integration
-
-# All
-pytest
+bash scripts/ci-local.sh          # everything CI checks, in the same order
 ```
+
+See `docs/testing.md` and `docs/tooling.md`.
 
 ## SQL migrations
 
@@ -142,3 +142,12 @@ bash sql/apply.sh
 ```
 
 See `docs/architecture.md` for the full guide on adding a new module.
+
+## Docs
+
+- `docs/architecture.md`: layers and how to add a module
+- `docs/configuration.md`: settings, env files and validators
+- `docs/auth.md`, `docs/event-bus.md`, `docs/jobs.md`, `docs/logging.md`, `docs/metrics.md`
+- `docs/testing.md`, `docs/tooling.md`, `docs/docker.md`
+- `docs/adr/`: architecture decision records
+- `CHANGELOG.md`

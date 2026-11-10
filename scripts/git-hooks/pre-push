@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Blocks direct pushes to protected branches: changes reach them through a PR.
+# Installed by scripts/install-hooks.sh. Bypass once with: git push --no-verify
+
+set -eu
+
+protected_branches="main"
+
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  remote_branch="${remote_ref#refs/heads/}"
+  for protected in $protected_branches; do
+    if [ "$remote_branch" = "$protected" ]; then
+      cat >&2 <<MSG
+ERROR: direct push to '$protected' blocked by the local pre-push hook.
+Expected flow:
+  git switch -c fix/<name>
+  git push -u origin fix/<name>
+  gh pr create --base $protected --fill
+MSG
+      exit 1
+    fi
+  done
+done
+exit 0

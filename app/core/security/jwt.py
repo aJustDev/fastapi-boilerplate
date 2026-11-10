@@ -1,6 +1,6 @@
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import TypedDict
+from typing import TypedDict, cast
 
 import jwt
 
@@ -46,7 +46,7 @@ def create_refresh_token(subject: str) -> str:
 
 def decode_token(token: str) -> TokenPayload:
     """Decode and validate a JWT token. Raises jwt.PyJWTError on failure."""
-    return jwt.decode(
+    payload = jwt.decode(
         token,
         settings.SECRET_KEY,
         algorithms=[settings.ALGORITHM],
@@ -54,3 +54,4 @@ def decode_token(token: str) -> TokenPayload:
         # An argument, not an option: PyJWT ignores a "leeway" key inside `options`.
         leeway=30,
     )
+    return cast("TokenPayload", payload)

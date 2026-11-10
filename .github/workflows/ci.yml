@@ -6,26 +6,69 @@ on:
   pull_request:
     branches: [main]
 
+# A new push to the same branch cancels the run that is now stale.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
 
+      - name: Lockfile up to date
+        run: uv lock --check
+
       - name: Install dependencies
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen
 
       - name: Ruff check
-        run: uv run ruff check app/ tests/
+        run: uv run ruff check app/ tests/ main.py docs/img/
 
       - name: Ruff format check
-        run: uv run ruff format --check app/ tests/
+        run: uv run ruff format --check app/ tests/ main.py docs/img/
+
+      - name: Mypy
+        run: uv run mypy app/ main.py
+
+      # The SVGs in docs/img are generated: an edited script whose figures were not
+      # regenerated, or a hand-edited SVG, shows up here.
+      - name: Diagrams up to date
+        run: |
+          for f in docs/img/[!_]*.py; do uv run python "$f" > /dev/null; done
+          if [ -n "$(git status --porcelain -- docs/img)" ]; then
+            git status --porcelain -- docs/img
+            echo "::error::docs/img is out of date; run the generators and commit the SVGs"
+            exit 1
+          fi
+
+      # Warning only: a new CVE in an unrelated package must not block every open PR,
+      # including the Dependabot one that fixes it. The daily audit workflow is the
+      # one that fails.
+      - name: Dependency CVE audit
+        continue-on-error: true
+        run: uv run pip-audit --skip-editable
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v3.5.0
+        with:
+          dockerfile: Dockerfile
+          failure-threshold: warning
 
   test:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    # A hung testcontainer would otherwise bill until the 360 min default.
+    timeout-minutes: 15
+    env:
+      # Same time zone as the image, so naive datetimes mean the same in tests and prod.
+      TZ: UTC
     steps:
       - uses: actions/checkout@v6
 
@@ -33,7 +76,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Install dependencies
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen
 
-      - name: Run tests
+      - name: Run tests (unit, functional and integration)
         run: uv run pytest --cov=app --cov-report=term-missing

@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock
 
 from prometheus_client import REGISTRY
+from sqlalchemy.pool import NullPool, QueuePool
 
 from app.core.metrics.db_collector import update_db_pool_metrics
 from app.core.metrics.instruments import (
@@ -45,6 +46,7 @@ class TestMetricsRegistered:
 class TestDbPoolCollector:
     def test_update_db_pool_metrics_sets_gauges(self):
         mock_engine = MagicMock()
+        mock_engine.pool = MagicMock(spec=QueuePool)
         mock_engine.pool.size.return_value = 5
         mock_engine.pool.checkedout.return_value = 2
         mock_engine.pool.checkedin.return_value = 3
@@ -56,3 +58,11 @@ class TestDbPoolCollector:
         assert db_pool_checked_out._value.get() == 2.0
         assert db_pool_checked_in._value.get() == 3.0
         assert db_pool_overflow._value.get() == 1.0
+
+    def test_pool_without_counters_is_skipped(self):
+        # NullPool keeps no size/overflow counters: reading them would raise
+        # AttributeError through the spec.
+        mock_engine = MagicMock()
+        mock_engine.pool = MagicMock(spec=NullPool)
+
+        update_db_pool_metrics(mock_engine)

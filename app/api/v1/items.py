@@ -44,7 +44,7 @@ async def list_items(
     category: ItemCategory | None = None,
     is_active: bool | None = None,
 ):
-    filters = {}
+    filters: dict[str, object] = {}
     if name is not None:
         filters["name"] = name
     if category is not None:
@@ -80,7 +80,7 @@ async def list_items_cursor(
     category: ItemCategory | None = None,
     is_active: bool | None = None,
 ):
-    filters = {}
+    filters: dict[str, object] = {}
     if name is not None:
         filters["name"] = name
     if category is not None:

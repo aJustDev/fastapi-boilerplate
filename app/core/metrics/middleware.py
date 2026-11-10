@@ -1,6 +1,6 @@
 import time
 
-from fastapi.routing import APIRoute
+from fastapi.routing import APIRoute, iter_route_contexts
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.metrics.instruments import (
@@ -26,6 +26,10 @@ class PrometheusMiddleware:
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
+        # {id(route) -> full path}. Built on the first request, once every route is
+        # registered, and never changes. Keyed by id because APIRoute is not hashable;
+        # safe because the app owns both the routes and this middleware.
+        self._templates: dict[int, str] | None = None
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -64,14 +68,21 @@ class PrometheusMiddleware:
                     method=method, path_template=path_template
                 ).observe(duration)
 
-    @staticmethod
-    def _path_template(scope: Scope) -> str:
-        """Route template (e.g. /v1/items/{item_id}) of the route that served the request.
+    def _path_template(self, scope: Scope) -> str:
+        """Full template (e.g. /v1/items/{item_id}) of the route that served the request.
 
         FastAPI's router sets `scope["route"]` when a path matches (also on a 405 for a
-        wrong method); no route means the path matched nothing (404).
+        wrong method); no route means the path matched nothing (404). Since FastAPI 0.140
+        included routers are not flattened: `route.path` is the path declared in the child
+        router, without the prefixes, so the full one comes from the route contexts.
         """
         route = scope.get("route")
-        if isinstance(route, APIRoute):
-            return route.path
-        return UNMATCHED_PATH
+        if not isinstance(route, APIRoute):
+            return UNMATCHED_PATH
+        if self._templates is None:
+            self._templates = {
+                id(ctx.route): ctx.path
+                for ctx in iter_route_contexts(getattr(scope.get("app"), "routes", []))
+                if isinstance(ctx.route, APIRoute) and ctx.path
+            }
+        return self._templates.get(id(route)) or route.path

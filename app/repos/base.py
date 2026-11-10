@@ -1,14 +1,12 @@
 import base64
 import json
 import logging
-from typing import Any, Generic, Literal, TypedDict, TypeVar
+from typing import Any, Literal, TypedDict
 
 from sqlalchemy import Select, asc, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import Base
-
-T = TypeVar("T", bound=Base)
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +25,11 @@ def encode_cursor(values: dict[str, Any]) -> str:
 
 def decode_cursor(cursor: str) -> dict[str, Any]:
     payload = base64.urlsafe_b64decode(cursor.encode()).decode()
-    return json.loads(payload)
+    decoded: dict[str, Any] = json.loads(payload)
+    return decoded
 
 
-class BaseRepo(Generic[T]):
+class BaseRepo[T: Base]:
     """Async generic repository with offset and cursor pagination."""
 
     model: type[T]
@@ -38,6 +37,11 @@ class BaseRepo(Generic[T]):
 
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    @property
+    def _pk(self) -> Any:
+        """The model's `id` column. Base does not declare it; IntPkMixin models do."""
+        return self.model.id  # type: ignore[attr-defined]
 
     def _base_select(self) -> Select:
         return select(self.model)
@@ -51,7 +55,7 @@ class BaseRepo(Generic[T]):
         return entity
 
     async def get_by_id(self, entity_id: int) -> T | None:
-        stmt = self._base_select().where(self.model.id == entity_id)
+        stmt = self._base_select().where(self._pk == entity_id)
         result = await self.session.execute(stmt)
         return result.scalars().first()
 
@@ -123,9 +127,9 @@ class BaseRepo(Generic[T]):
 
         # Apply ordering: sort field + id tiebreaker
         if sort_field != "id":
-            stmt = stmt.order_by(direction(sort_column), direction(self.model.id))
+            stmt = stmt.order_by(direction(sort_column), direction(self._pk))
         else:
-            stmt = stmt.order_by(direction(self.model.id))
+            stmt = stmt.order_by(direction(self._pk))
 
         stmt = stmt.limit(limit + 1)
         result = await self.session.execute(stmt)
@@ -152,7 +156,7 @@ class BaseRepo(Generic[T]):
         direction = desc if order_dir.lower() == "desc" else asc
 
         if not order_by or order_by == "id":
-            return self.model.id, "id", direction
+            return self._pk, "id", direction
 
         field_config = self.map_field.get(order_by)
         if field_config:
@@ -161,7 +165,7 @@ class BaseRepo(Generic[T]):
         if hasattr(self.model, order_by):
             return getattr(self.model, order_by), order_by, direction
 
-        return self.model.id, "id", direction
+        return self._pk, "id", direction
 
     def _apply_cursor_where(
         self,
@@ -181,19 +185,18 @@ class BaseRepo(Generic[T]):
 
         if sort_field == "id":
             if direction is asc:
-                return stmt.where(self.model.id > cursor_id)
-            return stmt.where(self.model.id < cursor_id)
+                return stmt.where(self._pk > cursor_id)
+            return stmt.where(self._pk < cursor_id)
 
         cursor_value = cursor_data.get(sort_field)
 
         if direction is asc:
             return stmt.where(
                 (sort_column > cursor_value)
-                | ((sort_column == cursor_value) & (self.model.id > cursor_id))
+                | ((sort_column == cursor_value) & (self._pk > cursor_id))
             )
         return stmt.where(
-            (sort_column < cursor_value)
-            | ((sort_column == cursor_value) & (self.model.id < cursor_id))
+            (sort_column < cursor_value) | ((sort_column == cursor_value) & (self._pk < cursor_id))
         )
 
     def _apply_filters(self, stmt: Select, filters: dict[str, Any] | None) -> Select:
@@ -222,7 +225,7 @@ class BaseRepo(Generic[T]):
 
     def _apply_ordering(self, stmt: Select, order_by: str | None, order_dir: str) -> Select:
         if not order_by:
-            return stmt.order_by(asc(self.model.id))
+            return stmt.order_by(asc(self._pk))
 
         field_config = self.map_field.get(order_by)
         if field_config:
@@ -230,7 +233,7 @@ class BaseRepo(Generic[T]):
         elif hasattr(self.model, order_by):
             column = getattr(self.model, order_by)
         else:
-            return stmt.order_by(asc(self.model.id))
+            return stmt.order_by(asc(self._pk))
 
         direction = desc if order_dir.lower() == "desc" else asc
         return stmt.order_by(direction(column))

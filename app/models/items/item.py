@@ -1,9 +1,14 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import BigInteger, Boolean, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
 from app.models.mixins.audit import AuditMixin
 from app.models.mixins.id import IntPkMixin
+
+if TYPE_CHECKING:
+    from app.models.auth.user import UserORM
 
 
 class ItemORM(Base, IntPkMixin, AuditMixin):

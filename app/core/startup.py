@@ -21,7 +21,9 @@ async def check_database(engine: AsyncEngine) -> str:
             async with engine.connect() as conn:
                 await conn.execute(text("SELECT 1"))
         return "OK"
-    except Exception as e:
+    # The message carries the error; the traceback of a "connection refused" at
+    # startup adds nothing.
+    except Exception as e:  # noqa: BLE001
         logger.warning("DB not available: %s", e)
         return "UNAVAILABLE"
 
@@ -50,7 +52,7 @@ def _count_sibling_workers() -> int:
                 if "resource_tracker" in cmdline:
                     continue
                 count += 1
-            except (OSError, IndexError, ValueError):
+            except OSError, IndexError, ValueError:
                 continue
     except OSError:
         return 1
@@ -72,10 +74,14 @@ async def log_system_info(
     is_banner_leader = False
     try:
         async with engine.connect() as conn:
-            result = await conn.execute(text(f"SELECT pg_try_advisory_lock({_BANNER_LOCK_ID})"))
-            is_banner_leader = result.scalar()
-    except Exception:
-        is_banner_leader = True  # fallback: always print
+            result = await conn.execute(
+                text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": _BANNER_LOCK_ID}
+            )
+            is_banner_leader = bool(result.scalar())
+    # The lock only decides who prints the banner; if it fails, every process
+    # prints it, which is visible on its own.
+    except Exception:  # noqa: BLE001
+        is_banner_leader = True
 
     if is_banner_leader:
         hostname = socket.gethostname()
