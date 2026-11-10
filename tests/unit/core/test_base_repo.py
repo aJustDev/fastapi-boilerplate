@@ -312,3 +312,56 @@ class TestResolveSort:
         _, _, direction = repo._resolve_sort(None, "asc")
 
         assert direction is asc
+
+
+def _order_by(statement) -> str:
+    sql = str(statement.compile(compile_kwargs={"literal_binds": True}))
+    return sql.split("ORDER BY", 1)[1].split("LIMIT")[0].strip()
+
+
+class TestOrderingIsTotal:
+    """Every list is ordered by something unique: the sort field, then the id.
+
+    Asserted on the SQL because a missing tiebreaker rarely shows on a small table.
+    """
+
+    @staticmethod
+    async def _statement(method: str, **kwargs):
+        session = AsyncMock()
+        result = MagicMock()
+        result.all.return_value = []
+        result.scalars.return_value.all.return_value = []
+        session.execute.return_value = result
+        await getattr(FakeRepo(session), method)(**kwargs)
+        return session.execute.call_args.args[0]
+
+    async def test_offset_list_breaks_ties_with_the_id(self):
+        statement = await self._statement("list_paginated", order_by="priority", order_dir="desc")
+        assert _order_by(statement) == "fake.priority DESC, fake.id DESC"
+
+    async def test_offset_list_without_a_sort_field_orders_by_id(self):
+        statement = await self._statement("list_paginated")
+        assert _order_by(statement) == "fake.id ASC"
+
+    async def test_cursor_list_breaks_ties_with_the_id(self):
+        statement = await self._statement("list_cursor", order_by="name", order_dir="asc")
+        assert _order_by(statement) == "fake.name ASC, fake.id ASC"
+
+
+class TestTextFilter:
+    @staticmethod
+    def _where(value: str) -> str:
+        statement = FakeRepo(AsyncMock())._apply_filters(
+            FakeRepo(AsyncMock())._base_select(), {"name": value}
+        )
+        return str(statement.compile(compile_kwargs={"literal_binds": True})).split("WHERE", 1)[1]
+
+    def test_wildcards_of_the_client_are_escaped(self):
+        where = self._where("50%_off")
+        assert r"50\%\_off" in where
+        assert "ESCAPE" in where
+
+    def test_an_attribute_that_is_not_a_declared_filter_is_ignored(self):
+        repo = FakeRepo(AsyncMock())
+        statement = repo._apply_filters(repo._base_select(), {"id": 1})
+        assert "WHERE" not in str(statement)

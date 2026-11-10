@@ -48,6 +48,11 @@ def decode_cursor(cursor: str) -> dict[str, Any]:
     return decoded
 
 
+def _like_literal(value: str) -> str:
+    """`value` escaped so that LIKE matches its characters, not its wildcards."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _cursor_value(column: Any, raw: Any) -> Any:
     """The sort value of a cursor, back in the Python type of its column.
 
@@ -128,12 +133,19 @@ class BaseRepo[T: Base]:
         rows = result.all()
 
         if not rows:
-            return [], 0
+            # The total travels on the rows, and this page has none. On the first page
+            # that means zero matches; past the last one the client still wants the count.
+            return [], 0 if page == 1 else await self._count(filters)
 
         items = [row[0] for row in rows]
         total = rows[0]._total_count
 
         return items, total
+
+    async def _count(self, filters: dict[str, Any] | None) -> int:
+        matching = self._apply_filters(self._base_select(), filters).subquery()
+        result = await self.session.execute(select(func.count()).select_from(matching))
+        return int(result.scalar_one())
 
     # ── Cursor pagination ─────────────────────────────────
 
@@ -244,34 +256,27 @@ class BaseRepo[T: Base]:
             if value is None:
                 continue
             field_config = self.map_field.get(key)
-            if field_config:
-                column = field_config["column"]
-                op = field_config["op"]
-                if op == "eq":
-                    stmt = stmt.where(column == value)
-                elif op == "ilike":
-                    stmt = stmt.where(column.ilike(f"%{value}%"))
-                elif op == "gte":
-                    stmt = stmt.where(column >= value)
-                elif op == "lte":
-                    stmt = stmt.where(column <= value)
-            elif hasattr(self.model, key):
-                stmt = stmt.where(getattr(self.model, key) == value)
-            else:
+            if not field_config:
+                # Only what the repository declares in `map_field` is a filter: a model
+                # attribute that happens to share the name of a key is not an invitation.
                 logger.warning("Unknown filter field ignored: %s", key)
+                continue
+            column = field_config["column"]
+            op = field_config["op"]
+            if op == "eq":
+                stmt = stmt.where(column == value)
+            elif op == "ilike":
+                stmt = stmt.where(column.ilike(f"%{_like_literal(str(value))}%", escape="\\"))
+            elif op == "gte":
+                stmt = stmt.where(column >= value)
+            elif op == "lte":
+                stmt = stmt.where(column <= value)
         return stmt
 
     def _apply_ordering(self, stmt: Select, order_by: str | None, order_dir: str) -> Select:
-        if not order_by:
-            return stmt.order_by(asc(self._pk))
-
-        field_config = self.map_field.get(order_by)
-        if field_config:
-            column = field_config["column"]
-        elif hasattr(self.model, order_by):
-            column = getattr(self.model, order_by)
-        else:
-            return stmt.order_by(asc(self._pk))
-
-        direction = desc if order_dir.lower() == "desc" else asc
-        return stmt.order_by(direction(column))
+        sort_column, sort_field, direction = self._resolve_sort(order_by, order_dir)
+        if sort_field == "id":
+            return stmt.order_by(direction(self._pk))
+        # The id breaks the ties. Without it PostgreSQL may return rows with the same sort
+        # value in a different order for each OFFSET, and pages repeat and skip rows.
+        return stmt.order_by(direction(sort_column), direction(self._pk))
