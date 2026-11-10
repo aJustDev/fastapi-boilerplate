@@ -103,7 +103,7 @@ class TestGetByUsername:
 
 class TestRolesRelationship:
     async def test_user_loads_roles(self, db_session: AsyncSession):
-        role = RoleORM(name="admin", description="Admin role")
+        role = RoleORM(name="auditor", description="Auditor role")
         db_session.add(role)
         await db_session.flush()
         await db_session.refresh(role)
@@ -127,12 +127,12 @@ class TestRolesRelationship:
 
         assert loaded is not None
         assert len(loaded.roles) == 1
-        assert loaded.roles[0].name == "admin"
-        assert loaded.has_role("admin") is True
+        assert loaded.roles[0].name == "auditor"
+        assert loaded.has_role("auditor") is True
         assert loaded.has_role("editor") is False
 
     async def test_user_loads_permissions_through_roles(self, db_session: AsyncSession):
-        perm = PermissionORM(name="items:write", description="Write items")
+        perm = PermissionORM(name="reports:export", description="Export reports")
         db_session.add(perm)
         await db_session.flush()
         await db_session.refresh(perm)
@@ -167,7 +167,7 @@ class TestRolesRelationship:
         loaded = await repo.get_by_email("withperm@test.com")
 
         assert loaded is not None
-        assert loaded.has_permission("items:write") is True
+        assert loaded.has_permission("reports:export") is True
         assert loaded.has_permission("items:delete") is False
 
 
