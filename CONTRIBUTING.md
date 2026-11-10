@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Python 3.13+
+- Python 3.14 (`uv` installs it from `.python-version`)
 - [uv](https://docs.astral.sh/uv/)
 - Docker and docker-compose
 - PostgreSQL 16 (or use the container)
@@ -12,8 +12,8 @@
 ```bash
 git clone <repo-url>
 cd fastapi
-uv sync --extra dev
-uv run pre-commit install
+uv sync
+bash scripts/install-hooks.sh
 
 docker compose up db -d
 bash sql/reset.sh
@@ -28,7 +28,7 @@ ENVIRONMENT=local uv run uvicorn main:app --reload
 4. Atomic commits grouped by responsibility (see commits section)
 5. Open a PR against `main`
 
-Pre-commit hooks automatically run ruff (check + format) and pytest before each commit.
+The pre-commit hook runs ruff (check + format) on staged files, and the pre-push hook blocks direct pushes to `main`. Before opening a PR, `bash scripts/ci-local.sh` runs the same checks as CI (see `docs/tooling.md`). Add a line to `CHANGELOG.md` under `[Unreleased]` when the change is visible to users of the boilerplate.
 
 ## Commit conventions
 

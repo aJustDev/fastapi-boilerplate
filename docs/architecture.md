@@ -65,7 +65,7 @@ Response ← Router ← Schema.model_validate(orm_obj) ←───────�
 
 ## Conventions
 
-- Python 3.13+, strict typing, Pydantic v2
+- Python 3.14, strict typing (mypy), Pydantic v2
 - SQLAlchemy async with asyncpg
 - Absolute imports from `app.`
 - English
