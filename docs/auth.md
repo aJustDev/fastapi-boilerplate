@@ -94,7 +94,7 @@ process.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `SECRET_KEY` | `change-me-in-production` | The app refuses to start outside local with the default |
+| `SECRET_KEY` | placeholder | Outside local the app refuses to start with the placeholder or with a key under 32 bytes |
 | `ALGORITHM` | `HS256` | JWT signing algorithm |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access token lifetime |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime |

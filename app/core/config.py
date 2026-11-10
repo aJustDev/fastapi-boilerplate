@@ -1,14 +1,30 @@
 import os
+from importlib.metadata import PackageNotFoundError, version
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Single source of truth for the version: pyproject.toml, read from the installed package.
+try:
+    _APP_VERSION = version("app")
+except PackageNotFoundError:
+    _APP_VERSION = "0.0.0+unknown"
+
+# SETTINGS_ENV_FILE="" reads no .env file at all. The test suite sets it before importing
+# `app`, so a developer's .env.local cannot make local runs differ from CI.
+_ENV_FILE = os.getenv("SETTINGS_ENV_FILE", f".env.{os.getenv('ENVIRONMENT', 'local')}") or None
+
+# Placeholder for local use only: validate_secret_key rejects it in any other environment.
+_DEFAULT_SECRET_KEY = "change-me-in-production-use-a-32-byte-random-key"  # noqa: S105
+# HS256 needs a key of at least 32 bytes (RFC 7518, section 3.2).
+_MIN_SECRET_KEY_BYTES = 32
 
 
 class Settings(BaseSettings):
     ENVIRONMENT: str = "local"
 
     APP_NAME: str = "FastAPI App"
-    APP_VERSION: str = "0.1.0"
+    APP_VERSION: str = _APP_VERSION
     APP_DESCRIPTION: str = ""
     ROOT_PATH: str = ""
 
@@ -17,7 +33,7 @@ class Settings(BaseSettings):
     DB_PORT: int = 5434
     DB_NAME: str = "app_db"
     DB_USER: str = "postgres"
-    DB_PASSWORD: str = "postgres"
+    DB_PASSWORD: str = "postgres"  # noqa: S105 -- local default
     DATABASE_URL: str = ""
 
     # Database Pool
@@ -26,7 +42,7 @@ class Settings(BaseSettings):
     DB_POOL_TIMEOUT: int = 30
 
     # JWT
-    SECRET_KEY: str = "change-me-in-production"
+    SECRET_KEY: str = _DEFAULT_SECRET_KEY
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -65,10 +81,17 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_secret_key(self) -> "Settings":
-        if self.ENVIRONMENT != "local" and self.SECRET_KEY == "change-me-in-production":
+        if self.ENVIRONMENT == "local":
+            return self
+        if self.SECRET_KEY == _DEFAULT_SECRET_KEY:
             raise ValueError(
                 "SECRET_KEY must be changed from default in non-local environments. "
                 "Set the SECRET_KEY environment variable."
+            )
+        if len(self.SECRET_KEY.encode()) < _MIN_SECRET_KEY_BYTES:
+            raise ValueError(
+                f"SECRET_KEY must be at least {_MIN_SECRET_KEY_BYTES} bytes. Generate one with: "
+                'python -c "import secrets; print(secrets.token_urlsafe(48))"'
             )
         return self
 
@@ -90,7 +113,7 @@ class Settings(BaseSettings):
         return self
 
     model_config = SettingsConfigDict(
-        env_file=f".env.{os.getenv('ENVIRONMENT', 'local')}",
+        env_file=_ENV_FILE,
         env_file_encoding="utf-8",
         extra="ignore",
     )
