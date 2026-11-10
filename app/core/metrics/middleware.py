@@ -69,7 +69,7 @@ class PrometheusMiddleware:
                 ).observe(duration)
 
     def _path_template(self, scope: Scope) -> str:
-        """Full template (e.g. /v1/items/{item_id}) of the route that served the request.
+        """Full template (e.g. /v1/workshops/{workshop_id}) of the route that served the request.
 
         FastAPI's router sets `scope["route"]` when a path matches (also on a 405 for a
         wrong method); no route means the path matched nothing (404). Since FastAPI 0.137

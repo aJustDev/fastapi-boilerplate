@@ -22,6 +22,5 @@ async def test_registered_jobs_and_seeded_rows_match(app_database):
 
 async def test_the_scanner_sees_the_jobs(app_database):
     # Canary: an empty registry would make the test above pass on nothing.
-    assert {"heartbeat_check", "revoked_tokens_cleanup", "outbox_cleanup"} <= set(
-        job_registry.registered_jobs
-    )
+    # One of the infrastructure, one of a context.
+    assert {"outbox_cleanup", "revoked_tokens_cleanup"} <= set(job_registry.registered_jobs)

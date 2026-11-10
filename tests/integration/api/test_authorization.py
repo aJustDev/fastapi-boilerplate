@@ -1,4 +1,4 @@
-"""Who may touch what: a permission on the route, and ownership of the resource.
+"""Who may touch what: a permission on the route, and the rules of the resource.
 
 Authentication is covered by tests/functional/test_auth_required_on_all_endpoints.py.
 A valid token only says who is calling; these tests are about the second user.
@@ -13,15 +13,17 @@ from app.auth.models.role import RoleORM
 from app.core.db import async_session_factory
 from tests._routes import iter_api_routes
 from tests.integration.api.helpers import bearer, login, register, signed_up
+from tests.integration.api.workshops import (
+    begin,
+    create_workshop,
+    enroll,
+    get_workshop,
+    published_workshop,
+)
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
-
-async def _create_item(client: AsyncClient, headers: dict[str, str], name: str = "mine") -> int:
-    response = await client.post("/v1/items", json={"name": name}, headers=headers)
-    assert response.status_code == 201, response.text
-    item_id: int = response.json()["id"]
-    return item_id
+EDIT = {"version": 1, "title": "changed by someone else"}
 
 
 async def _set_roles(user_id: int, *names: str) -> None:
@@ -34,69 +36,118 @@ async def _set_roles(user_id: int, *names: str) -> None:
         await session.commit()
 
 
-class TestOwnership:
-    async def test_another_users_item_looks_missing(self, api_client: AsyncClient):
+async def _organizer_requests(
+    client: AsyncClient, headers: dict[str, str], workshop_id: int, enrollment_id: int = 1
+) -> dict[str, int]:
+    """Status of every request that only whoever runs the workshop may make."""
+    url = f"/v1/workshops/{workshop_id}"
+    attendance = f"{url}/enrollments/{enrollment_id}/attendance"
+    return {
+        "edit": (await client.patch(url, json=EDIT, headers=headers)).status_code,
+        "list enrollments": (await client.get(f"{url}/enrollments", headers=headers)).status_code,
+        "attendance": (
+            await client.post(attendance, json={"attended": True}, headers=headers)
+        ).status_code,
+        "publish": (await client.post(f"{url}/publish", headers=headers)).status_code,
+        "cancel": (await client.post(f"{url}/cancel", headers=headers)).status_code,
+    }
+
+
+class TestDrafts:
+    async def test_someone_elses_draft_looks_missing(self, api_client: AsyncClient):
         alice = await signed_up(api_client, "alice")
         bob = await signed_up(api_client, "bob")
-        item_id = await _create_item(api_client, alice)
-        url = f"/v1/items/{item_id}"
+        draft = await create_workshop(api_client, alice)
+        url = f"/v1/workshops/{draft['id']}"
 
         read = await api_client.get(url, headers=bob)
-        update = await api_client.patch(url, json={"name": "taken"}, headers=bob)
-        remove = await api_client.delete(url, headers=bob)
-        absent = await api_client.get("/v1/items/999999", headers=bob)
+        absent = await api_client.get("/v1/workshops/999999", headers=bob)
+        joined = await enroll(api_client, bob, draft["id"])
+        left = await api_client.delete(f"{url}/enrollments/me", headers=bob)
+        as_organizer = await _organizer_requests(api_client, bob, draft["id"])
 
-        assert read.status_code == update.status_code == remove.status_code == 404
+        assert read.status_code == joined.status_code == left.status_code == 404
+        assert set(as_organizer.values()) == {404}, as_organizer
         # Same answer as an id nobody has: the response does not confirm that it exists.
         assert read.json()["code"] == absent.json()["code"] == "not_found"
-        mine = await api_client.get(url, headers=alice)
-        assert mine.status_code == 200
-        assert mine.json()["name"] == "mine"
+        mine = await get_workshop(api_client, alice, draft["id"])
+        assert (mine["status"], mine["title"]) == ("draft", "Intro to pottery")
 
-    async def test_lists_show_only_the_callers_items(self, api_client: AsyncClient):
+    async def test_the_list_shows_a_draft_only_to_its_organizer(self, api_client: AsyncClient):
         alice = await signed_up(api_client, "alice")
         bob = await signed_up(api_client, "bob")
-        await _create_item(api_client, alice, "of alice")
-        bobs = await _create_item(api_client, bob, "of bob")
+        await create_workshop(api_client, alice, title="draft of alice")
+        published = await published_workshop(api_client, alice, title="open to all")
+        bobs = await create_workshop(api_client, bob, title="draft of bob")
 
-        offset = await api_client.get("/v1/items", headers=bob)
-        cursor = await api_client.get("/v1/items/cursor", headers=bob)
-        search = await api_client.get("/v1/items", params={"name": "of"}, headers=bob)
+        async def listed(headers: dict[str, str], **params: str) -> list[int]:
+            response = await api_client.get("/v1/workshops", params=params, headers=headers)
+            return sorted(w["id"] for w in response.json()["items"])
 
-        assert offset.json()["total"] == 1
-        assert [i["id"] for i in offset.json()["items"]] == [bobs]
-        assert [i["id"] for i in cursor.json()["items"]] == [bobs]
-        assert [i["id"] for i in search.json()["items"]] == [bobs]
+        assert await listed(bob) == sorted([published["id"], bobs["id"]])
+        # Asking for drafts, or searching for the title, does not widen what is visible.
+        assert await listed(bob, status="draft") == [bobs["id"]]
+        assert await listed(bob, q="alice") == []
+        assert len(await listed(alice)) == 2
 
-    async def test_a_query_parameter_cannot_widen_the_list(self, api_client: AsyncClient):
+
+class TestPublishedWorkshops:
+    async def test_everyone_sees_it_and_only_its_organizer_runs_it(self, api_client: AsyncClient):
         alice = await signed_up(api_client, "alice")
         bob = await signed_up(api_client, "bob")
-        await _create_item(api_client, alice)
-        alice_id = (await api_client.get("/v1/auth/me", headers=alice)).json()["id"]
+        workshop = await published_workshop(api_client, alice)
+        enrolled = (await enroll(api_client, alice, workshop["id"])).json()
+        await begin(workshop["id"])
 
-        response = await api_client.get("/v1/items", params={"owner_id": alice_id}, headers=bob)
+        seen = await get_workshop(api_client, bob, workshop["id"])
+        as_someone_else = await _organizer_requests(api_client, bob, workshop["id"], enrolled["id"])
 
-        assert response.json()["total"] == 0
+        assert seen["id"] == workshop["id"]
+        # Visible, so not hidden behind a 404: forbidden.
+        assert set(as_someone_else.values()) == {403}, as_someone_else
+        unchanged = await get_workshop(api_client, alice, workshop["id"])
+        assert (unchanged["title"], unchanged["status"]) == ("Intro to pottery", "published")
+        as_organizer = await _organizer_requests(api_client, alice, workshop["id"], enrolled["id"])
+        assert as_organizer["list enrollments"] == as_organizer["attendance"] == 200
 
-    async def test_filter_options_come_from_the_callers_items(self, api_client: AsyncClient):
+    async def test_an_enrollment_is_reachable_only_through_its_own_workshop(
+        self, api_client: AsyncClient
+    ):
+        # Bob runs a workshop, so he passes the check on its path. The enrollment he
+        # names belongs to a workshop of alice.
         alice = await signed_up(api_client, "alice")
         bob = await signed_up(api_client, "bob")
-        await api_client.post("/v1/items", json={"name": "a", "category": "books"}, headers=alice)
-        await api_client.post("/v1/items", json={"name": "b", "category": "sports"}, headers=bob)
+        hers = await published_workshop(api_client, alice)
+        his = await published_workshop(api_client, bob)
+        enrollment = (await enroll(api_client, alice, hers["id"])).json()
+        await begin(hers["id"])
+        await begin(his["id"])
 
-        response = await api_client.get("/v1/items/filters", headers=bob)
+        response = await api_client.post(
+            f"/v1/workshops/{his['id']}/enrollments/{enrollment['id']}/attendance",
+            json={"attended": False},
+            headers=bob,
+        )
 
-        assert response.json()["category"] == ["sports"]
+        assert response.status_code == 404
+        listed = await api_client.get(f"/v1/workshops/{hers['id']}/enrollments", headers=alice)
+        assert [e["status"] for e in listed.json()["items"]] == ["confirmed"]
 
-    async def test_the_owner_has_full_access(self, api_client: AsyncClient):
+    async def test_an_enrollment_belongs_to_whoever_made_it(self, api_client: AsyncClient):
         alice = await signed_up(api_client, "alice")
-        url = f"/v1/items/{await _create_item(api_client, alice)}"
+        bob = await signed_up(api_client, "bob")
+        workshop = await published_workshop(api_client, alice)
+        await enroll(api_client, alice, workshop["id"])
 
-        assert (await api_client.get(url, headers=alice)).status_code == 200
-        renamed = await api_client.patch(url, json={"name": "renamed"}, headers=alice)
-        assert renamed.json()["name"] == "renamed"
-        assert (await api_client.delete(url, headers=alice)).status_code == 204
-        assert (await api_client.get(url, headers=alice)).status_code == 404
+        left = await api_client.delete(
+            f"/v1/workshops/{workshop['id']}/enrollments/me", headers=bob
+        )
+        bobs = await api_client.get("/v1/me/enrollments", headers=bob)
+        hers = await api_client.get("/v1/me/enrollments", headers=alice)
+
+        assert left.status_code == 404  # bob has no enrollment; alice's is not his to end
+        assert bobs.json()["total"] == 0
+        assert [e["status"] for e in hers.json()["items"]] == ["confirmed"]
 
 
 class TestPermissions:
@@ -108,42 +159,58 @@ class TestPermissions:
     async def test_an_account_without_the_permission_gets_403(self, api_client: AsyncClient):
         user = await register(api_client, "alice")
         headers = bearer((await login(api_client, "alice"))["access_token"])
-        item_id = await _create_item(api_client, headers)
+        workshop = await published_workshop(api_client, headers)
         await _set_roles(user["id"])  # roles are read on every request: no new login needed
+        url = f"/v1/workshops/{workshop['id']}"
 
         responses = [
-            await api_client.get("/v1/items", headers=headers),
-            await api_client.get(f"/v1/items/{item_id}", headers=headers),
-            await api_client.post("/v1/items", json={"name": "x"}, headers=headers),
-            await api_client.patch(f"/v1/items/{item_id}", json={"name": "x"}, headers=headers),
-            await api_client.delete(f"/v1/items/{item_id}", headers=headers),
+            await api_client.get("/v1/workshops", headers=headers),
+            await api_client.get(url, headers=headers),
+            await api_client.patch(url, json=EDIT, headers=headers),
+            await api_client.post(f"{url}/enrollments", headers=headers),
+            await api_client.get("/v1/me/enrollments", headers=headers),
         ]
 
         assert [r.status_code for r in responses] == [403] * 5
         assert {r.json()["code"] for r in responses} == {"forbidden"}
 
-    async def test_items_manage_reaches_the_items_of_every_owner(self, api_client: AsyncClient):
+    async def test_workshops_moderate_reaches_the_workshops_of_every_organizer(
+        self, api_client: AsyncClient
+    ):
         alice = await signed_up(api_client, "alice")
-        item_id = await _create_item(api_client, alice)
+        draft = await create_workshop(api_client, alice)
         admin_user = await register(api_client, "root")
         await _set_roles(admin_user["id"], "admin")
         admin = bearer((await login(api_client, "root"))["access_token"])
 
-        listed = await api_client.get("/v1/items", headers=admin)
-        read = await api_client.get(f"/v1/items/{item_id}", headers=admin)
-        removed = await api_client.delete(f"/v1/items/{item_id}", headers=admin)
+        listed = await api_client.get("/v1/workshops", headers=admin)
+        read = await api_client.get(f"/v1/workshops/{draft['id']}", headers=admin)
+        cancelled = await api_client.post(f"/v1/workshops/{draft['id']}/cancel", headers=admin)
 
-        assert listed.json()["total"] == 1
+        assert [w["id"] for w in listed.json()["items"]] == [draft["id"]]
         assert read.status_code == 200
-        assert removed.status_code == 204
+        assert cancelled.json()["status"] == "cancelled"
 
 
 # ── Every route that names a resource ─────────────────────
-# How to create, as the given user, the resource each path parameter stands for. A route
-# with a parameter that is missing here fails below: add how to build its resource, and
-# the route is checked like the rest.
-RESOURCES = {"item_id": _create_item}
-BODIES = {"PATCH": {"name": "changed by someone else"}, "PUT": {"name": "changed"}, "POST": {}}
+# How to create, as the given user, a private resource for each path parameter: one that
+# nobody else may see. A route with a parameter that is missing here fails below: add how
+# to build its resource, and the route is checked like the rest.
+
+
+async def _private_workshop(client: AsyncClient, headers: dict[str, str]) -> int:
+    workshop_id: int = (await create_workshop(client, headers))["id"]  # a draft
+    return workshop_id
+
+
+async def _own_enrollment(client: AsyncClient, headers: dict[str, str]) -> int:
+    workshop = await published_workshop(client, headers)
+    enrollment_id: int = (await enroll(client, headers, workshop["id"])).json()["id"]
+    return enrollment_id
+
+
+RESOURCES = {"workshop_id": _private_workshop, "enrollment_id": _own_enrollment}
+BODIES = {"PATCH": EDIT, "PUT": EDIT, "POST": {"attended": True}}
 
 
 def _routes_with_a_resource() -> list[tuple[str, str]]:
@@ -175,6 +242,7 @@ async def test_no_route_serves_the_resource_of_another_user(
     response = await api_client.request(method, url, json=BODIES.get(method), headers=bob)
 
     assert response.status_code in (403, 404), (
-        f"{method} {path} answered {response.status_code} to a user who does not own the "
-        "resource: check ownership in the use case (app/items/services/access.py)."
+        f"{method} {path} answered {response.status_code} to a user who may not see the "
+        "resource: check who it belongs to in the use case "
+        "(app/workshops/services/access.py)."
     )

@@ -7,13 +7,13 @@ root_packages =
     app
 
 # Inside a context, a layer may import the layers below it, never the ones above.
-# Parentheses mark layers a context may not have (items has no jobs).
+# Parentheses mark layers a context may not have (auth has no event handlers).
 [importlinter:contract:layers]
 name = Layers inside each context
 type = layers
 containers =
     app.auth
-    app.items
+    app.workshops
 layers =
     api | (event_handlers) | (jobs)
     use_cases
@@ -31,27 +31,29 @@ source_modules =
     app.core
 forbidden_modules =
     app.auth
-    app.items
+    app.workshops
     app.deps
     app.api
     app.db_registry
 
-# Contexts are independent. Items reaches the current user through app.deps (the
-# shared dependency), never by importing auth directly; items and users are linked by
-# owner_id only, without an ORM relationship.
-[importlinter:contract:items-auth]
-name = Items does not import auth directly
+# Contexts are independent. Workshops reaches the current user through app.deps (the
+# shared dependency), never by importing auth directly; workshops and users are linked
+# by organizer_id and attendee_id only, without an ORM relationship.
+# allow_indirect_imports: app.deps.auth imports the user model, and that chain is the
+# intended one. A context that uses app.deps needs it in its contract against app.auth.
+[importlinter:contract:workshops-auth]
+name = Workshops does not import auth directly
 type = forbidden
 allow_indirect_imports = true
 source_modules =
-    app.items
+    app.workshops
 forbidden_modules =
     app.auth
 
-[importlinter:contract:auth-items]
-name = Auth does not import items
+[importlinter:contract:auth-workshops]
+name = Auth does not import workshops
 type = forbidden
 source_modules =
     app.auth
 forbidden_modules =
-    app.items
+    app.workshops

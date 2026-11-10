@@ -14,7 +14,7 @@ class ErrorResponse(BaseModel):
 
     model_config = ConfigDict(
         extra="forbid",
-        json_schema_extra={"examples": [{"detail": "Item not found", "code": "not_found"}]},
+        json_schema_extra={"examples": [{"detail": "Workshop not found", "code": "not_found"}]},
     )
 
     detail: str
@@ -68,18 +68,24 @@ UNAUTHENTICATED: Responses = {
 }
 FORBIDDEN: Responses = {
     403: _error(
-        "The user lacks the permission of this route",
+        "The user lacks the permission of this route, or does not run the resource",
         "forbidden",
-        "Permission 'items:write' required",
+        "Permission 'workshops:create' required",
     )
 }
 NOT_FOUND: Responses = {
     404: _error(
-        "No such resource, or not one the caller may see", "not_found", "Item not found (ID: 42)"
+        "No such resource, or not one the caller may see",
+        "not_found",
+        "Workshop not found (ID: 42)",
     )
 }
 CONFLICT: Responses = {
-    409: _error("Conflict with what is already stored", "conflict", "Conflict on User: email taken")
+    409: _error(
+        "Conflict with what is stored: a duplicate, or a state that does not allow the operation",
+        "conflict",
+        "Conflict on User: email taken",
+    )
 }
 RATE_LIMITED: Responses = {
     429: {
