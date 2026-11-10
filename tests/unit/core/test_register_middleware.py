@@ -4,6 +4,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
+from app.core.exceptions.middleware import UnhandledErrorMiddleware
 from app.core.logging.middleware import RequestIdMiddleware
 from app.core.metrics.middleware import PrometheusMiddleware
 from app.core.security.headers import SecurityHeadersMiddleware
@@ -23,4 +24,6 @@ def test_middleware_stack_order():
         SecurityHeadersMiddleware,
         CORSMiddleware,
         GZipMiddleware,
+        # Innermost: the 500 of an unhandled error goes back through everything above.
+        UnhandledErrorMiddleware,
     ]

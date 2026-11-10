@@ -176,13 +176,24 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
     )
 
 
-async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    ctx = _extract_context(request, exc)
-    logger.error(_format_log(ctx), exc_info=True)
+def describe_unhandled(request: Request, exc: Exception) -> str:
+    """Log message of an unhandled error: exception, where it was raised and the request."""
+    return _format_log(_extract_context(request, exc))
+
+
+def internal_error_response() -> JSONResponse:
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error", "code": "internal_error"},
     )
+
+
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    # Last resort. Errors raised under the middleware stack never get here:
+    # UnhandledErrorMiddleware answers them from inside it. This one only sees what a
+    # middleware itself raises.
+    logger.error(describe_unhandled(request, exc), exc_info=True)
+    return internal_error_response()
 
 
 def register_exception_handlers(app: FastAPI) -> None:

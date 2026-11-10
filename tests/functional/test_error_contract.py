@@ -154,6 +154,38 @@ class TestRealRequests:
         assert response.status_code == 409
         assert ErrorResponse.model_validate(response.json()).code == "integrity_conflict"
 
+    async def test_unhandled_error_is_a_500_like_any_other_response(
+        self, client: AsyncClient, auth_headers, fake_user, caplog: pytest.LogCaptureFixture
+    ):
+        # The 500 is produced inside the middleware stack: a browser can read it (CORS),
+        # it carries the hardening headers, and its request id is in the response and in
+        # the one log line of the error.
+        with (
+            patch("app.auth.repos.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
+            patch("app.auth.repos.user.UserRepo.get_by_id", return_value=fake_user),
+            patch("app.items.repos.item.ItemRepo.get_by_id", side_effect=RuntimeError("boom")),
+            caplog.at_level("ERROR"),
+        ):
+            response = await client.get(
+                "/v1/items/1",
+                headers={
+                    **auth_headers,
+                    "Origin": "http://localhost:3000",
+                    "X-Request-ID": "trace-123",
+                },
+            )
+
+        assert response.status_code == 500
+        body = ErrorResponse.model_validate(response.json())
+        assert body.code == "internal_error"
+        assert "boom" not in response.text
+        assert response.headers["X-Request-ID"] == "trace-123"
+        assert response.headers["Access-Control-Allow-Origin"] == "http://localhost:3000"
+        assert response.headers["X-Content-Type-Options"] == "nosniff"
+        errors = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert len(errors) == 1, "one log line per unhandled error"
+        assert errors[0].exc_info is not None
+
 
 @pytest.mark.parametrize("status", ["422", "500"])
 def test_openapi_declares_the_error_schemas(status: str):

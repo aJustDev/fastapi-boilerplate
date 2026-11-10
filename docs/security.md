@@ -9,7 +9,8 @@ and hosts, security headers, CORS, authentication and rate limits.
 
 `app/core/middleware.py` registers, from outermost to innermost: `ProxyHeadersMiddleware`,
 `TrustedHostMiddleware`, metrics, request id, `SlowAPIMiddleware`, `SecurityHeadersMiddleware`,
-CORS and GZip. The order is checked by `tests/unit/core/test_register_middleware.py`.
+CORS, GZip and `UnhandledErrorMiddleware` (`docs/errors.md`). The order is checked by
+`tests/unit/core/test_register_middleware.py`.
 
 - **Proxies.** `X-Forwarded-For` and `X-Forwarded-Proto` are honored only from the addresses in
   `FORWARDED_ALLOW_IPS`, so the client IP seen by the rate limiter and the logs cannot be forged.

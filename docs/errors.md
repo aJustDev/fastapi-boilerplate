@@ -58,4 +58,8 @@ the race between that check and the `INSERT`.
   against the schemas, fails when a handler is added without being checked, and checks the
   OpenAPI references.
 - A 500 never exposes the exception message; the traceback goes to the log with the request id.
+- An exception no handler knows is answered by `UnhandledErrorMiddleware`
+  (`app/core/exceptions/middleware.py`), the innermost middleware. The 500 is built inside the
+  stack, so it has the CORS, security and `X-Request-ID` headers of any other response and is
+  logged once. The handler registered for `Exception` only sees what a middleware itself raises.
 - `code` values are part of the API contract: renaming one is a breaking change.
