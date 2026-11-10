@@ -12,7 +12,8 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-DB_CONNECT_TIMEOUT = 3
+# Short on purpose: startup only decides whether to start the workers.
+STARTUP_DB_CHECK_SECONDS = 3
 _BANNER_LOCK_ID = 2026_03_22  # arbitrary advisory lock ID
 
 
@@ -36,7 +37,7 @@ def check_utc_timezone() -> None:
 
 async def check_database(engine: AsyncEngine) -> str:
     try:
-        async with asyncio.timeout(DB_CONNECT_TIMEOUT):
+        async with asyncio.timeout(STARTUP_DB_CHECK_SECONDS):
             async with engine.connect() as conn:
                 await conn.execute(text("SELECT 1"))
         return "OK"
@@ -90,18 +91,21 @@ async def log_system_info(
     pid = os.getpid()
     instances = _count_sibling_workers()
 
-    # Only one process prints the full banner (advisory lock)
-    is_banner_leader = False
-    try:
-        async with engine.connect() as conn:
-            result = await conn.execute(
-                text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": _BANNER_LOCK_ID}
-            )
-            is_banner_leader = bool(result.scalar())
-    # The lock only decides who prints the banner; if it fails, every process
-    # prints it, which is visible on its own.
-    except Exception:  # noqa: BLE001
-        is_banner_leader = True
+    # Only one process prints the full banner (advisory lock). Without a database there is
+    # no lock to take: trying would wait for another connection timeout during startup,
+    # when uvicorn cannot be interrupted, so every process prints it.
+    is_banner_leader = True
+    if db_status == "OK":
+        try:
+            async with engine.connect() as conn:
+                result = await conn.execute(
+                    text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": _BANNER_LOCK_ID}
+                )
+                is_banner_leader = bool(result.scalar())
+        # The lock only decides who prints the banner; if it fails, every process
+        # prints it, which is visible on its own.
+        except Exception:  # noqa: BLE001
+            is_banner_leader = True
 
     if is_banner_leader:
         hostname = socket.gethostname()

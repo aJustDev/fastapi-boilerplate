@@ -113,6 +113,9 @@ class TestLogSystemInfo:
             await log_system_info(engine, "UNAVAILABLE")
 
         assert "UNAVAILABLE" in caplog.text
+        # No database, no lock to take: connecting again would wait for a second timeout
+        # during startup, when Ctrl+C cannot interrupt uvicorn.
+        engine.connect.assert_not_called()
 
     @patch("app.core.startup.settings")
     async def test_handles_url_without_at_sign(self, mock_settings, caplog):

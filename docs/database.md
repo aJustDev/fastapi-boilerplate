@@ -26,6 +26,7 @@ shows what happens to the changes of one request.
 | `DB_MAX_OVERFLOW` | `10` | Extra connections under load |
 | `DB_POOL_TIMEOUT` | `30` | Seconds to wait for a free connection |
 | `DB_POOL_RECYCLE` | `1800` | Seconds before a connection is replaced, ahead of proxies that drop idle ones |
+| `DB_CONNECT_TIMEOUT` | `10` | Seconds to open a connection (pool and event bus listener) |
 | `DB_COMMAND_TIMEOUT` | `30` | Client-side limit (seconds) for one statement |
 | `DB_STATEMENT_TIMEOUT_MS` | `30000` | Server-side `statement_timeout` of every app connection |
 | `DB_LOCK_TIMEOUT_MS` | `5000` | Server-side `lock_timeout`: waiting for a lock fails instead of hanging |

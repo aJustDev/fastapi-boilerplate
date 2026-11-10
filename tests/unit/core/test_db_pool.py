@@ -43,3 +43,12 @@ class TestJobLeaseSetting:
     def test_lease_shorter_than_twice_the_handler_timeout_is_rejected(self):
         with pytest.raises(ValueError, match="JOB_LEASE_SECONDS"):
             Settings(JOB_LEASE_SECONDS=100, JOB_HANDLER_TIMEOUT_SECONDS=60)
+
+
+class TestConnectTimeout:
+    def test_engine_connections_use_the_configured_connect_timeout(self):
+        # asyncpg waits 60 s by default; an unreachable host that drops packets would
+        # make every connection attempt wait that long.
+        from app.core.db import ENGINE_OPTIONS
+
+        assert ENGINE_OPTIONS["connect_args"]["timeout"] == Settings().DB_CONNECT_TIMEOUT
