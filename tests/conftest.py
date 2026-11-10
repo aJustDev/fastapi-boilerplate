@@ -3,6 +3,8 @@ import os
 # Before anything imports `app`: Settings is built at import time and would otherwise
 # read the developer's .env.local, so local runs would not reproduce CI.
 os.environ.setdefault("SETTINGS_ENV_FILE", "")
+# ENVIRONMENT has no default (app/core/config.py); the suite runs as local.
+os.environ.setdefault("ENVIRONMENT", "local")
 
 from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock

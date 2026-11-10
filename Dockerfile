@@ -24,6 +24,7 @@ FROM python:3.14-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     TZ=UTC \
+    ENVIRONMENT=production \
     PATH="/build/.venv/bin:$PATH" \
     PYTHONPATH=/app
 

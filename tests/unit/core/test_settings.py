@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from app.core.config import Settings
 
@@ -13,6 +14,19 @@ def test_app_version_comes_from_the_package():
     from importlib.metadata import version
 
     assert version("app") == Settings().APP_VERSION
+
+
+class TestEnvironment:
+    def test_environment_has_no_default(self, monkeypatch):
+        # Falling back to "local" would switch every production validator off, placeholder
+        # SECRET_KEY included, the day a deployment forgets the variable.
+        monkeypatch.delenv("ENVIRONMENT", raising=False)
+        with pytest.raises(ValidationError, match="ENVIRONMENT"):
+            Settings()
+
+    def test_placeholder_key_needs_an_explicit_local(self, monkeypatch):
+        monkeypatch.setenv("ENVIRONMENT", "local")
+        assert Settings().SECRET_KEY.startswith("change-me")
 
 
 class TestSecretKey:
