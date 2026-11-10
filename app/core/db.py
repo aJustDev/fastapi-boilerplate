@@ -17,6 +17,9 @@ ENGINE_OPTIONS: dict[str, Any] = dict(
     pool_recycle=settings.DB_POOL_RECYCLE,
     pool_pre_ping=True,
     echo=False,
+    # A DBAPIError carries its statement and, by default, the bound values. Its text ends
+    # up in the log: without this, a failed INSERT INTO users logs the password hash.
+    hide_parameters=True,
     connect_args={
         "timeout": settings.DB_CONNECT_TIMEOUT,
         "command_timeout": settings.DB_COMMAND_TIMEOUT,
