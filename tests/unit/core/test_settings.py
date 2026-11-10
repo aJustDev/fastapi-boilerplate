@@ -1,5 +1,6 @@
 import pytest
 from pydantic import ValidationError
+from sqlalchemy.engine import make_url
 
 from app.core.config import Settings
 
@@ -39,7 +40,12 @@ class TestSecretKey:
             Settings(ENVIRONMENT="prod", SECRET_KEY="x" * 31)
 
     def test_long_random_key_is_accepted(self):
-        s = Settings(ENVIRONMENT="prod", SECRET_KEY="x" * 32, ALLOWED_HOSTS=["api.example.com"])
+        s = Settings(
+            ENVIRONMENT="prod",
+            SECRET_KEY="x" * 32,
+            ALLOWED_HOSTS=["api.example.com"],
+            FORWARDED_ALLOW_IPS="",
+        )
         assert s.SECRET_KEY == "x" * 32
 
 
@@ -67,5 +73,43 @@ class TestNetworkExposure:
         )
         assert s.ALLOWED_HOSTS == ["api.example.com"]
 
+    def test_trusted_proxies_must_be_stated_outside_local(self):
+        # Behind a proxy that is not listed every client has the proxy's address: one rate
+        # limit for everybody, and five bad logins a minute lock all of them out.
+        with pytest.raises(ValueError, match="FORWARDED_ALLOW_IPS must be set"):
+            Settings(**self.prod, ALLOWED_HOSTS=["api.example.com"])
+
+    def test_no_proxy_is_a_valid_statement(self):
+        s = Settings(**self.prod, ALLOWED_HOSTS=["api.example.com"], FORWARDED_ALLOW_IPS="")
+        assert s.FORWARDED_ALLOW_IPS == ""
+
     def test_local_keeps_the_permissive_defaults(self):
         assert Settings(ENVIRONMENT="local").ALLOWED_HOSTS == ["*"]
+
+
+class TestDatabaseUrl:
+    @pytest.mark.parametrize("password", ["p@ss/w#rd", "a:b@c", "abc?def", "100%", "plain"])
+    def test_a_password_with_url_characters_stays_a_password(self, password: str):
+        s = Settings(ENVIRONMENT="local", DB_PASSWORD=password, DB_HOST="db.internal", DB_PORT=5432)
+
+        url = make_url(s.DATABASE_URL)
+
+        assert (url.host, url.port, url.database) == ("db.internal", 5432, "app_db")
+        assert url.password == password
+
+    def test_an_explicit_url_wins(self):
+        url = "postgresql+asyncpg://u:p@other:6432/db?ssl=require"
+        assert url == Settings(ENVIRONMENT="local", DATABASE_URL=url).DATABASE_URL
+
+    def test_the_libpq_spelling_of_tls_is_rejected_with_the_right_one(self):
+        with pytest.raises(ValueError, match="ssl=require"):
+            Settings(
+                ENVIRONMENT="local",
+                DATABASE_URL="postgresql+asyncpg://u:p@host/db?sslmode=require",
+            )
+
+
+class TestExposure:
+    def test_api_docs_are_off_unless_asked_for(self, monkeypatch):
+        monkeypatch.delenv("DOCS_ENABLED", raising=False)
+        assert Settings(ENVIRONMENT="local").DOCS_ENABLED is False

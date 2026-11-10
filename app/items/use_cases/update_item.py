@@ -19,6 +19,7 @@ class UpdateItemUseCase:
 
         await self.event_bus.publish(
             event_type="item.updated",
+            aggregate_id=item.id,
             payload={
                 "item_id": item.id,
                 "name": item.name,

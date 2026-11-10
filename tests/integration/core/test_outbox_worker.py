@@ -1,6 +1,7 @@
 """Outbox worker against real PostgreSQL: delivery guarantees with several workers."""
 
 import asyncio
+import uuid
 from collections import Counter
 
 import pytest
@@ -24,7 +25,7 @@ def committing_tables() -> list[str]:
 @pytest.fixture
 def isolated_dispatcher():
     """Handlers registered by a test disappear when it ends."""
-    snapshot = {k: list(v) for k, v in dispatcher._handlers.items()}
+    snapshot = {k: dict(v) for k, v in dispatcher._handlers.items()}
     yield dispatcher
     dispatcher._handlers.clear()
     dispatcher._handlers.update(snapshot)
@@ -55,7 +56,7 @@ async def test_each_event_is_dispatched_once_with_several_workers(factory, isola
     handled: list[int] = []
 
     @isolated_dispatcher.register("test.concurrent")
-    async def record(payload: dict) -> None:
+    async def record(payload: dict, event_id: uuid.UUID) -> None:
         handled.append(payload["n"])
         await asyncio.sleep(0.02)  # widen the window in which locks are held
 
@@ -87,7 +88,7 @@ async def test_notify_wakes_the_worker_before_the_poll_interval(
     handled = asyncio.Event()
 
     @isolated_dispatcher.register("test.notify")
-    async def record(payload: dict) -> None:
+    async def record(payload: dict, event_id: uuid.UUID) -> None:
         handled.set()
 
     dsn = pg_url.replace("postgresql+asyncpg://", "postgresql://")

@@ -17,7 +17,7 @@ def stack():
                 "title": "2 - TrustedHost: allowed Host?",
                 "tone": "decision",
                 "down": "yes",
-                "branch": ("no", "400 before any work is done.", "bad"),
+                "branch": ("no", "400 before any work is done. Health probes are exempt.", "bad"),
             },
             {
                 "title": "3 - Metrics, request id, headers, CORS",

@@ -54,8 +54,11 @@ def downgrade() -> None:
 A row without a registered handler is claimed and rescheduled with
 `last_error = "No handler registered for job ..."`.
 
-Jobs of this boilerplate: `heartbeat_check` (every 5 min, logs the worker identity) and
-`revoked_tokens_cleanup` (hourly, see `docs/auth.md`).
+A handler without its row never runs either. The worker warns about both cases once at startup.
+
+Jobs of this boilerplate: `heartbeat_check` (every 5 min, logs the worker identity at DEBUG),
+`revoked_tokens_cleanup` (hourly, see `docs/auth.md`) and `outbox_cleanup` (daily, see
+`docs/event-bus.md`).
 
 ## Configuration
 
@@ -64,6 +67,7 @@ Jobs of this boilerplate: `heartbeat_check` (every 5 min, logs the worker identi
 | `JOB_POLL_INTERVAL_SECONDS` | `15` | How often each worker looks for due jobs |
 | `JOB_HANDLER_TIMEOUT_SECONDS` | `60` | Maximum run time of a handler |
 | `JOB_LEASE_SECONDS` | `120` | How long a claimed job belongs to its worker; at least twice the handler timeout (validated at startup) |
+| `JOB_WORKER_ENABLED` | `true` | Run the worker in the API process (`docs/operations.md`) |
 
 ## Operations
 

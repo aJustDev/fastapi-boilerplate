@@ -13,6 +13,8 @@ from app.core.config import settings
 from app.core.db import async_session_factory, build_asyncpg_dsn
 from app.core.events.dispatcher import dispatcher
 from app.core.events.models import OutboxEventORM
+from app.core.logging.context import request_id_var
+from app.core.metrics.instruments import outbox_events_failed_total, outbox_events_processed_total
 
 logger = logging.getLogger(__name__)
 
@@ -139,11 +141,17 @@ class OutboxWorker:
             name for name, info in (event.handler_state or {}).items() if info.get("status") == "ok"
         }
 
-        dispatch_result = await dispatcher.dispatch(
-            event.event_type,
-            event.payload,
-            completed_handlers=completed,
-        )
+        # Handlers log under the request id of the request that published the event.
+        token = request_id_var.set(event.correlation_id or "")
+        try:
+            dispatch_result = await dispatcher.dispatch(
+                event.event_type,
+                event.payload,
+                event_id=event.id,
+                completed_handlers=completed,
+            )
+        finally:
+            request_id_var.reset(token)
 
         # Merge per-handler results into handler_state
         new_state = dict(event.handler_state or {})
@@ -161,6 +169,7 @@ class OutboxWorker:
         if dispatch_result.all_succeeded:
             event.status = "PROCESSED"
             event.processed_at = datetime.now(UTC)
+            outbox_events_processed_total.labels(event_type=event.event_type).inc()
             logger.info(
                 "Event %s processed (type=%s)",
                 event.id,
@@ -172,6 +181,7 @@ class OutboxWorker:
 
             if event.retry_count >= event.max_retries:
                 event.status = "FAILED"
+                outbox_events_failed_total.labels(event_type=event.event_type).inc()
                 logger.critical(
                     "Event %s FAILED after %d retries (type=%s): %s",
                     event.id,

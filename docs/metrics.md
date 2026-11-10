@@ -20,6 +20,8 @@ flight, recorded by an ASGI middleware, plus database pool gauges read on each s
 | `http_request_duration_seconds` | Histogram | `method`, `path_template` (not observed for OPTIONS and HEAD) |
 | `http_requests_in_progress` | Gauge | `method` |
 | `db_pool_size`, `db_pool_checked_out`, `db_pool_checked_in`, `db_pool_overflow` | Gauge | |
+| `outbox_events_processed_total` | Counter | `event_type` |
+| `outbox_events_failed_total` | Counter | `event_type`: events out of retries, waiting for a replay |
 
 The process collector of `prometheus_client` adds the standard `process_*` and `python_*` metrics.
 
@@ -47,6 +49,7 @@ Keep label values bounded (categories, statuses), never ids or free text.
 | Setting | Default | Meaning |
 |---|---|---|
 | `METRICS_ENABLED` | `true` | Registers the recording middleware; `/v1/metrics` stays mounted either way |
+| `METRICS_TOKEN` | empty | When set, `/v1/metrics` requires it as a bearer token |
 
 ## Guarantees and limits
 
@@ -54,7 +57,9 @@ Keep label values bounded (categories, statuses), never ids or free text.
 - Counters live in each process. With `uvicorn --workers N` every scrape reaches one worker and
   returns only its counters, so totals jump between scrapes: run one process per container (and
   scale containers), or switch `prometheus_client` to multiprocess mode.
-- `/v1/metrics` has no authentication: keep it on the internal network.
+- `/v1/metrics` is open unless `METRICS_TOKEN` is set; with it, the scrape must send
+  `Authorization: Bearer <token>` (Prometheus: `authorization: {credentials: <token>}` in the
+  scrape config). Without a token, keep the endpoint on the internal network.
 - Metrics only; there is no tracing.
 
 ## Files

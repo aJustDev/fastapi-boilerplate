@@ -11,7 +11,8 @@
 <polygon points="440,89.0 432.9,92.8 432.9,85.2" fill="#b03a2e"/>
 <text x="400.0" y="83.0" text-anchor="middle"><tspan font-weight="bold" fill="#b03a2e" font-size="11">no</tspan></text>
 <rect x="440" y="66" width="320" height="46" rx="6" fill="#fbeaea" stroke="#b03a2e" stroke-width="1.2"/>
-<text x="452" y="93" text-anchor="start"><tspan fill="#222" font-size="11.5">400 before any work is done.</tspan></text>
+<text x="452" y="85" text-anchor="start"><tspan fill="#222" font-size="11.5">400 before any work is done. Health probes are</tspan></text>
+<text x="452" y="99" text-anchor="start"><tspan fill="#222" font-size="11.5">exempt.</tspan></text>
 <polyline points="200.0,112.0 200.0,126.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
 <polygon points="200.0,132 196.2,124.9 203.8,124.9" fill="#6b7785"/>
 <text x="208.0" y="126" text-anchor="start"><tspan font-weight="bold" fill="#6b7785" font-size="11">yes</tspan></text>

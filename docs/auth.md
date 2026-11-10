@@ -57,7 +57,9 @@ is the first of two checks: the permission says the user may delete items, and t
 checks that this item is the user's (`docs/security.md`).
 
 Users have roles (`user_roles`) and roles have permissions (`role_permissions`). Both are read
-from the database on every request. The reference data comes from the migrations:
+from the database on every request, with the user: one query for the revocation list, one for
+the user, and one each for its roles and their permissions. The reference data comes from the
+migrations:
 
 | Role | Permissions |
 |---|---|

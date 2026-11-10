@@ -1,8 +1,16 @@
 import asyncio
+import uuid
 
 import pytest
 
-from app.core.events.dispatcher import DispatchResult, EventDispatcher, HandlerResult
+from app.core.events.dispatcher import (
+    DispatchResult,
+    EventDispatcher,
+    HandlerResult,
+    handler_key,
+)
+
+EVENT_ID = uuid.uuid4()
 
 
 @pytest.fixture
@@ -63,28 +71,28 @@ class TestEventDispatcher:
         called_with = {}
 
         @fresh_dispatcher.register("test.event")
-        async def handler(payload: dict) -> None:
+        async def handler(payload: dict, event_id: uuid.UUID) -> None:
             called_with.update(payload)
 
-        result = await fresh_dispatcher.dispatch("test.event", {"key": "value"})
+        result = await fresh_dispatcher.dispatch("test.event", {"key": "value"}, event_id=EVENT_ID)
 
         assert result.all_succeeded is True
         assert len(result.results) == 1
-        assert result.results[0].handler_name == "handler"
+        assert result.results[0].handler_name == handler_key(handler)
         assert called_with == {"key": "value"}
 
     async def test_multiple_handlers(self, fresh_dispatcher: EventDispatcher):
         call_order: list[str] = []
 
         @fresh_dispatcher.register("test.event")
-        async def handler_a(payload: dict) -> None:
+        async def handler_a(payload: dict, event_id: uuid.UUID) -> None:
             call_order.append("a")
 
         @fresh_dispatcher.register("test.event")
-        async def handler_b(payload: dict) -> None:
+        async def handler_b(payload: dict, event_id: uuid.UUID) -> None:
             call_order.append("b")
 
-        result = await fresh_dispatcher.dispatch("test.event", {})
+        result = await fresh_dispatcher.dispatch("test.event", {}, event_id=EVENT_ID)
 
         assert result.all_succeeded is True
         assert len(result.results) == 2
@@ -92,7 +100,7 @@ class TestEventDispatcher:
 
     async def test_no_handlers_is_not_a_success(self, fresh_dispatcher: EventDispatcher):
         # An event nobody handles must be retried, not acknowledged as processed.
-        result = await fresh_dispatcher.dispatch("nonexistent.event", {})
+        result = await fresh_dispatcher.dispatch("nonexistent.event", {}, event_id=EVENT_ID)
         assert result.no_handlers is True
         assert result.all_succeeded is False
         assert result.results == []
@@ -102,15 +110,15 @@ class TestEventDispatcher:
         call_order: list[str] = []
 
         @fresh_dispatcher.register("test.event")
-        async def handler_a(payload: dict) -> None:
+        async def handler_a(payload: dict, event_id: uuid.UUID) -> None:
             call_order.append("a")
             raise ValueError("handler a failed")
 
         @fresh_dispatcher.register("test.event")
-        async def handler_b(payload: dict) -> None:
+        async def handler_b(payload: dict, event_id: uuid.UUID) -> None:
             call_order.append("b")
 
-        result = await fresh_dispatcher.dispatch("test.event", {})
+        result = await fresh_dispatcher.dispatch("test.event", {}, event_id=EVENT_ID)
 
         assert result.all_succeeded is False
         assert len(result.results) == 2
@@ -121,7 +129,7 @@ class TestEventDispatcher:
 
     async def test_handler_timeout(self, fresh_dispatcher: EventDispatcher):
         @fresh_dispatcher.register("test.slow")
-        async def slow_handler(payload: dict) -> None:
+        async def slow_handler(payload: dict, event_id: uuid.UUID) -> None:
             await asyncio.sleep(999)
 
         # Patch timeout to 0.1s for testing
@@ -129,7 +137,7 @@ class TestEventDispatcher:
 
         with patch("app.core.events.dispatcher.settings") as mock_settings:
             mock_settings.OUTBOX_HANDLER_TIMEOUT_SECONDS = 0.1
-            result = await fresh_dispatcher.dispatch("test.slow", {})
+            result = await fresh_dispatcher.dispatch("test.slow", {}, event_id=EVENT_ID)
 
         assert result.all_succeeded is False
         assert len(result.results) == 1
@@ -140,23 +148,25 @@ class TestEventDispatcher:
         call_order: list[str] = []
 
         @fresh_dispatcher.register("test.event")
-        async def handler_a(payload: dict) -> None:
+        async def handler_a(payload: dict, event_id: uuid.UUID) -> None:
             call_order.append("a")
 
         @fresh_dispatcher.register("test.event")
-        async def handler_b(payload: dict) -> None:
+        async def handler_b(payload: dict, event_id: uuid.UUID) -> None:
             call_order.append("b")
 
-        result = await fresh_dispatcher.dispatch("test.event", {}, completed_handlers={"handler_a"})
+        result = await fresh_dispatcher.dispatch(
+            "test.event", {}, event_id=EVENT_ID, completed_handlers={handler_key(handler_a)}
+        )
 
         assert result.all_succeeded is True
         assert len(result.results) == 2
         # handler_a should be skipped
-        assert result.results[0].handler_name == "handler_a"
+        assert result.results[0].handler_name == handler_key(handler_a)
         assert result.results[0].skipped is True
         assert result.results[0].success is True
         # handler_b should have run
-        assert result.results[1].handler_name == "handler_b"
+        assert result.results[1].handler_name == handler_key(handler_b)
         assert result.results[1].skipped is False
         assert call_order == ["b"]
 
@@ -164,14 +174,16 @@ class TestEventDispatcher:
         self, fresh_dispatcher: EventDispatcher
     ):
         @fresh_dispatcher.register("test.event")
-        async def handler_a(payload: dict) -> None:
+        async def handler_a(payload: dict, event_id: uuid.UUID) -> None:
             pass
 
         @fresh_dispatcher.register("test.event")
-        async def handler_b(payload: dict) -> None:
+        async def handler_b(payload: dict, event_id: uuid.UUID) -> None:
             raise ValueError("fail")
 
-        result = await fresh_dispatcher.dispatch("test.event", {}, completed_handlers={"handler_a"})
+        result = await fresh_dispatcher.dispatch(
+            "test.event", {}, event_id=EVENT_ID, completed_handlers={handler_key(handler_a)}
+        )
 
         assert result.all_succeeded is False
         assert result.results[0].skipped is True
@@ -179,11 +191,11 @@ class TestEventDispatcher:
 
     def test_registered_events(self, fresh_dispatcher: EventDispatcher):
         @fresh_dispatcher.register("event.a")
-        async def handler_a(payload: dict) -> None:
+        async def handler_a(payload: dict, event_id: uuid.UUID) -> None:
             pass
 
         @fresh_dispatcher.register("event.b")
-        async def handler_b(payload: dict) -> None:
+        async def handler_b(payload: dict, event_id: uuid.UUID) -> None:
             pass
 
         assert sorted(fresh_dispatcher.registered_events) == ["event.a", "event.b"]

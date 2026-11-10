@@ -12,6 +12,11 @@ not count.
 
 ### Added
 
+- `python -m app.cli`: `create-admin`, `outbox replay`, `outbox cleanup` and `worker` (the outbox and job workers without the API). `OUTBOX_WORKER_ENABLED` and `JOB_WORKER_ENABLED` turn them off in the API process (#25).
+- `outbox_cleanup` daily job, and counters `outbox_events_processed_total` and `outbox_events_failed_total` (#25).
+- `DOCS_ENABLED` (off by default; Swagger UI, ReDoc and `/openapi.json`) and `METRICS_TOKEN` (bearer token for `/v1/metrics`) (#25).
+- `created_by` and `updated_by` record the authenticated user; events carry the request id as `correlation_id` and their handlers log under it (#25).
+- Docs: operations guide (health endpoints, command line, running the workers) (#25).
 - API test level, `tests/integration/api/`: requests through the real app and the real `get_session` against PostgreSQL. It covers the session model, authorization with two users, malformed input and pagination across pages (#24).
 - Authorization in the example context: each `items` route requires a permission, the use case checks the owner, lists are limited to the caller, and `items:manage` lifts the limit. Registration assigns the `user` role (#24).
 - Bounded input types in `app/core/schema.py` (`ShortText`, `LongText`, `Int32`, `IdPath`, `PageQuery`, `SearchQuery`...) and error codes `invalid_cursor` (400) and `invalid_input` (422) (#24).
@@ -29,6 +34,11 @@ not count.
 
 ### Changed
 
+- Event handlers receive `(payload, event_id)`, and their retry state is keyed by module and qualified name. Events pending during the upgrade run their handlers once more (#25).
+- `OUTBOX_MAX_RETRIES` defaults to 12 (a little over an hour of retries) instead of 5 (about 30 s) (#25).
+- Outside local `FORWARDED_ALLOW_IPS` must be set (empty for no proxy), and uvicorn runs with `--no-proxy-headers` (#25).
+- The health endpoints are exempt from `ALLOWED_HOSTS`, and a rejected `Host` answers JSON with code `invalid_host` (#25).
+- `outbox_events.aggregate_id` and `correlation_id` are text (#25).
 - `ENVIRONMENT` has no default: the app does not start until it is set. The Docker image sets `ENVIRONMENT=production` (#24).
 - Sessions end by counter: `users.session_version` replaces `tokens_valid_after`, tokens carry it as the `sv` claim and the unused `scopes` claim is gone. Tokens issued before the upgrade are rejected (#24).
 - Password hashes use the argon2-cffi defaults and are upgraded at login when they were made with older parameters (#24).
@@ -44,6 +54,8 @@ not count.
 
 ### Removed
 
+- `SlowAPIMiddleware`: it does nothing for routes of an included router; the endpoint decorators are the rate limit (#25).
+- The partial index `ix_users_is_active` (#25).
 - `app/deps/database.py`, an unused re-export of `get_session` (#24).
 - `AUDIT-CHECKLIST.md` (its open items are done or in `ROADMAP.md`) and `docs/skill.md` (now the `working-on-fastapi-boilerplate` skill).
 - `ItemORM.owner`, a relationship across contexts; items expose `owner_id`.
@@ -51,6 +63,16 @@ not count.
 
 ### Fixed
 
+- Two event handlers with the same function name shared one retry state: when one failed and the other succeeded, the event was marked processed and the failed handler never ran again (#25).
+- The example webhook handler reported a 500 from the receiver as a delivery, so it was never retried (#25).
+- An instance that started while the database was unreachable never became ready and never started its workers (#25).
+- The image's `HEALTHCHECK` failed with the explicit `ALLOWED_HOSTS` production requires (#25).
+- Offset pagination repeated and skipped rows when the sort column had ties, and a page past the end reported `total: 0` (#25).
+- The text filter treated `%` and `_` as wildcards, and any model attribute worked as a filter (#25).
+- Nothing scheduled the outbox cleanup, and `FAILED` events could only be replayed from a Python shell (#25).
+- A database password with `@`, `/` or `#` was parsed as part of the host; `sslmode=` in `DATABASE_URL` failed on the first connection (#25).
+- The startup banner was printed by one process per database, so later processes and deployments never showed it (#25).
+- A job handler without its row in `scheduled_jobs`, or a row without a handler, never ran and nothing said so (#25).
 - Any registered user could read, change and delete the items of every other user (#24).
 - A deployment without `ENVIRONMENT` ran as `local` and accepted the placeholder `SECRET_KEY`, which lets anyone sign tokens (#24).
 - Responses were sent before the transaction committed: a failed commit still answered 2xx, and a read right after a write could miss it (#24).

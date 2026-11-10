@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.core.config import settings
+from app.core.logging.context import get_actor
 
 # Shared by the app engine and the integration test that checks the server settings.
 ENGINE_OPTIONS: dict[str, Any] = dict(
@@ -42,11 +43,12 @@ def build_asyncpg_dsn() -> str:
     from DB_* when empty, so setting it directly (pgbouncer, managed provider) would
     otherwise point the listener at a different database than the pool.
     """
-    return (
-        make_url(settings.DATABASE_URL)
-        .set(drivername="postgresql")
-        .render_as_string(hide_password=False)
-    )
+    url = make_url(settings.DATABASE_URL).set(drivername="postgresql")
+    # TLS is `ssl=` for SQLAlchemy's asyncpg dialect and `sslmode=` in an asyncpg DSN.
+    query = dict(url.query)
+    if "ssl" in query:
+        query["sslmode"] = query.pop("ssl")
+    return url.set(query=query).render_as_string(hide_password=False)
 
 
 def rowcount(result: Result[Any]) -> int:
@@ -98,8 +100,10 @@ class AuditMixin:
         onupdate=func.now(),
         server_onupdate=func.now(),
     )
-    created_by: Mapped[str | None] = mapped_column(default=None)
-    updated_by: Mapped[str | None] = mapped_column(default=None)
+    # The id of the authenticated user who made the change (see `actor_var`); NULL for
+    # rows written outside a request (workers, jobs, scripts, migrations).
+    created_by: Mapped[str | None] = mapped_column(default=get_actor)
+    updated_by: Mapped[str | None] = mapped_column(default=None, onupdate=get_actor)
 
 
 async def get_session() -> AsyncGenerator[AsyncSession]:

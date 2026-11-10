@@ -19,6 +19,34 @@ logger = logging.getLogger(__name__)
 BATCH_SIZE = 10
 
 
+async def job_mismatches() -> tuple[list[str], list[str]]:
+    """(handlers without a row, rows without a handler).
+
+    A job needs both: the handler registered in code and its row in `scheduled_jobs`,
+    which a migration inserts. One without the other never runs, silently.
+    """
+    async with async_session_factory() as session:
+        rows = set((await session.execute(select(ScheduledJobORM.job_name))).scalars())
+    registered = set(job_registry.registered_jobs)
+    return sorted(registered - rows), sorted(rows - registered)
+
+
+async def log_job_mismatches() -> None:
+    without_row, without_handler = await job_mismatches()
+    for name in without_row:
+        logger.warning(
+            "Job %r is registered but has no row in scheduled_jobs: it will never run. "
+            "Add the row with a migration.",
+            name,
+        )
+    for name in without_handler:
+        logger.warning(
+            "scheduled_jobs has a row for %r but no handler is registered: import its "
+            "module in app/db_registry.py or remove the row.",
+            name,
+        )
+
+
 class JobWorker:
     def __init__(self) -> None:
         self._task: asyncio.Task[None] | None = None
@@ -41,8 +69,12 @@ class JobWorker:
     # ── Main loop ─────────────────────────────────────────
 
     async def _run(self) -> None:
+        rows_checked = False
         while not self._shutdown_event.is_set():
             try:
+                if not rows_checked:
+                    await log_job_mismatches()
+                    rows_checked = True
                 await self._recover_stale_jobs()
                 await self._process_due_jobs()
             except asyncio.CancelledError:

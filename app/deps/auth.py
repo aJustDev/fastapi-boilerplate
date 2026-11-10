@@ -9,6 +9,7 @@ from app.auth.models.user import UserORM
 from app.auth.repos.revoked_token import RevokedTokenRepo
 from app.auth.repos.user import UserRepo
 from app.core.exceptions import AuthenticationError, AuthorizationError
+from app.core.logging.context import actor_var
 from app.core.security import decode_token
 from app.deps.repository import get_repo
 
@@ -49,6 +50,8 @@ async def get_current_user(
     if not user.accepts_session(payload["sv"]):
         raise AuthenticationError("Session has been invalidated")
 
+    # From here on, rows written by this request record who wrote them (AuditMixin).
+    actor_var.set(str(user.id))
     return user
 
 

@@ -10,8 +10,9 @@ module of the logger.
 - `RequestIdMiddleware` takes `X-Request-ID` from the request when it is a plain token (letters,
   digits, `.`, `_`, `-`, at most 64 characters) and generates a UUID4 hex otherwise, stores it in
   a `ContextVar` for the duration of the request and returns it in the response header.
-- `RequestIdFilter` adds `request_id` to every record (empty outside a request: workers, jobs,
-  startup).
+- `RequestIdFilter` adds `request_id` to every record (empty outside a request: jobs, startup).
+  An event handler logs under the id of the request that published its event
+  (`docs/event-bus.md`).
 - `LayerModuleFilter` derives `layer` and `module` from the logger name: the first of `api`,
   `use_cases`, `services`, `repos`, `core`, `deps` in it gives the layer (`Router`, `UseCase`,
   `Service`, `Repo`, `Core`, `Deps`, else `App`) and the last part the module, title-cased. A

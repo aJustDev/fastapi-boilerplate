@@ -3,7 +3,7 @@ import uuid
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app.core.logging.context import request_id_var
+from app.core.logging.context import actor_var, request_id_var
 
 # The id goes verbatim into every log line of the request and into the response: anything
 # outside this shape (spaces, brackets, control or non-ASCII bytes, kilobytes of text)
@@ -33,6 +33,8 @@ class RequestIdMiddleware:
         rid = client_id.decode("ascii") if _CLIENT_ID.fullmatch(client_id) else uuid.uuid4().hex
 
         token = request_id_var.set(rid)
+        # A request starts as nobody: whoever authenticates sets it (get_current_user).
+        actor_token = actor_var.set(None)
         try:
 
             async def send_with_request_id(message: Message) -> None:
@@ -44,4 +46,5 @@ class RequestIdMiddleware:
 
             await self.app(scope, receive, send_with_request_id)
         finally:
+            actor_var.reset(actor_token)
             request_id_var.reset(token)

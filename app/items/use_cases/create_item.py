@@ -29,6 +29,7 @@ class CreateItemUseCase:
 
         await self.event_bus.publish(
             event_type="item.created",
+            aggregate_id=item.id,
             payload={
                 "item_id": item.id,
                 "name": item.name,

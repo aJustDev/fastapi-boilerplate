@@ -69,7 +69,9 @@ classDiagram
   migrations rely on, and maps `datetime` to `TIMESTAMPTZ` and `str` to `TEXT` unless a column
   says otherwise.
 - **Mixins** (`app/core/db.py`): `IntPkMixin` for the primary key, `AuditMixin` for
-  timestamps and authorship.
+  timestamps and authorship. `created_by` and `updated_by` hold the id of the authenticated user
+  of the request that wrote the row (`actor_var`, set by `get_current_user`); they are `NULL` for
+  rows written by an anonymous request, a worker, a job or a script.
 - Defaults that exist in the database are declared with `server_default`, so rows inserted
   outside the ORM get them too and the migrations test can compare them.
 
@@ -88,8 +90,13 @@ class ItemRepo(BaseRepo[ItemORM]):
     }
 ```
 
-Unknown filter keys are ignored and logged at warning level. Inject a repository in a router with
-`Annotated[ItemRepo, Depends(get_repo(ItemRepo))]`.
+Only the keys in `map_field` are filters; any other key is ignored and logged at warning level.
+An `ilike` filter is a case-insensitive "contains" of the text as sent: `%` and `_` are escaped.
+Inject a repository in a router with `Annotated[ItemRepo, Depends(get_repo(ItemRepo))]`.
+
+Both paginations order by the requested field and then by `id`, so the order is total and pages
+never repeat or skip a row when many rows share the sort value. `list_paginated` returns the total
+of the filtered set on every page, including a page past the last one.
 
 A cursor is base64 of a JSON object with the `id` of the last row and, when the list is sorted by
 another field, the value of that field. It is client input: `decode_cursor` raises

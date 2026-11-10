@@ -44,41 +44,49 @@ class CreateItemUseCase:
 ```
 
 `publish(event_type, payload, *, aggregate_id=None, correlation_id=None)`: the payload must be
-JSON-serializable; `aggregate_id` and `correlation_id` (UUIDs) are indexed for tracing.
+JSON-serializable. `aggregate_id` is the id of the entity the event is about. `correlation_id`
+defaults to the id of the current request, and the worker restores it while the handlers run, so
+their log lines carry the `request_id` of the request that published the event. Both are text
+columns, indexed for tracing.
 
 Handle it in the context that reacts, and import the module in `app/db_registry.py`:
 
 ```python
 # app/<context>/event_handlers/<name>.py
 @dispatcher.register("item.created")
-async def notify_owner(payload: dict) -> None:
-    ...
+async def notify_owner(payload: dict, event_id: uuid.UUID) -> None:
+    response = await client.post(url, json=payload, headers={"Idempotency-Key": str(event_id)})
+    response.raise_for_status()
 ```
 
-A handler receives the payload only. It must be idempotent (see the limits) and should read the
-current state of the entity from the database instead of trusting the payload.
+A handler receives the payload and the id of the event, and has two duties:
+
+- **Raise unless the work was done.** A handler that returns is marked as done for good; one that
+  raises is retried with backoff. An HTTP answer is not a delivery: check the status.
+- **Be idempotent** (see the limits). The event id is the same on every attempt: pass it as the
+  idempotency key of external calls, or record it. Read the current state of the entity from the
+  database instead of trusting the payload.
 
 ## Configuration
 
 | Setting | Default | Meaning |
 |---|---|---|
 | `OUTBOX_POLL_INTERVAL_SECONDS` | `30` | Poll when no notification arrives |
-| `OUTBOX_MAX_RETRIES` | `5` | Attempts before an event becomes `FAILED` |
+| `OUTBOX_MAX_RETRIES` | `12` | Attempts before an event becomes `FAILED`. The wait doubles each time (2 s, 4 s, ...): 12 attempts span a little over an hour |
+| `OUTBOX_WORKER_ENABLED` | `true` | Run the worker in the API process (`docs/operations.md`) |
 | `OUTBOX_HANDLER_TIMEOUT_SECONDS` | `30` | Timeout of each handler |
 | `OUTBOX_CLEANUP_DAYS` | `30` | Retention used by `cleanup_processed_events` |
 | `OUTBOX_CLEANUP_BATCH_SIZE` | `1000` | Rows per `DELETE` batch of the cleanup |
 
 ## Operations
 
-```python
-from app.core.events.cleanup import cleanup_processed_events, replay_failed_events
-
-await cleanup_processed_events(days=7)  # delete PROCESSED events older than 7 days
-await replay_failed_events()            # FAILED -> PENDING, retry count reset
-await replay_failed_events(event_ids=[...], reset_handler_state=True)  # re-run every handler
-```
-
-Neither runs on a schedule: call them from a job (`docs/jobs.md`) or a script.
+- **Cleanup** is a scheduled job: `outbox_cleanup` deletes `PROCESSED` events older than
+  `OUTBOX_CLEANUP_DAYS` once a day (`app/core/jobs/handlers/outbox_cleanup.py`). `FAILED` events
+  are kept until someone replays or removes them.
+- **Replay** is a command: `python -m app.cli outbox replay` puts `FAILED` events back to
+  `PENDING` (`docs/operations.md`). Replay after fixing what made the handlers fail.
+- **Watch** `outbox_events_failed_total` (`docs/metrics.md`): any increase is an event that needs
+  a decision. Each one is also logged at CRITICAL with its id and last error.
 
 ## Guarantees and limits
 
@@ -90,7 +98,9 @@ Neither runs on a schedule: call them from a job (`docs/jobs.md`) or a script.
   `item.created`. A handler that depends on another event raises, and the retry gives it time.
 - A handler that outlives its timeout is cancelled; protect external calls that must not be
   repeated with `asyncio.shield()` and record their result.
-- `handler_state` is keyed by function name: renaming a handler re-runs it on pending retries.
+- `handler_state` is keyed by the module and qualified name of each handler, so two contexts may
+  name their handlers alike. Moving or renaming a handler re-runs it on pending retries, and
+  registering the same handler twice for an event fails at import.
 - Each process keeps one extra connection for `LISTEN`, checked with `SELECT 1` on every cycle
   and reopened with backoff (up to 60 s) when it fails.
 
@@ -102,5 +112,6 @@ Neither runs on a schedule: call them from a job (`docs/jobs.md`) or a script.
 | `app/core/events/dispatcher.py` | Handler registry and dispatch |
 | `app/core/events/worker.py` | `OutboxWorker`: LISTEN, poll, batch, retries |
 | `app/core/events/cleanup.py` | Cleanup and replay |
+| `app/core/jobs/handlers/outbox_cleanup.py` | The daily cleanup job |
 | `app/core/events/models.py` | `OutboxEventORM` |
 | `app/deps/events.py` | `get_event_bus` dependency |

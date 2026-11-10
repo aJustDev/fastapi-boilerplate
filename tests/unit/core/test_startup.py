@@ -154,3 +154,19 @@ class TestCheckUtcTimezone:
         with caplog.at_level(logging.WARNING, logger="app.core.startup"):
             self._run(monkeypatch, ("CET", "CEST"), "local")
         assert "not UTC" in caplog.text
+
+
+class TestBannerLock:
+    def test_siblings_share_the_id_and_other_servers_do_not(self, monkeypatch):
+        # One banner per server (the workers of one uvicorn share a parent), not one for
+        # the whole database: a fixed id let the oldest process silence every later one.
+        from app.core import startup
+
+        monkeypatch.setattr(startup.socket, "gethostname", lambda: "api-1")
+        monkeypatch.setattr(startup.os, "getppid", lambda: 100)
+        first = startup._banner_lock_id()
+        assert startup._banner_lock_id() == first
+
+        monkeypatch.setattr(startup.socket, "gethostname", lambda: "api-2")
+        assert startup._banner_lock_id() != first
+        assert -(2**63) <= first < 2**63  # fits the bigint pg_try_advisory_lock takes

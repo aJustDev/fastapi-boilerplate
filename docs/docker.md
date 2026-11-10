@@ -63,6 +63,10 @@ not obvious.
 - The volume name carries the PostgreSQL major version: a volume created by another major
   version cannot be reused.
 - The image does not run the migrations on start; run them as a separate step (`docs/migrations.md`).
+- uvicorn starts with `--no-proxy-headers` and `--no-server-header`: forwarded headers are read
+  by the app from `FORWARDED_ALLOW_IPS` (`docs/security.md`), and the `Server` header is not sent.
+- The `HEALTHCHECK` asks for `localhost`; the health endpoints are exempt from `ALLOWED_HOSTS`,
+  so it works with the explicit hosts production requires.
 - The image runs as `ENVIRONMENT=production`: without a real `SECRET_KEY`, explicit
   `ALLOWED_HOSTS` and `ALLOWED_ORIGINS` it refuses to start (`docs/configuration.md`). Compose sets
   `ENVIRONMENT=local` through the env file.
