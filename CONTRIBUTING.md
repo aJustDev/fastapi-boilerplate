@@ -24,7 +24,7 @@ ENVIRONMENT=local uv run uvicorn main:app --reload
 ## Workflow
 
 1. Create a branch from `main`: `git switch -c feat/my-change`
-2. Implement following the layer rules (see `docs/skill.md`)
+2. Implement following the layer rules (see `docs/architecture.md`)
 3. Add unit and/or integration tests
 4. Atomic commits grouped by responsibility (see commits section)
 5. Open a PR against `main`
