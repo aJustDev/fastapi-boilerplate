@@ -26,29 +26,32 @@ A solid foundation for building production-grade backends that scale from small 
 ## Quick start
 
 ```bash
-# 1. Start PostgreSQL
+# 1. Local settings: the app and docker compose both read .env.local
+cp .env.example .env.local
+
+# 2. Start PostgreSQL
 docker compose up db -d
 
-# 2. Install dependencies (dev group included)
+# 3. Install dependencies (dev group included)
 uv sync
 
-# 3. Apply migrations and add development data (admin@example.com / admin123)
+# 4. Apply migrations and add development data (admin@example.com / admin123)
 uv run alembic upgrade head
 uv run python scripts/seed_dev.py
 
-# 4. Install git hooks (pre-commit + pre-push)
+# 5. Install git hooks (pre-commit + pre-push)
 bash scripts/install-hooks.sh
 
-# 5. Start the API
-ENVIRONMENT=local uv run uvicorn main:app --reload
+# 6. Start the API
+uv run uvicorn main:app --reload
 
-# 6. Open docs
-open http://localhost:8000/docs
+# 7. Interactive docs: http://localhost:8000/docs
 ```
 
 ## Docker setup
 
 ```bash
+cp .env.example .env.local  # once
 docker compose up --build   # db, then migrate (alembic upgrade head), then api
 docker compose exec api python scripts/seed_dev.py
 ```

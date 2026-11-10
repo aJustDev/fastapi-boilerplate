@@ -12,13 +12,14 @@
 ```bash
 git clone <repo-url>
 cd fastapi
+cp .env.example .env.local
 uv sync
 bash scripts/install-hooks.sh
 
 docker compose up db -d
 uv run alembic upgrade head
 uv run python scripts/seed_dev.py
-ENVIRONMENT=local uv run uvicorn main:app --reload
+uv run uvicorn main:app --reload
 ```
 
 ## Workflow
