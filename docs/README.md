@@ -21,6 +21,7 @@ configuration, guarantees and limits, and its files. Diagrams are generated from
 
 ## Operations
 
+- [operations.md](operations.md): health endpoints, the command line, running the workers
 - [logging.md](logging.md): JSON and colored logs, request ids
 - [metrics.md](metrics.md): Prometheus metrics and dashboards
 - [docker.md](docker.md): the image and compose

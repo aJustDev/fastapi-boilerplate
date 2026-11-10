@@ -20,6 +20,8 @@ flight, recorded by an ASGI middleware, plus database pool gauges read on each s
 | `http_request_duration_seconds` | Histogram | `method`, `path_template` (not observed for OPTIONS and HEAD) |
 | `http_requests_in_progress` | Gauge | `method` |
 | `db_pool_size`, `db_pool_checked_out`, `db_pool_checked_in`, `db_pool_overflow` | Gauge | |
+| `outbox_events_processed_total` | Counter | `event_type` |
+| `outbox_events_failed_total` | Counter | `event_type`: events out of retries, waiting for a replay |
 
 The process collector of `prometheus_client` adds the standard `process_*` and `python_*` metrics.
 

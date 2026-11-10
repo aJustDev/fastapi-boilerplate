@@ -19,6 +19,20 @@ http_requests_in_progress = Gauge(
     ["method"],
 )
 
+# ── Event bus metrics ────────────────────────────────────────
+# Labelled by event type: a bounded set, the types the code publishes.
+outbox_events_processed_total = Counter(
+    "outbox_events_processed_total",
+    "Outbox events whose handlers all succeeded",
+    ["event_type"],
+)
+
+outbox_events_failed_total = Counter(
+    "outbox_events_failed_total",
+    "Outbox events that used up their retries and wait for a manual replay",
+    ["event_type"],
+)
+
 # ── Database pool metrics ────────────────────────────────────
 db_pool_size = Gauge(
     "db_pool_size",

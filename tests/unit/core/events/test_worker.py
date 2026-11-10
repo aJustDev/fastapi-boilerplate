@@ -218,3 +218,80 @@ class TestHandlerState:
         # handler_b should be newly recorded
         assert event.handler_state["handler_b"]["status"] == "ok"
         assert event.status == "PROCESSED"
+
+
+class TestRetryBudget:
+    async def test_default_settings_ride_out_an_hour_of_failures(self):
+        # What a handler calls (a mail provider, a webhook receiver) restarts and has
+        # outages. An event must still be PENDING when it comes back, not FAILED and
+        # waiting for someone to replay it by hand.
+        from app.core.config import Settings
+
+        worker, session = OutboxWorker(), AsyncMock()
+        event = _make_event(max_retries=Settings(ENVIRONMENT="local").OUTBOX_MAX_RETRIES)
+        failure = DispatchResult(results=[HandlerResult("handler_a", success=False, error="x")])
+        waited = timedelta()
+
+        with patch("app.core.events.worker.dispatcher.dispatch", return_value=failure):
+            while event.status == "PENDING":
+                before = datetime.now(UTC)
+                await worker._handle_event(session, event)
+                if event.status == "PENDING":
+                    waited += event.scheduled_at - before
+
+        assert event.status == "FAILED"
+        assert waited >= timedelta(hours=1)
+
+
+class TestWorkerMetrics:
+    @staticmethod
+    def _count(counter, event_type: str) -> float:
+        return counter.labels(event_type=event_type)._value.get()
+
+    async def test_a_processed_event_is_counted(self):
+        from app.core.metrics.instruments import outbox_events_processed_total
+
+        worker, session, event = OutboxWorker(), AsyncMock(), _make_event()
+        before = self._count(outbox_events_processed_total, event.event_type)
+        ok = DispatchResult(results=[HandlerResult("handler_a", success=True)])
+
+        with patch("app.core.events.worker.dispatcher.dispatch", return_value=ok):
+            await worker._handle_event(session, event)
+
+        assert self._count(outbox_events_processed_total, event.event_type) == before + 1
+
+    async def test_an_event_out_of_retries_is_counted_as_failed(self):
+        from app.core.metrics.instruments import outbox_events_failed_total
+
+        worker, session = OutboxWorker(), AsyncMock()
+        event = _make_event(retry_count=4, max_retries=5)
+        before = self._count(outbox_events_failed_total, event.event_type)
+        failure = DispatchResult(results=[HandlerResult("handler_a", success=False, error="x")])
+
+        with patch("app.core.events.worker.dispatcher.dispatch", return_value=failure):
+            await worker._handle_event(session, event)
+
+        assert event.status == "FAILED"
+        assert self._count(outbox_events_failed_total, event.event_type) == before + 1
+
+
+class TestCorrelation:
+    async def test_handlers_run_under_the_request_id_of_the_publisher(self):
+        from app.core.events.dispatcher import EventDispatcher
+        from app.core.logging.context import get_request_id
+
+        seen: list[str] = []
+        dispatcher = EventDispatcher()
+
+        @dispatcher.register("test.event")
+        async def record(payload: dict, event_id: uuid.UUID) -> None:
+            seen.append(get_request_id())
+
+        event = _make_event()
+        event.correlation_id = "trace-42"
+
+        with patch("app.core.events.worker.dispatcher", dispatcher):
+            await OutboxWorker()._handle_event(AsyncMock(), event)
+
+        assert seen == ["trace-42"]
+        assert get_request_id() == ""  # and it does not leak into the worker loop

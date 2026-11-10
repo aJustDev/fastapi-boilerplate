@@ -12,6 +12,7 @@ import app.auth.jobs.revoked_tokens_cleanup  # noqa: F401
 import app.auth.models  # noqa: F401
 import app.core.events.models  # noqa: F401
 import app.core.jobs.handlers.heartbeat  # noqa: F401
+import app.core.jobs.handlers.outbox_cleanup  # noqa: F401
 import app.core.jobs.models  # noqa: F401
 import app.items.event_handlers.item_events  # noqa: F401
 import app.items.models  # noqa: F401

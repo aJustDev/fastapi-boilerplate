@@ -91,9 +91,17 @@ class Settings(BaseSettings):
     # Webhooks
     WEBHOOK_URL: str = ""
 
+    # Background workers. Both run inside every API process by default; turn them off
+    # here and run `python -m app.cli worker` to give them a process of their own.
+    OUTBOX_WORKER_ENABLED: bool = True
+    JOB_WORKER_ENABLED: bool = True
+
     # Event Bus
     OUTBOX_POLL_INTERVAL_SECONDS: int = 30
-    OUTBOX_MAX_RETRIES: int = 5
+    # Attempts before an event is FAILED and waits for a manual replay. The wait doubles
+    # each time (2 s, 4 s, ...): 12 attempts span a little over an hour, enough to ride
+    # out the restart or the short outage of whatever a handler calls.
+    OUTBOX_MAX_RETRIES: int = 12
     OUTBOX_HANDLER_TIMEOUT_SECONDS: int = 30
     OUTBOX_CLEANUP_DAYS: int = 30
     OUTBOX_CLEANUP_BATCH_SIZE: int = 1000
