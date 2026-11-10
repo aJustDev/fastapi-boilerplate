@@ -91,25 +91,32 @@ See `docs/jobs.md` for the full guide.
 ## Auth flow
 
 ```bash
-# Register
+# Register (password: at least 8 characters)
 curl -X POST http://localhost:8000/v1/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email":"user@test.com","username":"user1","password":"pass123"}'
+  -d '{"email":"user@test.com","username":"user1","password":"pass1234"}'
 
-# Login
+# Login (OAuth2 form, not JSON)
 curl -X POST http://localhost:8000/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"user@test.com","password":"pass123"}'
+  -d "username=user@test.com&password=pass1234"
 
 # Use token
 curl http://localhost:8000/v1/auth/me \
   -H "Authorization: Bearer <access_token>"
 
-# Refresh
+# Refresh (the old refresh token stops working)
 curl -X POST http://localhost:8000/v1/auth/refresh \
   -H "Content-Type: application/json" \
   -d '{"refresh_token":"<refresh_token>"}'
+
+# Logout (revokes both tokens)
+curl -X POST http://localhost:8000/v1/auth/logout \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token":"<refresh_token>"}'
 ```
+
+See `docs/auth.md` for rotation, reuse detection and the rest of the session model.
 
 ## Tests
 
