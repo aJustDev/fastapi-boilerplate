@@ -8,13 +8,18 @@ and hosts, security headers, CORS, authentication and rate limits.
 ![Request path through the security layers](img/security-stack.svg)
 
 `app/core/middleware.py` registers, from outermost to innermost: `ProxyHeadersMiddleware`,
-`TrustedHostMiddleware`, metrics, request id, `SlowAPIMiddleware`, `SecurityHeadersMiddleware`,
-CORS, GZip and `UnhandledErrorMiddleware` (`docs/errors.md`). The order is checked by
+`TrustedHostMiddleware`, metrics, request id, `SecurityHeadersMiddleware`, CORS, GZip and
+`UnhandledErrorMiddleware` (`docs/errors.md`). The order is checked by
 `tests/unit/core/test_register_middleware.py`.
 
 - **Proxies.** `X-Forwarded-For` and `X-Forwarded-Proto` are honored only from the addresses in
   `FORWARDED_ALLOW_IPS`, so the client IP seen by the rate limiter and the logs cannot be forged.
-- **Hosts.** A `Host` header not in `ALLOWED_HOSTS` gets 400.
+  The app's middleware is the only layer that reads them: uvicorn runs with `--no-proxy-headers`
+  (the image does), because its own copy takes the list from the process environment alone.
+- **Hosts.** A `Host` header not in `ALLOWED_HOSTS` gets 400 (`invalid_host`). The two health
+  endpoints are exempt: a container health check asks for `localhost` and an orchestrator for
+  the address of the instance, and a probe returns nothing a forged Host could abuse
+  (`app/core/security/trusted_host.py`).
 - **Headers.** Every response gets `Content-Security-Policy: default-src 'none';
   frame-ancestors 'none'; base-uri 'none'; form-action 'none'`, `X-Content-Type-Options: nosniff`,
   `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, a restrictive `Permissions-Policy`,
@@ -33,6 +38,11 @@ CORS, GZip and `UnhandledErrorMiddleware` (`docs/errors.md`). The order is check
 - **Rate limits.** Each endpoint declares `@limiter.limit(...)`: `RATE_LIMIT_STRICT` on login,
   register and refresh, `RATE_LIMIT_DEFAULT` on the rest. It is checked when the endpoint is
   called, after its dependencies, so a request with an invalid token gets 401 and does not count.
+  The decorators are the whole mechanism: there is no rate-limit middleware and no global default
+  limit.
+- **What is public.** Login, register, refresh, the health endpoints, and `/v1/metrics` unless
+  `METRICS_TOKEN` is set (`docs/metrics.md`). Swagger UI, ReDoc and `/openapi.json` exist only
+  with `DOCS_ENABLED=true`.
 
 ## Usage
 
@@ -55,13 +65,14 @@ CORS, GZip and `UnhandledErrorMiddleware` (`docs/errors.md`). The order is check
 
 | Setting | Default | Outside local |
 |---|---|---|
-| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Proxy address or subnet; `*` aborts startup |
+| `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Must be set: the proxy address or subnet, or empty when clients connect directly. Unset or `*` aborts startup |
 | `ALLOWED_HOSTS` | `["*"]` | Explicit host names; `*` or empty aborts startup |
 | `ALLOWED_ORIGINS` | localhost frontends | Explicit origins; `*` or empty aborts startup |
 | `SECURITY_HEADERS_ENABLED` | `true` | |
 | `HSTS_ENABLED`, `HSTS_MAX_AGE` | `false`, `31536000` | Enable behind HTTPS |
 | `RATE_LIMIT_ENABLED` | `true` | |
 | `RATE_LIMIT_STRICT`, `RATE_LIMIT_DEFAULT` | `5/minute`, `60/minute` | |
+| `DOCS_ENABLED` | `false` (`true` in `.env.example`) | Leave it off unless the API is meant to be explored |
 
 ## Guarantees and limits
 
@@ -71,6 +82,10 @@ CORS, GZip and `UnhandledErrorMiddleware` (`docs/errors.md`). The order is check
 - Every route with a path parameter answers 403 or 404 to a user who does not own the resource:
   `tests/integration/api/test_authorization.py` walks them against a real database and fails for
   a route whose resource it does not know how to create.
+- The rate limit key is the client address. Behind a reverse proxy that is not in
+  `FORWARDED_ALLOW_IPS`, that address is the proxy's for every client and they all share one
+  bucket: five failed logins a minute by anyone would lock everybody out. That is why the setting
+  has to be stated outside local.
 - Rate limit counters are in memory per process: with `--workers N` the effective limit is `N`
   times the configured one, and they reset on restart. A shared limit needs a Redis or memcached
   storage for slowapi.
@@ -84,5 +99,6 @@ CORS, GZip and `UnhandledErrorMiddleware` (`docs/errors.md`). The order is check
 |---|---|
 | `app/core/middleware.py` | Stack and order |
 | `app/core/security/headers.py` | `SecurityHeadersMiddleware` |
+| `app/core/security/trusted_host.py` | `TrustedHostMiddleware` with the probe exemption |
 | `app/core/ratelimit.py` | `limiter` |
 | `app/core/config.py` | Settings and their validators |

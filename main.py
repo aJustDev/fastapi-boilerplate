@@ -8,22 +8,31 @@ from app.core.exceptions.schemas import ERROR_RESPONSES
 from app.core.lifespan import lifespan
 from app.core.middleware import register_middleware
 
-app = FastAPI(
-    title=settings.APP_NAME,
-    version=settings.APP_VERSION,
-    description=settings.APP_DESCRIPTION,
-    root_path=settings.ROOT_PATH,
-    lifespan=lifespan,
-    responses=ERROR_RESPONSES,
-    swagger_ui_parameters={
-        "persistAuthorization": True,
-        "defaultModelsExpandDepth": -1,
-        "filter": True,
-        "displayRequestDuration": True,
-        "tryItOutEnabled": True,
-    },
-)
 
-register_exception_handlers(app)
-register_middleware(app)
-app.include_router(v1_router)
+def create_app() -> FastAPI:
+    # Swagger UI, ReDoc and the OpenAPI document are served only when asked for.
+    docs = {} if settings.DOCS_ENABLED else {"docs_url": None, "redoc_url": None}
+    application = FastAPI(
+        title=settings.APP_NAME,
+        version=settings.APP_VERSION,
+        description=settings.APP_DESCRIPTION,
+        root_path=settings.ROOT_PATH,
+        lifespan=lifespan,
+        responses=ERROR_RESPONSES,
+        openapi_url="/openapi.json" if settings.DOCS_ENABLED else None,
+        swagger_ui_parameters={
+            "persistAuthorization": True,
+            "defaultModelsExpandDepth": -1,
+            "filter": True,
+            "displayRequestDuration": True,
+            "tryItOutEnabled": True,
+        },
+        **docs,  # type: ignore[arg-type]
+    )
+    register_exception_handlers(application)
+    register_middleware(application)
+    application.include_router(v1_router)
+    return application
+
+
+app = create_app()

@@ -43,11 +43,12 @@ def build_asyncpg_dsn() -> str:
     from DB_* when empty, so setting it directly (pgbouncer, managed provider) would
     otherwise point the listener at a different database than the pool.
     """
-    return (
-        make_url(settings.DATABASE_URL)
-        .set(drivername="postgresql")
-        .render_as_string(hide_password=False)
-    )
+    url = make_url(settings.DATABASE_URL).set(drivername="postgresql")
+    # TLS is `ssl=` for SQLAlchemy's asyncpg dialect and `sslmode=` in an asyncpg DSN.
+    query = dict(url.query)
+    if "ssl" in query:
+        query["sslmode"] = query.pop("ssl")
+    return url.set(query=query).render_as_string(hide_password=False)
 
 
 def rowcount(result: Result[Any]) -> int:

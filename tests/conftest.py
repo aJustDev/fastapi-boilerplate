@@ -5,6 +5,8 @@ import os
 os.environ.setdefault("SETTINGS_ENV_FILE", "")
 # ENVIRONMENT has no default (app/core/config.py); the suite runs as local.
 os.environ.setdefault("ENVIRONMENT", "local")
+# Off by default; the suite inspects /docs and the OpenAPI document.
+os.environ.setdefault("DOCS_ENABLED", "true")
 
 from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock

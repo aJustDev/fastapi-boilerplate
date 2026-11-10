@@ -28,6 +28,7 @@ global exception handlers, and the shape is published in OpenAPI. Clients branch
 | Other `DBAPIError` for a value the column cannot take (SQLSTATE class 22, or refused by asyncpg) | 422 | `invalid_input` |
 | Rate limit exceeded | 429 | `rate_limited`; `Retry-After` in seconds |
 | `HTTPException` (unknown route, wrong method...) | its status | `not_found`, `method_not_allowed`, ... |
+| `Host` header not in `ALLOWED_HOSTS` (answered by the middleware) | 400 | `invalid_host` |
 | Any other exception | 500 | `internal_error`; the message is logged, never returned |
 
 Domain exceptions declare `status_code` and `code` as class attributes. `main.py` declares

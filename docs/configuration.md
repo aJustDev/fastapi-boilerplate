@@ -31,8 +31,9 @@ assumed. A developer gets it from `.env.local` (copied from `.env.example`); the
 `ENVIRONMENT=production`, and compose overrides that with the env file.
 
 `DATABASE_URL` is built from `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` and `DB_PASSWORD` when it
-is empty. Set it directly (pgbouncer, managed providers) and it wins; the LISTEN connections of
-the event bus derive from it too.
+is empty; the password may contain any character. Set it directly (pgbouncer, managed providers)
+and it wins; the LISTEN connections of the event bus derive from it too. For TLS write
+`?ssl=require`, the spelling of the asyncpg driver: `sslmode=` is rejected at startup.
 
 ## Validators
 
@@ -45,6 +46,8 @@ the event bus derive from it too.
 | `ALLOWED_HOSTS` explicit, no `*` | outside `local` | requests for any host would be served |
 | `ALLOWED_ORIGINS` explicit, no `*` | outside `local` | any site could call the API with the user's credentials |
 | `FORWARDED_ALLOW_IPS` not `*` | outside `local` | any client could forge its IP (see `docs/security.md`) |
+| `FORWARDED_ALLOW_IPS` is set (empty means no proxy) | outside `local` | behind an unlisted proxy every client shares one rate limit |
+| `DATABASE_URL` has no `sslmode=` | always | the driver would fail on the first connection; it takes `ssl=` |
 
 At startup (not a validator) the process must run in UTC outside `local`: `check_utc_timezone`
 in `app/core/startup.py`.

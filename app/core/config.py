@@ -3,6 +3,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import URL
 
 # Single source of truth for the version: pyproject.toml, read from the installed package.
 try:
@@ -67,7 +68,10 @@ class Settings(BaseSettings):
     # Hosts the API answers to (Host header); requests for any other host get a 400.
     ALLOWED_HOSTS: list[str] = ["*"]
     # Proxies whose X-Forwarded-For/-Proto are trusted. Only them: anyone else could
-    # forge the client IP that rate limits and logs see.
+    # forge the client IP that rate limits and logs see. Addresses or subnets separated
+    # by commas; empty trusts nobody (no proxy in front). Outside local it has to be
+    # stated: behind a proxy that is not listed, every client shares the proxy's address
+    # and therefore one rate-limit bucket.
     FORWARDED_ALLOW_IPS: str = "127.0.0.1"
 
     # Security headers (CSP, nosniff, frame options...). Disable only when a reverse
@@ -81,8 +85,13 @@ class Settings(BaseSettings):
     RATE_LIMIT_DEFAULT: str = "60/minute"
     RATE_LIMIT_STRICT: str = "5/minute"
 
-    # Metrics
+    # Metrics. With a token, /v1/metrics requires `Authorization: Bearer <token>`.
     METRICS_ENABLED: bool = True
+    METRICS_TOKEN: str = ""
+
+    # Swagger UI, ReDoc and /openapi.json. Off unless turned on: they describe the whole
+    # API to whoever can reach it.
+    DOCS_ENABLED: bool = False
 
     # Logging
     LOG_LEVEL: str = "INFO"
@@ -144,6 +153,12 @@ class Settings(BaseSettings):
                 'FORWARDED_ALLOW_IPS must not be "*" outside local: any client could forge '
                 "X-Forwarded-For. Set the address or subnet of the reverse proxy."
             )
+        if "FORWARDED_ALLOW_IPS" not in self.model_fields_set:
+            raise ValueError(
+                "FORWARDED_ALLOW_IPS must be set outside local: the address or subnet of the "
+                "reverse proxy, or empty if clients connect to the API directly. Left to its "
+                "default behind a proxy, every client would share one rate limit."
+            )
         return self
 
     @model_validator(mode="after")
@@ -157,9 +172,19 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def build_database_url(self) -> "Settings":
         if not self.DATABASE_URL:
-            self.DATABASE_URL = (
-                f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}"
-                f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+            # URL.create escapes what an f-string would not: a password with "@", "/" or
+            # "#" in it would otherwise be read as part of the host.
+            self.DATABASE_URL = URL.create(
+                "postgresql+asyncpg",
+                username=self.DB_USER,
+                password=self.DB_PASSWORD,
+                host=self.DB_HOST,
+                port=self.DB_PORT,
+                database=self.DB_NAME,
+            ).render_as_string(hide_password=False)
+        elif "sslmode=" in self.DATABASE_URL:
+            raise ValueError(
+                'DATABASE_URL: the asyncpg driver takes "ssl=require", not "sslmode=require".'
             )
         return self
 
