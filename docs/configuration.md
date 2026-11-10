@@ -1,7 +1,5 @@
 # Configuration
 
-## What it solves
-
 Every tunable value lives in one typed object, `settings` (`app/core/config.py`), built once at
 import time from the environment. Invalid combinations stop the process at startup instead of
 failing later in a request.

@@ -1,10 +1,8 @@
 # Migrations
 
-## What it solves
-
-The schema changes with the code, and every database (local, CI, production) must go through the
-same changes in the same order. Alembic keeps them as numbered revisions in
-`migrations/versions/` and records in `alembic_version` which one a database is at.
+Alembic owns the schema. Revisions live in `migrations/versions/`, numbered (`0001_baseline`,
+`0002_seed_reference_data`, ...); `alembic_version` records the revision a database is at.
+`migrations/env.py` is async and reads `settings.DATABASE_URL`, the same configuration as the app.
 
 ## How a deploy applies them
 
@@ -17,8 +15,6 @@ a `docker compose up`.
   and exits. `api` depends on it with `condition: service_completed_successfully`.
 - In production, do the same: run `alembic upgrade head` once (a job or a release step), then
   roll out the API.
-- `migrations/env.py` reads `settings.DATABASE_URL`, so migrations use the same configuration as
-  the app; there is no URL in `alembic.ini`.
 
 ## Daily workflow
 
@@ -87,9 +83,4 @@ The integration suite builds its database with `alembic upgrade head` on a Postg
 container, the same way production does; it never uses `Base.metadata.create_all`, which would
 hide a model without its migration.
 
-## History
-
-The schema used to be plain SQL (`sql/schema.sql` plus deltas). Revision `0001` reproduces it
-exactly, checked column by column, constraint by constraint and index by index; only the names of
-constraints and indexes changed to follow the naming convention. Databases created from the old
-scripts are not stamped: recreate them. See [ADR-002](adr/002-alembic.md).
+Decision and alternatives: [ADR-002](adr/002-alembic.md).

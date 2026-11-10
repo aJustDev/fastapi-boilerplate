@@ -1,131 +1,68 @@
-# Metrics & Observability
+# Metrics
 
-## What it provides
+Prometheus metrics served at `GET /v1/metrics`: HTTP request counts, latency and requests in
+flight, recorded by an ASGI middleware, plus database pool gauges read on each scrape.
+`docker-compose.observability.yml` brings up Prometheus and Grafana with a ready dashboard.
 
-Prometheus-compatible metrics endpoint at `GET /v1/metrics` that exposes request-level and infrastructure health data. Designed for scraping by Prometheus and visualization in Grafana.
+## How it works
 
-The system tracks three categories of metrics:
+- `PrometheusMiddleware` (`app/core/metrics/middleware.py`) wraps every HTTP request except
+  `/v1/metrics` and `/v1/health/*`. After the response it labels the request with the template of
+  the route that served it, taken from `scope["route"]` and resolved to its full path with
+  `fastapi.routing.iter_route_contexts` (once, on the first request). A request that matched no
+  route is labeled `__unmatched__`; a wrong method on an existing path keeps the route template.
+- `GET /v1/metrics` refreshes the pool gauges from the engine (`QueuePool` only) and returns the
+  default registry in the Prometheus text format.
 
-- **HTTP request metrics** — count, latency distribution, and in-progress requests per endpoint
-- **Database pool metrics** — connection pool utilization (checked out, available, overflow)
+| Metric | Type | Labels |
+|---|---|---|
+| `http_requests_total` | Counter | `method`, `path_template`, `status` |
+| `http_request_duration_seconds` | Histogram | `method`, `path_template` (not observed for OPTIONS and HEAD) |
+| `http_requests_in_progress` | Gauge | `method` |
+| `db_pool_size`, `db_pool_checked_out`, `db_pool_checked_in`, `db_pool_overflow` | Gauge | |
 
-## Architecture
+The process collector of `prometheus_client` adds the standard `process_*` and `python_*` metrics.
 
+## Usage
+
+```bash
+docker compose -f docker-compose.observability.yml up -d   # with the API on port 8000
+# Grafana: http://localhost:3001 (admin/admin), dashboard "FastAPI Overview"
+# Prometheus: http://localhost:9090
 ```
-Request → PrometheusMiddleware → (records start time)
-                                       ↓
-                                  Application
-                                       ↓
-Response ← PrometheusMiddleware ← (observes duration, increments counters)
 
-Prometheus ──scrape──→ GET /v1/metrics ──→ generate_latest()
-                                              ↓
-                                    update_db_pool_metrics(engine)
+A standalone Prometheus scrapes `metrics_path: /v1/metrics`. A custom metric is declared in
+`app/core/metrics/instruments.py` and used where the event happens:
+
+```python
+items_created_total = Counter("items_created_total", "Items created", ["category"])
+
+items_created_total.labels(category=item.category).inc()
 ```
 
-The `PrometheusMiddleware` is an ASGI middleware (outermost in the stack) that wraps every request to capture timing and status codes. DB pool metrics are updated on each scrape, not per-request.
-
-## Metrics reference
-
-### HTTP metrics
-
-| Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
-| `http_requests_total` | Counter | `method`, `path_template`, `status` | Total HTTP requests processed |
-| `http_request_duration_seconds` | Histogram | `method`, `path_template` | Request latency distribution (seconds) |
-| `http_requests_in_progress` | Gauge | `method` | Requests currently being processed |
-
-### Database pool metrics
-
-| Metric | Type | Description |
-|--------|------|-------------|
-| `db_pool_size` | Gauge | Configured pool size |
-| `db_pool_checked_out` | Gauge | Connections currently in use |
-| `db_pool_checked_in` | Gauge | Connections available in pool |
-| `db_pool_overflow` | Gauge | Connections beyond pool_size |
-
-### Label conventions
-
-- `path_template` is the template of the route that served the request (e.g., `/v1/items/{item_id}`), read from `scope["route"]` after the router matched it. Since FastAPI 0.140 included routers are not flattened and `route.path` lacks the router prefixes, so the middleware maps each route to its full path once, with `fastapi.routing.iter_route_contexts`. A request that matches no route (404) is labeled `__unmatched__`, never with its raw path: every URL a scanner makes up would otherwise become its own series and the label cardinality would be unbounded. A wrong method on an existing path (405) keeps the route template.
-- `OPTIONS` (CORS preflights) and `HEAD` requests count in `http_requests_total` but do not observe `http_request_duration_seconds`: they are not API work and would skew the latency percentiles.
-- `status` is the HTTP status code as a string (e.g., `"200"`, `"404"`).
-- Requests to `/v1/metrics` and `/v1/health/*` are excluded from metrics to avoid self-referential noise.
+Keep label values bounded (categories, statuses), never ids or free text.
 
 ## Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `METRICS_ENABLED` | `true` | Enable/disable the metrics middleware and endpoint |
+| Setting | Default | Meaning |
+|---|---|---|
+| `METRICS_ENABLED` | `true` | Registers the recording middleware; `/v1/metrics` stays mounted either way |
 
-## Quick start: Prometheus + Grafana
+## Guarantees and limits
 
-A pre-configured observability stack is included:
+- Label cardinality is bounded by the number of routes: raw paths never become labels.
+- Counters live in each process. With `uvicorn --workers N` every scrape reaches one worker and
+  returns only its counters, so totals jump between scrapes: run one process per container (and
+  scale containers), or switch `prometheus_client` to multiprocess mode.
+- `/v1/metrics` has no authentication: keep it on the internal network.
+- Metrics only; there is no tracing.
 
-```bash
-# Start Prometheus + Grafana (app must be running on port 8000)
-docker compose -f docker-compose.observability.yml up -d
+## Files
 
-# Open Grafana (admin/admin)
-open http://localhost:3001
-```
-
-The "FastAPI Overview" dashboard is auto-provisioned with request rate, latency percentiles, throughput by endpoint, DB pool status, error rate, and pool saturation panels.
-
-- Prometheus UI: `http://localhost:9090`
-- Grafana: `http://localhost:3001` (admin / admin)
-
-### Custom Prometheus configuration
-
-If you need a standalone Prometheus, add this to your `prometheus.yml`:
-
-```yaml
-scrape_configs:
-  - job_name: "fastapi"
-    scrape_interval: 15s
-    metrics_path: "/v1/metrics"
-    static_configs:
-      - targets: ["api:8000"]
-```
-
-## Adding custom metrics
-
-Define metrics in `app/core/metrics/instruments.py` and use them anywhere:
-
-```python
-# instruments.py
-from prometheus_client import Counter
-
-items_created_total = Counter(
-    "items_created_total",
-    "Total items created",
-    ["category"],
-)
-
-# In your use case or service:
-from app.core.metrics.instruments import items_created_total
-
-items_created_total.labels(category="electronics").inc()
-```
-
-Available types: `Counter` (monotonically increasing), `Histogram` (distributions), `Gauge` (current value), `Summary` (quantiles).
-
-## Grafana dashboard
-
-The auto-provisioned "FastAPI Overview" dashboard includes:
-
-| Panel | PromQL | Purpose |
-|-------|--------|---------|
-| Request Rate | `sum by (status) (rate(http_requests_total[1m]))` | Requests/s by status code |
-| Latency Percentiles | `histogram_quantile(0.95, ...)` | p50, p95, p99 latency |
-| Throughput by Endpoint | `sum by (path_template) (rate(http_requests_total[1m]))` | Per-endpoint traffic |
-| DB Connection Pool | `db_pool_checked_out`, `db_pool_size`, etc. | Pool utilization |
-| Error Rate | `sum(rate(...{status=~"5.."}[5m])) / sum(rate(...[5m]))` | 5xx percentage with thresholds |
-| Pool Saturation | `db_pool_checked_out / db_pool_size * 100` | Gauge with green/yellow/red |
-
-Dashboard source: `observability/grafana/dashboards/fastapi-overview.json`
-
-## Limitations
-
-- **In-memory, per-process**: Each uvicorn worker maintains its own counters. Prometheus aggregates across workers via the scrape target. If running multiple instances behind a load balancer, each needs its own scrape target.
-- **No distributed tracing**: This implementation covers metrics only. OpenTelemetry can be added later for distributed tracing without conflicting with the current setup.
-- **No authentication on `/metrics`**: Standard practice — restrict access via network/firewall in production.
+| File | Role |
+|---|---|
+| `app/core/metrics/middleware.py` | `PrometheusMiddleware` |
+| `app/core/metrics/instruments.py` | Metric definitions |
+| `app/core/metrics/db_collector.py` | Pool gauges |
+| `app/api/v1/metrics.py` | `GET /v1/metrics` |
+| `observability/` | Prometheus and Grafana provisioning, dashboard JSON |

@@ -1,7 +1,8 @@
 # Docs
 
-One doc per feature or structural piece. Each explains what it solves, how it works, what it
-guarantees and how to extend it; diagrams are generated from `img/<topic>.py`.
+One doc per feature or structural piece: what it is, how it works, how to use it, its
+configuration, guarantees and limits, and its files. Diagrams are generated from
+`img/<topic>.py`.
 
 ## Structure
 

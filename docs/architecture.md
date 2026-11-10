@@ -1,7 +1,5 @@
 # Architecture
 
-## What it solves
-
 Code is grouped by what it is about (a bounded context: `auth`, `items`), and inside each
 context by layer. A new feature touches one folder; the rules for what may import what are
 written down and checked, so the structure does not erode as the project grows.

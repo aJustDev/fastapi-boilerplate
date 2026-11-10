@@ -1,72 +1,61 @@
 # Errors
 
-## What it solves
-
-A client must be able to react to an error without parsing English. Every error response has
-the same shape and a stable machine-readable `code`, whatever produced it: a domain rule, a
-missing route, bad input, a rate limit or a bug.
+Every error response has the same JSON shape with a stable machine-readable `code`, produced by
+global exception handlers, and the shape is published in OpenAPI. Clients branch on `code`;
+`detail` is human text and may change.
 
 ```json
 {"detail": "Item not found (ID: 42)", "code": "not_found"}
 {"detail": "Validation error", "code": "validation_error", "errors": ["body.name: Field required"]}
 ```
 
-`detail` is for humans and may change; `code` is the contract.
+## How it works
 
-## Where each error comes from
-
-Global handlers (`app/core/exceptions/handlers.py`) turn every failure into that body.
-The figure shows the cases that used to answer differently.
-
-![Error responses before and now](img/errors-responses.svg)
+`app/core/exceptions/handlers.py` registers one handler per error family:
 
 | Source | Status | `code` |
 |---|---|---|
 | `NotFoundError` | 404 | `not_found` |
 | `ConflictError` | 409 | `conflict` |
 | `BusinessValidationError` / `UseCaseException` | 400 | `business_validation` / `use_case_error` |
-| `AuthenticationError` | 401 | `unauthenticated` (plus `WWW-Authenticate: Bearer`) |
-| `RefreshTokenReuseError` | 401 | `refresh_token_reused` (every session of the user ended) |
+| `AuthenticationError` | 401 | `unauthenticated`, with `WWW-Authenticate: Bearer` |
+| `RefreshTokenReuseError` | 401 | `refresh_token_reused` |
 | `AuthorizationError` | 403 | `forbidden` |
-| Request validation | 422 | `validation_error`, per-field messages in `errors` |
-| `IntegrityError` that reached the handler | 409 | `integrity_conflict` |
-| Rate limit | 429 | `rate_limited`, `Retry-After` in seconds |
-| `HTTPException` (unknown route, wrong method...) | its status | `not_found`, `method_not_allowed`... |
-| Anything else | 500 | `internal_error`; the message is logged, never returned |
+| Request validation | 422 | `validation_error`; per-field messages in `errors` |
+| `sqlalchemy.exc.IntegrityError` | 409 | `integrity_conflict` |
+| Rate limit exceeded | 429 | `rate_limited`; `Retry-After` in seconds |
+| `HTTPException` (unknown route, wrong method...) | its status | `not_found`, `method_not_allowed`, ... |
+| Any other exception | 500 | `internal_error`; the message is logged, never returned |
 
-## Raising errors
+Domain exceptions declare `status_code` and `code` as class attributes. `main.py` declares
+`ErrorResponse` and `ValidationErrorResponse` (`app/core/exceptions/schemas.py`,
+`extra="forbid"`) for every operation.
 
-Raise domain exceptions from services and use cases, never `HTTPException`:
+## Usage
+
+Raise domain exceptions from services and use cases; never `HTTPException` below the router:
 
 ```python
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 
-item = await self.repo.get_by_id(item_id)
-if item is None:
-    raise NotFoundError("Item", item_id)
+if await self.user_repo.get_by_email(email):
+    raise ConflictError("User", "email already registered")
 ```
 
-A new error type subclasses the closest one and sets its `code` (and `status_code` if it
-differs):
+A new error type subclasses the closest one and sets its code:
 
 ```python
 class OutOfStockError(BusinessValidationError):
     code = "out_of_stock"
 ```
 
-Check uniqueness in the service to give a precise error (`ConflictError("User", "email already
-registered")`); the `integrity_conflict` handler is the safety net for the race between that
-check and the INSERT.
+Check uniqueness in the service to give a precise error; the `integrity_conflict` handler covers
+the race between that check and the `INSERT`.
 
-## In OpenAPI
+## Guarantees and limits
 
-`app/core/exceptions/schemas.py` defines `ErrorResponse` and `ValidationErrorResponse` with
-`extra="forbid"`, and `main.py` declares them for every operation (`responses=ERROR_RESPONSES`),
-so generated clients get the real shape instead of FastAPI's default validation error.
-
-## Tests
-
-`tests/functional/test_error_contract.py` calls every registered handler and validates the body
-against the schemas, fails if a new handler appears without being checked, sends real requests
-(unknown route, wrong method, missing token, invalid body, duplicate) and checks the OpenAPI
-references.
+- `tests/functional/test_error_contract.py` validates every registered handler and real requests
+  against the schemas, fails when a handler is added without being checked, and checks the
+  OpenAPI references.
+- A 500 never exposes the exception message; the traceback goes to the log with the request id.
+- `code` values are part of the API contract: renaming one is a breaking change.
