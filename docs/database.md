@@ -27,10 +27,19 @@ shows what happens to the changes of one request.
 | `DB_POOL_SIZE` | `5` | Connections kept open per process |
 | `DB_MAX_OVERFLOW` | `10` | Extra connections under load |
 | `DB_POOL_TIMEOUT` | `30` | Seconds to wait for a free connection |
+| `DB_POOL_RECYCLE` | `1800` | Seconds before a connection is replaced, ahead of proxies that drop idle ones |
+| `DB_COMMAND_TIMEOUT` | `30` | Client-side limit (seconds) for one statement |
+| `DB_STATEMENT_TIMEOUT_MS` | `30000` | Server-side `statement_timeout` of every app connection |
+| `DB_LOCK_TIMEOUT_MS` | `5000` | Server-side `lock_timeout`: waiting for a lock fails instead of hanging |
 
 `pool_pre_ping` discards dead connections before using them. With `--workers N`, the database
 sees up to `N * (DB_POOL_SIZE + DB_MAX_OVERFLOW)` connections plus one LISTEN connection per
 process for the event bus.
+
+The timeouts are set per connection by `ENGINE_OPTIONS` (`app/core/db.py`); a stuck query or a
+lock held by a migration fails the request instead of holding a worker forever.
+`tests/integration/core/test_engine_settings.py` checks that PostgreSQL receives them. Migrations
+use their own engine and are not limited by them.
 
 ## Models
 

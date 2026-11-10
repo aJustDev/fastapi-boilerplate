@@ -11,7 +11,7 @@ def request():
         [
             {
                 "title": "1 - Middleware",
-                "sub": "metrics, request id, rate limit, CORS, gzip",
+                "sub": "proxy headers, trusted host, metrics, request id, CORS",
             },
             {
                 "title": "2 - Router: app/<context>/api",

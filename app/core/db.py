@@ -9,14 +9,24 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.core.config import settings
 
-engine = create_async_engine(
-    settings.DATABASE_URL,
+# Shared by the app engine and the integration test that checks the server settings.
+ENGINE_OPTIONS: dict[str, Any] = dict(
     pool_size=settings.DB_POOL_SIZE,
     max_overflow=settings.DB_MAX_OVERFLOW,
     pool_timeout=settings.DB_POOL_TIMEOUT,
+    pool_recycle=settings.DB_POOL_RECYCLE,
     pool_pre_ping=True,
     echo=False,
+    connect_args={
+        "command_timeout": settings.DB_COMMAND_TIMEOUT,
+        "server_settings": {
+            "statement_timeout": str(settings.DB_STATEMENT_TIMEOUT_MS),
+            "lock_timeout": str(settings.DB_LOCK_TIMEOUT_MS),
+        },
+    },
 )
+
+engine = create_async_engine(settings.DATABASE_URL, **ENGINE_OPTIONS)
 
 async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 

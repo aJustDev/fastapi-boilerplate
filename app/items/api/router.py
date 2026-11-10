@@ -1,8 +1,10 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
+from app.core.config import settings
 from app.core.events.bus import EventBus
+from app.core.ratelimit import limiter
 from app.core.schema import CursorPaginatedResponse, PaginatedResponse, SortDir
 from app.deps.auth import CurrentUser
 from app.deps.events import get_event_bus
@@ -22,7 +24,8 @@ EventBusDep = Annotated[EventBus, Depends(get_event_bus)]
 
 
 @router.get("/filters")
-async def get_filter_options(repo: ItemRepoDep, user: CurrentUser):
+@limiter.limit(settings.RATE_LIMIT_DEFAULT)
+async def get_filter_options(request: Request, repo: ItemRepoDep, user: CurrentUser):
     categories = await repo.get_distinct_categories()
     priorities = await repo.get_distinct_priorities()
     return {
@@ -33,7 +36,9 @@ async def get_filter_options(repo: ItemRepoDep, user: CurrentUser):
 
 
 @router.get("", response_model=PaginatedResponse[ItemRead])
+@limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def list_items(
+    request: Request,
     repo: ItemRepoDep,
     user: CurrentUser,
     page: int = Query(1, ge=1),
@@ -69,7 +74,9 @@ async def list_items(
 
 
 @router.get("/cursor", response_model=CursorPaginatedResponse[ItemRead])
+@limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def list_items_cursor(
+    request: Request,
     repo: ItemRepoDep,
     user: CurrentUser,
     cursor: str | None = None,
@@ -104,14 +111,17 @@ async def list_items_cursor(
 
 
 @router.get("/{item_id}", response_model=ItemRead)
-async def get_item(item_id: int, repo: ItemRepoDep, user: CurrentUser):
+@limiter.limit(settings.RATE_LIMIT_DEFAULT)
+async def get_item(request: Request, item_id: int, repo: ItemRepoDep, user: CurrentUser):
     uc = GetItemUseCase(repo)
     item = await uc.execute(item_id)
     return ItemRead.model_validate(item)
 
 
 @router.post("", response_model=ItemRead, status_code=201)
+@limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def create_item(
+    request: Request,
     body: ItemCreate,
     repo: ItemRepoDep,
     user: CurrentUser,
@@ -123,7 +133,9 @@ async def create_item(
 
 
 @router.patch("/{item_id}", response_model=ItemRead)
+@limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def update_item(
+    request: Request,
     item_id: int,
     body: ItemUpdate,
     repo: ItemRepoDep,
@@ -137,7 +149,9 @@ async def update_item(
 
 
 @router.delete("/{item_id}", status_code=204)
+@limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def delete_item(
+    request: Request,
     item_id: int,
     repo: ItemRepoDep,
     user: CurrentUser,

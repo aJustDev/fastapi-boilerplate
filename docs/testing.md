@@ -20,6 +20,36 @@ Each level is split by context like `app/`: `auth/`, `items/` and `core/` for in
 Meta-tests that check the whole code base (one use case per endpoint, the Dockerfile allow-list)
 sit at the root of `tests/unit/`.
 
+## Meta-tests
+
+Some tests check a rule over the whole code base instead of one behavior. Each has a canary
+(`test_scanner_sees_...`) that fails if the scanner finds nothing, so a refactor cannot turn it
+into a test that passes on zero cases.
+
+```mermaid
+flowchart LR
+    U[unit: no I/O] --> F[functional: HTTP, DB mocked] --> I[integration: real PostgreSQL]
+    M[meta-tests: rules over the code] -.-> U
+    M -.-> F
+    M -.-> I
+```
+
+| Test | Rule |
+|---|---|
+| `tests/functional/test_auth_required_on_all_endpoints.py` | Every route answers 401 without a token, except the ones in `PUBLIC` |
+| `tests/unit/test_every_endpoint_has_a_rate_limit.py` | Every endpoint declares a rate limit, except the ones in `EXEMPT` |
+| `tests/unit/test_api_endpoint_single_use_case.py` | An endpoint runs at most one use case |
+| `tests/functional/test_error_contract.py` | Every error body matches the published schemas |
+| `tests/unit/test_no_interpolated_sql.py` | No SQL in `app/` is built from strings |
+| `tests/unit/core/events/test_published_event_types_have_handlers.py` | Every published event type has a handler |
+| `tests/unit/core/test_register_middleware.py` | The middleware stack and its order |
+| `tests/unit/core/test_env_example_sync.py` | `.env.example` lists every setting |
+| `tests/unit/test_dockerfile_runtime_copy.py` | The Docker image copies an allow-list |
+| `tests/integration/test_migrations.py` | Models match the migrations; downgrades work |
+
+When one fails, its docstring says what to do; exemptions go in the list at the top of the file,
+each with its reason.
+
 ## Running tests
 
 ```bash

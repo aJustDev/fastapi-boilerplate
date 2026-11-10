@@ -69,8 +69,9 @@ class TestRateLimitIntegration:
             data={"username": "test", "password": "test"},
         )
         assert response.status_code == 429
-        assert response.json()["detail"] == "Too many requests"
-        assert "retry-after" in response.headers
+        assert response.json() == {"detail": "Too many requests", "code": "rate_limited"}
+        # Seconds left in the current window, not the window name ("minute").
+        assert 0 < int(response.headers["retry-after"]) <= 60
 
     async def test_under_limit_not_blocked(self, client: AsyncClient):
         # 5 requests within the limit should all return 401 (auth error, not 429)

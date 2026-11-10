@@ -38,6 +38,12 @@ the event bus derive from it too.
 | `SECRET_KEY` is not the placeholder | outside `local` | a known key lets anyone sign tokens |
 | `SECRET_KEY` has at least 32 bytes | outside `local` | HS256 needs a key as long as its output (RFC 7518, 3.2) |
 | `JOB_LEASE_SECONDS >= 2 * JOB_HANDLER_TIMEOUT_SECONDS` | always | a shorter lease lets another worker recover a job that is still running |
+| `ALLOWED_HOSTS` explicit, no `*` | outside `local` | requests for any host would be served |
+| `ALLOWED_ORIGINS` explicit, no `*` | outside `local` | any site could call the API with the user's credentials |
+| `FORWARDED_ALLOW_IPS` not `*` | outside `local` | any client could forge its IP (see `docs/security.md`) |
+
+At startup (not a validator) the process must run in UTC outside `local`: `check_utc_timezone`
+in `app/core/startup.py`.
 
 Generate a key with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
 

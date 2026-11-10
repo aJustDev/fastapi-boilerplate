@@ -25,4 +25,33 @@ class TestSecretKey:
             Settings(ENVIRONMENT="prod", SECRET_KEY="x" * 31)
 
     def test_long_random_key_is_accepted(self):
-        assert Settings(ENVIRONMENT="prod", SECRET_KEY="x" * 32).SECRET_KEY == "x" * 32
+        s = Settings(ENVIRONMENT="prod", SECRET_KEY="x" * 32, ALLOWED_HOSTS=["api.example.com"])
+        assert s.SECRET_KEY == "x" * 32
+
+
+class TestNetworkExposure:
+    prod = {"ENVIRONMENT": "prod", "SECRET_KEY": "x" * 32}
+
+    def test_wildcard_hosts_are_rejected_outside_local(self):
+        with pytest.raises(ValueError, match="ALLOWED_HOSTS"):
+            Settings(**self.prod, ALLOWED_HOSTS=["*"])
+
+    def test_wildcard_origins_are_rejected_outside_local(self):
+        with pytest.raises(ValueError, match="ALLOWED_ORIGINS"):
+            Settings(**self.prod, ALLOWED_HOSTS=["api.example.com"], ALLOWED_ORIGINS=["*"])
+
+    def test_trusting_every_proxy_is_rejected_outside_local(self):
+        with pytest.raises(ValueError, match="FORWARDED_ALLOW_IPS"):
+            Settings(**self.prod, ALLOWED_HOSTS=["api.example.com"], FORWARDED_ALLOW_IPS="*")
+
+    def test_explicit_values_are_accepted(self):
+        s = Settings(
+            **self.prod,
+            ALLOWED_HOSTS=["api.example.com"],
+            ALLOWED_ORIGINS=["https://app.example.com"],
+            FORWARDED_ALLOW_IPS="10.0.0.0/8",
+        )
+        assert s.ALLOWED_HOSTS == ["api.example.com"]
+
+    def test_local_keeps_the_permissive_defaults(self):
+        assert Settings(ENVIRONMENT="local").ALLOWED_HOSTS == ["*"]

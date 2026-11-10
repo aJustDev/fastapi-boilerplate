@@ -4,6 +4,7 @@ import app.db_registry as _db_registry  # noqa: F401 -- models and handlers, bef
 from app.api.v1 import v1_router
 from app.core.config import settings
 from app.core.exceptions.handlers import register_exception_handlers
+from app.core.exceptions.schemas import ERROR_RESPONSES
 from app.core.lifespan import lifespan
 from app.core.middleware import register_middleware
 
@@ -13,6 +14,7 @@ app = FastAPI(
     description=settings.APP_DESCRIPTION,
     root_path=settings.ROOT_PATH,
     lifespan=lifespan,
+    responses=ERROR_RESPONSES,
     swagger_ui_parameters={
         "persistAuthorization": True,
         "defaultModelsExpandDepth": -1,

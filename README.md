@@ -8,7 +8,9 @@ A solid foundation for building production-grade backends that scale from small 
 - **Scheduled jobs** — Recurring tasks with `FOR UPDATE SKIP LOCKED` for multi-worker safety, no Redis or Celery required
 - **Configurable connection pool** — `pool_size`, `max_overflow`, `pool_timeout` via env vars, safe defaults for multi-worker deployments
 - **Structured logging + request tracing** — JSON logs in production, colored in development, per-request `request_id` across all layers. See `docs/logging.md`
-- **Rate limiting** — Two-tier throttling (`strict` for auth, `default` for general) via slowapi with in-memory storage
+- **Rate limiting** — Every endpoint declares a limit (`strict` for login/register/refresh, `default` for the rest), checked by a test
+- **Error contract** — Every error is `{detail, code}` with a stable code, published in OpenAPI; see `docs/errors.md`
+- **HTTP hardening** — Security headers, trusted hosts and proxies, database timeouts; see `docs/security.md`
 - **Prometheus metrics** — Request count, latency histograms, DB pool health at `/v1/metrics`. See `docs/metrics.md`
 - **Repository pattern** — Generic `BaseRepo[T]` with offset and cursor pagination, filtering, and field mapping
 - **Bounded contexts** — `app/<context>/` with its own layers; use cases orchestrate services; import-linter enforces the boundaries
@@ -152,6 +154,7 @@ See `docs/architecture.md` for the full guide on adding a new module.
 - `docs/database.md`, `docs/migrations.md`: sessions, models, repositories and schema changes
 - `docs/configuration.md`: settings, env files and validators
 - `docs/auth.md`, `docs/event-bus.md`, `docs/jobs.md`, `docs/logging.md`, `docs/metrics.md`
+- `docs/errors.md`, `docs/security.md`
 - `docs/testing.md`, `docs/tooling.md`, `docs/docker.md`
 - `docs/adr/`: architecture decision records
 - `CHANGELOG.md`
