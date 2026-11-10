@@ -169,6 +169,10 @@ async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded)
 _NOT_NULL_VIOLATION = "23502"
 _CHECK_VIOLATION = "23514"
 _DATA_EXCEPTION_CLASS = "22"
+# The transaction lost to another one and nothing of it was stored: a lock not granted
+# within lock_timeout, a deadlock, a serialization failure. The same request, sent again,
+# is expected to work.
+_LOST_TO_ANOTHER_TRANSACTION = frozenset({"55P03", "40P01", "40001"})
 
 
 def _driver_error(exc: DBAPIError) -> BaseException | None:
@@ -181,7 +185,7 @@ def _log_rejected_by_database(request: Request, exc: DBAPIError, status_code: in
     # offending values ("Key (lower(email))=(a@b.c) already exists").
     driver_error = _driver_error(exc)
     logger.warning(
-        "%s %s -> %d: the database rejected the input (%s, sqlstate=%s, constraint=%s)",
+        "%s %s -> %d: the database rejected the statement (%s, sqlstate=%s, constraint=%s)",
         request.method,
         request.url.path,
         status_code,
@@ -231,9 +235,17 @@ async def database_error_handler(request: Request, exc: DBAPIError) -> JSONRespo
     """A value PostgreSQL or the driver could not take is the client's error: 422.
 
     Request validation should have stopped it (app/core/schema.py); this is the net for
-    the field that was left unbounded. Every other database error is ours: it is raised
-    again and ends as a 500.
+    the field that was left unbounded. A transaction that lost to another one is nobody's
+    error: 503 with Retry-After. Every other database error is ours: it is raised again
+    and ends as a 500.
     """
+    if getattr(exc.orig, "sqlstate", None) in _LOST_TO_ANOTHER_TRANSACTION:
+        _log_rejected_by_database(request, exc, 503)
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "The resource is busy, try again", "code": "busy"},
+            headers={"Retry-After": "1"},
+        )
     if not _is_data_error(exc):
         raise exc
     _log_rejected_by_database(request, exc, 422)

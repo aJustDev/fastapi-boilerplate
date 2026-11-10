@@ -85,3 +85,40 @@ class TestEventBus:
             event = await EventBus(mock_session).publish("test.event", {})
 
         assert event.max_retries == 9
+
+
+class TestPublishMany:
+    async def test_inserts_one_event_per_pair_and_notifies_once(self, mock_session: AsyncMock):
+        bus = EventBus(mock_session)
+
+        published = await bus.publish_many(
+            "seat.freed", [(1, {"seat": "a"}), ("x-2", {"seat": "b"}), (None, {"seat": "c"})]
+        )
+
+        assert published == 3
+        events = mock_session.add_all.call_args[0][0]
+        assert [e.event_type for e in events] == ["seat.freed"] * 3
+        assert [e.aggregate_id for e in events] == ["1", "x-2", None]
+        assert [e.payload for e in events] == [{"seat": "a"}, {"seat": "b"}, {"seat": "c"}]
+        mock_session.flush.assert_called_once()
+        mock_session.execute.assert_called_once()  # a single NOTIFY, whatever the number
+        assert "pg_notify" in str(mock_session.execute.call_args[0][0])
+        mock_session.commit.assert_not_called()
+
+    async def test_nothing_to_publish_touches_nothing(self, mock_session: AsyncMock):
+        bus = EventBus(mock_session)
+
+        assert await bus.publish_many("seat.freed", []) == 0
+
+        mock_session.add_all.assert_not_called()
+        mock_session.execute.assert_not_called()
+
+    async def test_events_carry_the_request_id(self, mock_session: AsyncMock):
+        token = request_id_var.set("req-7")
+        try:
+            await EventBus(mock_session).publish_many("seat.freed", [(1, {})])
+        finally:
+            request_id_var.reset(token)
+
+        (event,) = mock_session.add_all.call_args[0][0]
+        assert event.correlation_id == "req-7"

@@ -1,8 +1,16 @@
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated
 
 from fastapi import Path, Query
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import (
+    AfterValidator,
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+)
 
 
 class BaseSchema(BaseModel):
@@ -38,6 +46,21 @@ LongText = Annotated[str, StringConstraints(max_length=10_000), AfterValidator(r
 
 Int32 = Annotated[int, Field(ge=-(2**31), le=2**31 - 1)]
 """A value stored in an INTEGER column."""
+
+_EARLIEST = datetime(1900, 1, 1, tzinfo=UTC)
+_LATEST = datetime(3000, 1, 1, tzinfo=UTC)
+
+
+def _within_range(value: datetime) -> datetime:
+    # Year 1 at +14:00 is a valid datetime that has no UTC equivalent: converting it
+    # overflows in the driver. No request means a date outside these bounds.
+    if not _EARLIEST <= value < _LATEST:
+        raise ValueError("must be between the years 1900 and 3000")
+    return value
+
+
+Timestamp = Annotated[AwareDatetime, AfterValidator(_within_range)]
+"""A point in time: with its UTC offset, and within a range every layer can handle."""
 
 # Path and query parameters.
 IdPath = Annotated[int, Path(ge=1, le=2**63 - 1)]

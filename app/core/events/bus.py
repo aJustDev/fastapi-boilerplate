@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Iterable
 from typing import Any
 
 from sqlalchemy import text
@@ -44,9 +45,45 @@ class EventBus:
         await self.session.flush()
         await self.session.refresh(event)
 
-        await self.session.execute(
-            text("SELECT pg_notify(:channel, :payload)"),
-            {"channel": CHANNEL, "payload": str(event.id)},
-        )
+        await self._notify(str(event.id))
         logger.info("Published event %s (id=%s)", event_type, event.id)
         return event
+
+    async def publish_many(
+        self,
+        event_type: str,
+        events: Iterable[tuple[str | int | None, dict[str, Any]]],
+    ) -> int:
+        """Insert one event per `(aggregate_id, payload)` pair; returns how many.
+
+        For a change that concerns many recipients (a cancellation, a batch of
+        reminders): each one gets its own event, so each delivery is retried on its own
+        and carries its own id. The rows go in one batch and a single NOTIFY wakes the
+        workers, whatever the number.
+        """
+        correlation_id = get_request_id() or None
+        rows = [
+            OutboxEventORM(
+                event_type=event_type,
+                payload=payload,
+                aggregate_id=None if aggregate_id is None else str(aggregate_id),
+                correlation_id=correlation_id,
+                max_retries=settings.OUTBOX_MAX_RETRIES,
+            )
+            for aggregate_id, payload in events
+        ]
+        if not rows:
+            return 0
+        self.session.add_all(rows)
+        await self.session.flush()
+        await self._notify(event_type)
+        logger.info("Published %d %s events", len(rows), event_type)
+        return len(rows)
+
+    async def _notify(self, payload: str) -> None:
+        # The payload is only for whoever reads the logs: a worker wakes up and claims
+        # whatever is pending.
+        await self.session.execute(
+            text("SELECT pg_notify(:channel, :payload)"),
+            {"channel": CHANNEL, "payload": payload},
+        )
