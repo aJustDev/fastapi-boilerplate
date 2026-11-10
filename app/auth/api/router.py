@@ -1,7 +1,7 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.auth.repos.revoked_token import RevokedTokenRepo
@@ -38,14 +38,22 @@ def _auth_service(
 AuthServiceDep = Annotated[AuthService, Depends(_auth_service)]
 
 
+def _never_cache(response: Response) -> None:
+    # RFC 6749, 5.1: a response that carries tokens must not be stored by any cache.
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+
+
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit(settings.RATE_LIMIT_STRICT)
 async def login(
     request: Request,
+    response: Response,
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
     service: AuthServiceDep,
 ):
     logger.info("Login request received")
+    _never_cache(response)
     uc = LoginUseCase(service)
     return await uc.execute(form.username, form.password)
 
@@ -60,7 +68,10 @@ async def register(request: Request, body: RegisterRequest, service: AuthService
 
 @router.post("/refresh", response_model=TokenResponse)
 @limiter.limit(settings.RATE_LIMIT_STRICT)
-async def refresh(request: Request, body: RefreshRequest, service: AuthServiceDep):
+async def refresh(
+    request: Request, response: Response, body: RefreshRequest, service: AuthServiceDep
+):
+    _never_cache(response)
     uc = RefreshTokenUseCase(service)
     return await uc.execute(body.refresh_token)
 

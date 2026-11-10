@@ -49,7 +49,7 @@ services:
         condition: service_completed_successfully
     volumes:
       - .:/app
-    command: ["main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "app"]
+    command: ["main:app", "--host", "0.0.0.0", "--port", "8000", "--no-server-header", "--reload", "--reload-dir", "app"]
 
 # New name for PostgreSQL 18: a volume initialized by PostgreSQL 16 cannot be reused.
 volumes:

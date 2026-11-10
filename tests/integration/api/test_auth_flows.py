@@ -65,6 +65,20 @@ async def test_wrong_password_and_unknown_account_look_the_same(api_client: Asyn
     assert wrong.json() == unknown.json()
 
 
+async def test_responses_with_tokens_are_never_cached(api_client: AsyncClient):
+    await register(api_client, "alice")
+
+    logged_in = await api_client.post(
+        "/v1/auth/login", data={"username": "alice", "password": PASSWORD}
+    )
+    refreshed = await _refresh(api_client, logged_in.json()["refresh_token"])
+
+    for response in (logged_in, refreshed):
+        assert response.status_code == 200
+        assert response.headers["Cache-Control"] == "no-store"
+        assert response.headers["Pragma"] == "no-cache"
+
+
 async def test_refresh_rotates_the_token(api_client: AsyncClient):
     await register(api_client, "alice")
     first = await login(api_client, "alice")

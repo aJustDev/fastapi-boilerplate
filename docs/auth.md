@@ -84,6 +84,8 @@ an administrator; `scripts/seed_dev.py` creates the local admin.
   from the database on every request, so a change applies at once.
 - Revocations live in `revoked_tokens` until the token would be rejected as expired anyway (`exp`
   plus the leeway); the `revoked_tokens_cleanup` job deletes them hourly.
+- Login and refresh answer with `Cache-Control: no-store`: a response that carries tokens is
+  never cached.
 - Logout without the refresh token leaves that refresh token valid until it expires.
 - Two clients refreshing with the same token at the same time (two tabs) look like a reuse and
   end the session: clients must serialize refreshes.
