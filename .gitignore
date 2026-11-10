@@ -17,5 +17,6 @@ htmlcov/
 *.log
 logs/
 
-.claude/
+.claude/settings.local.json
+docs/img/*.png
 notes/*
