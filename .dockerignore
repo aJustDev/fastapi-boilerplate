@@ -4,19 +4,32 @@
 .ruff_cache/
 .mypy_cache/
 **/__pycache__/
-*.py[cod]
+**/*.py[cod]
 
 tests/
 docs/
 htmlcov/
 .coverage
 
+# Tooling, CI and dev scripts. The runtime stage copies an allow-list, so this mostly
+# keeps the build context small and the builder's `COPY app` clean.
+.claude/
+.github/
+scripts/
+sql/
+notes/
+observability/
+.editorconfig
+.pre-commit-config.yaml
+.python-version
+
 *.md
 !README.md
 
+# No real .env file ever enters the image: only the template.
 .env.*
 !.env.example
 
 .dockerignore
 .gitignore
-docker-compose.yml
+docker-compose*.yml
