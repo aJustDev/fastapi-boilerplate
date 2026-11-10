@@ -4,10 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
 
-import app.models  # noqa: F401 -- register all ORM models in Base.metadata
+import app.db_registry  # noqa: F401 -- register all ORM models in Base.metadata
+from app.auth.models.user import UserORM
 from app.core.db import Base
 from app.core.security import hash_password
-from app.models.auth.user import UserORM
 from tests.integration.alembic_helpers import run_alembic
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]

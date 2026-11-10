@@ -16,13 +16,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import select  # noqa: E402
 
-import app.models as _models  # noqa: E402, F401
+import app.db_registry as _db_registry  # noqa: E402, F401
+from app.auth.models.role import RoleORM  # noqa: E402
+from app.auth.models.user import UserORM  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.core.db import async_session_factory, engine  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
-from app.models.auth.role import RoleORM  # noqa: E402
-from app.models.auth.user import UserORM  # noqa: E402
-from app.models.items.item import ItemORM  # noqa: E402
+from app.items.models.item import ItemORM  # noqa: E402
 
 ADMIN_EMAIL = "admin@example.com"
 ADMIN_PASSWORD = "admin123"  # noqa: S105 -- local development only

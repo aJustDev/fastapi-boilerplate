@@ -5,7 +5,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_session
-from app.repos.base import BaseRepo
+from app.core.repo import BaseRepo
 
 
 def get_repo[T: BaseRepo](repo_class: type[T]) -> Callable[..., Awaitable[T]]:

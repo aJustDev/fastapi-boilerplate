@@ -3,12 +3,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.core.exceptions import NotFoundError
-from app.models.items.item import ItemORM
-from app.use_cases.items.create_item import CreateItemUseCase
-from app.use_cases.items.delete_item import DeleteItemUseCase
-from app.use_cases.items.get_item import GetItemUseCase
-from app.use_cases.items.list_items import ListItemsCursorUseCase, ListItemsUseCase
-from app.use_cases.items.update_item import UpdateItemUseCase
+from app.items.models.item import ItemORM
+from app.items.use_cases.create_item import CreateItemUseCase
+from app.items.use_cases.delete_item import DeleteItemUseCase
+from app.items.use_cases.get_item import GetItemUseCase
+from app.items.use_cases.list_items import ListItemsCursorUseCase, ListItemsUseCase
+from app.items.use_cases.update_item import UpdateItemUseCase
 
 
 class TestCreateItemUseCase:

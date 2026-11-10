@@ -2,9 +2,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.auth.schemas.token import TokenResponse
+from app.auth.use_cases.refresh_token import RefreshTokenUseCase
 from app.core.exceptions import RefreshTokenReuseError
-from app.schemas.auth.token import TokenResponse
-from app.use_cases.auth.refresh_token import RefreshTokenUseCase
 
 
 class TestRefreshTokenUseCase:
@@ -26,8 +26,8 @@ class TestRefreshTokenUseCase:
         factory.return_value.__aexit__ = AsyncMock(return_value=False)
 
         with (
-            patch("app.use_cases.auth.refresh_token.async_session_factory", factory),
-            patch("app.use_cases.auth.refresh_token.AuthService") as own_service_cls,
+            patch("app.auth.use_cases.refresh_token.async_session_factory", factory),
+            patch("app.auth.use_cases.refresh_token.AuthService") as own_service_cls,
             pytest.raises(RefreshTokenReuseError),
         ):
             own_service_cls.return_value.invalidate_sessions = AsyncMock()

@@ -4,8 +4,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-import app.core.events.handlers  # noqa: F401 — register all event handlers
-import app.core.jobs.handlers  # noqa: F401 — register all job handlers
 from app.core.db import engine
 from app.core.events.worker import OutboxWorker
 from app.core.jobs.registry import job_registry

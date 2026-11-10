@@ -2,8 +2,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from httpx import AsyncClient
 
+from app.auth.models.user import UserORM
 from app.core.security import create_access_token, create_refresh_token, decode_token
-from app.models.auth.user import UserORM
 
 
 def _user() -> MagicMock:
@@ -21,7 +21,7 @@ class TestLogoutEndpoint:
         refresh = create_refresh_token(subject="1")
 
         with patch(
-            "app.repos.auth.revoked_token.RevokedTokenRepo.revoke", return_value=True
+            "app.auth.repos.revoked_token.RevokedTokenRepo.revoke", return_value=True
         ) as revoke:
             response = await client.post(
                 "/v1/auth/logout",
@@ -37,7 +37,7 @@ class TestLogoutEndpoint:
         access = create_access_token(subject="1")
 
         with patch(
-            "app.repos.auth.revoked_token.RevokedTokenRepo.revoke", return_value=True
+            "app.auth.repos.revoked_token.RevokedTokenRepo.revoke", return_value=True
         ) as revoke:
             response = await client.post(
                 "/v1/auth/logout", headers={"Authorization": f"Bearer {access}"}
@@ -55,11 +55,11 @@ class TestRefreshEndpoint:
         factory.return_value.__aexit__ = AsyncMock(return_value=False)
 
         with (
-            patch("app.repos.auth.user.UserRepo.get_by_id", return_value=_user()),
-            patch("app.repos.auth.revoked_token.RevokedTokenRepo.revoke", return_value=False),
-            patch("app.use_cases.auth.refresh_token.async_session_factory", factory),
+            patch("app.auth.repos.user.UserRepo.get_by_id", return_value=_user()),
+            patch("app.auth.repos.revoked_token.RevokedTokenRepo.revoke", return_value=False),
+            patch("app.auth.use_cases.refresh_token.async_session_factory", factory),
             patch(
-                "app.services.auth.AuthService.invalidate_sessions", new_callable=AsyncMock
+                "app.auth.services.auth.AuthService.invalidate_sessions", new_callable=AsyncMock
             ) as invalidate,
         ):
             response = await client.post(

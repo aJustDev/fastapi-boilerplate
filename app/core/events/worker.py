@@ -12,7 +12,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.core.config import settings
 from app.core.db import async_session_factory, build_asyncpg_dsn
 from app.core.events.dispatcher import dispatcher
-from app.models.events.outbox import OutboxEventORM
+from app.core.events.models import OutboxEventORM
 
 logger = logging.getLogger(__name__)
 

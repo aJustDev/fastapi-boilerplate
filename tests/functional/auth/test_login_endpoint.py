@@ -3,9 +3,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.auth.models.user import UserORM
 from app.core.db import get_session
 from app.core.security import hash_password
-from app.models.auth.user import UserORM
 from main import app
 
 
@@ -37,7 +37,7 @@ async def client():
 
 class TestLoginEndpoint:
     async def test_login_success(self, client, active_user):
-        with patch("app.repos.auth.user.UserRepo.get_by_email", return_value=active_user):
+        with patch("app.auth.repos.user.UserRepo.get_by_email", return_value=active_user):
             response = await client.post(
                 "/v1/auth/login",
                 data={"username": "test@example.com", "password": "correct_password"},
@@ -51,8 +51,8 @@ class TestLoginEndpoint:
 
     async def test_login_invalid_credentials(self, client):
         with (
-            patch("app.repos.auth.user.UserRepo.get_by_email", return_value=None),
-            patch("app.repos.auth.user.UserRepo.get_by_username", return_value=None),
+            patch("app.auth.repos.user.UserRepo.get_by_email", return_value=None),
+            patch("app.auth.repos.user.UserRepo.get_by_username", return_value=None),
         ):
             response = await client.post(
                 "/v1/auth/login",

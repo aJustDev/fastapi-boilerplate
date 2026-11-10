@@ -3,10 +3,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.auth.models.user import UserORM
+from app.auth.services.auth import AuthService
 from app.core.exceptions import AuthenticationError, ConflictError, RefreshTokenReuseError
 from app.core.security import create_access_token, create_refresh_token, decode_token, hash_password
-from app.models.auth.user import UserORM
-from app.services.auth import AuthService
 
 
 @pytest.fixture
@@ -70,7 +70,7 @@ class TestLogin:
         user_repo.get_by_username.return_value = None
 
         with (
-            patch("app.services.auth._verify_against_dummy") as dummy,
+            patch("app.auth.services.auth._verify_against_dummy") as dummy,
             pytest.raises(AuthenticationError),
         ):
             await auth_service.login("nobody@example.com", "secret")

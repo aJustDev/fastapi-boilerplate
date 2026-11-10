@@ -6,7 +6,7 @@ from sqlalchemy import delete, select, update
 
 from app.core.config import settings
 from app.core.db import async_session_factory, rowcount
-from app.models.events.outbox import OutboxEventORM
+from app.core.events.models import OutboxEventORM
 
 logger = logging.getLogger(__name__)
 

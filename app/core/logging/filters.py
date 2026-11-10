@@ -60,6 +60,11 @@ class LayerModuleFilter(logging.Filter):
                     layer_name = display
                     break
 
+            # app.<context>.api.router: every router file has the same name, the
+            # context says which one logged.
+            if module_name == "router" and "api" in parts[1:]:
+                module_name = parts[parts.index("api") - 1]
+
         clean_module = module_name.replace("_", " ").title()
 
         record.layer_name = layer_name

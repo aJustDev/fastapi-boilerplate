@@ -2,10 +2,10 @@ from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import DateTime, MetaData, Text
+from sqlalchemy import BigInteger, DateTime, Identity, MetaData, Text, func
 from sqlalchemy.engine import CursorResult, Result, make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.core.config import settings
 
@@ -60,6 +60,32 @@ class Base(DeclarativeBase):
     # Every timestamp is timezone-aware and every unbounded string is TEXT, like the
     # database; a column declares another type explicitly when it needs one.
     type_annotation_map = {datetime: DateTime(timezone=True), str: Text}
+
+
+class IntPkMixin:
+    """Provides a BIGINT GENERATED ALWAYS AS IDENTITY primary key."""
+
+    id: Mapped[int] = mapped_column(
+        BigInteger,
+        Identity(always=True),
+        primary_key=True,
+    )
+
+
+class AuditMixin:
+    """Adds created_at, updated_at, created_by, updated_by columns."""
+
+    created_at: Mapped[datetime] = mapped_column(
+        default=func.now(),
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        default=None,
+        onupdate=func.now(),
+        server_onupdate=func.now(),
+    )
+    created_by: Mapped[str | None] = mapped_column(default=None)
+    updated_by: Mapped[str | None] = mapped_column(default=None)
 
 
 async def get_session() -> AsyncGenerator[AsyncSession]:

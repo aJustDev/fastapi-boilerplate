@@ -5,12 +5,12 @@ from typing import Annotated
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 
+from app.auth.models.user import UserORM
+from app.auth.repos.revoked_token import RevokedTokenRepo
+from app.auth.repos.user import UserRepo
 from app.core.exceptions import AuthenticationError, AuthorizationError
 from app.core.security import decode_token
 from app.deps.repository import get_repo
-from app.models.auth.user import UserORM
-from app.repos.auth.revoked_token import RevokedTokenRepo
-from app.repos.auth.user import UserRepo
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/auth/login")
 
