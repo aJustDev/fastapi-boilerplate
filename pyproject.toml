@@ -17,6 +17,7 @@ dependencies = [
     "colorlog>=6.12",
     "slowapi>=0.1.10",
     "prometheus-client>=0.26",
+    "alembic>=1.20",
 ]
 
 [tool.pytest.ini_options]
