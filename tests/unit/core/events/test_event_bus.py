@@ -1,5 +1,5 @@
 import uuid
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from app.core.events.bus import EventBus
 from app.core.events.models import OutboxEventORM
@@ -72,3 +72,9 @@ class TestEventBus:
 
         event = mock_session.add.call_args[0][0]
         assert event.payload == payload
+
+    async def test_publish_applies_the_configured_max_retries(self, mock_session: AsyncMock):
+        with patch("app.core.events.bus.settings.OUTBOX_MAX_RETRIES", 9):
+            event = await EventBus(mock_session).publish("test.event", {})
+
+        assert event.max_retries == 9
