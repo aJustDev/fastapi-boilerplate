@@ -23,7 +23,8 @@ flowchart LR
   reuses the dependency layer. `uv` comes from a pinned image tag.
 - **runtime** copies the virtualenv and an explicit list of paths (`main.py`, `alembic.ini`,
   `app/`, `migrations/`); never `COPY . .`. pip, setuptools and wheel are removed. It runs as
-  uid/gid 1000 with `TZ=UTC`, exposes 8000 and has a `HEALTHCHECK` on `/v1/health/liveness`.
+  uid/gid 1000 with `TZ=UTC` and `ENVIRONMENT=production`, exposes 8000 and has a `HEALTHCHECK` on
+  `/v1/health/liveness`.
 - `.dockerignore` keeps the build context small and lets no `.env.*` file in except
   `.env.example`.
 
@@ -62,3 +63,6 @@ not obvious.
 - The volume name carries the PostgreSQL major version: a volume created by another major
   version cannot be reused.
 - The image does not run the migrations on start; run them as a separate step (`docs/migrations.md`).
+- The image runs as `ENVIRONMENT=production`: without a real `SECRET_KEY`, explicit
+  `ALLOWED_HOSTS` and `ALLOWED_ORIGINS` it refuses to start (`docs/configuration.md`). Compose sets
+  `ENVIRONMENT=local` through the env file.

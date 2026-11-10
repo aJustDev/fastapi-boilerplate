@@ -1,7 +1,13 @@
 import logging
 
 from app.core.logging.context import request_id_var
-from app.core.logging.filters import IgnoreOptionsFilter, LayerModuleFilter, RequestIdFilter
+from app.core.logging.filters import (
+    IgnoreHealthcheckFilter,
+    IgnoreMetricsFilter,
+    IgnoreOptionsFilter,
+    LayerModuleFilter,
+    RequestIdFilter,
+)
 
 
 class TestLayerModuleFilter:
@@ -139,41 +145,59 @@ class TestLayerModuleFilter:
         assert "\033[36m" in record.colored_module  # cyan
 
 
+def _access(method: str, full_path: str, status: int = 200) -> logging.LogRecord:
+    """A record shaped like the ones uvicorn's access logger emits."""
+    return logging.LogRecord(
+        name="uvicorn.access",
+        level=logging.INFO,
+        pathname="",
+        lineno=0,
+        msg='%s - "%s %s HTTP/%s" %d',
+        args=("127.0.0.1:5000", method, full_path, "1.1", status),
+        exc_info=None,
+    )
+
+
+def _plain(msg: str, name: str = "app.items.api.router") -> logging.LogRecord:
+    return logging.LogRecord(
+        name=name, level=logging.INFO, pathname="", lineno=0, msg=msg, args=(), exc_info=None
+    )
+
+
 class TestIgnoreOptionsFilter:
-    def _make_record(self, msg: str) -> logging.LogRecord:
-        return logging.LogRecord(
-            name="uvicorn.access",
-            level=logging.INFO,
-            pathname="",
-            lineno=0,
-            msg=msg,
-            args=(),
-            exc_info=None,
-        )
+    def test_options_request_is_dropped(self):
+        assert IgnoreOptionsFilter().filter(_access("OPTIONS", "/v1/items")) is False
 
-    def test_options_request_returns_false(self):
-        f = IgnoreOptionsFilter()
-        record = self._make_record('"OPTIONS /api/v1/items HTTP/1.1" 200')
+    def test_other_methods_are_kept(self):
+        assert IgnoreOptionsFilter().filter(_access("GET", "/v1/items")) is True
+        assert IgnoreOptionsFilter().filter(_access("POST", "/v1/items", 201)) is True
 
-        assert f.filter(record) is False
+    def test_only_access_records_are_judged(self):
+        # The filter sits on the console handler of every logger: an application line that
+        # happens to quote a request must never be dropped.
+        assert IgnoreOptionsFilter().filter(_plain('client sent "OPTIONS /v1/items"')) is True
 
-    def test_get_request_returns_true(self):
-        f = IgnoreOptionsFilter()
-        record = self._make_record('"GET /api/v1/items HTTP/1.1" 200')
 
-        assert f.filter(record) is True
+class TestNoiseFiltersLookAtThePathOnly:
+    def test_liveness_probe_is_dropped(self):
+        assert IgnoreHealthcheckFilter().filter(_access("GET", "/v1/health/liveness")) is False
 
-    def test_post_request_returns_true(self):
-        f = IgnoreOptionsFilter()
-        record = self._make_record('"POST /api/v1/items HTTP/1.1" 201')
+    def test_metrics_scrape_is_dropped(self):
+        assert IgnoreMetricsFilter().filter(_access("GET", "/v1/metrics")) is False
 
-        assert f.filter(record) is True
+    def test_a_query_string_cannot_hide_a_request(self):
+        # The access line of a request is its audit trail (source address, status). Anything
+        # a client controls must not be able to remove it.
+        login = _access("POST", "/v1/auth/login?/v1/metrics", 401)
+        delete = _access("DELETE", "/v1/items/3?x=/v1/health/liveness", 204)
 
-    def test_plain_message_returns_true(self):
-        f = IgnoreOptionsFilter()
-        record = self._make_record("Application started")
+        for f in (IgnoreHealthcheckFilter(), IgnoreMetricsFilter()):
+            assert f.filter(login) is True
+            assert f.filter(delete) is True
 
-        assert f.filter(record) is True
+    def test_a_longer_path_is_not_the_probe(self):
+        assert IgnoreMetricsFilter().filter(_access("GET", "/v1/metrics/extra")) is True
+        assert IgnoreHealthcheckFilter().filter(_access("GET", "/x/v1/health/liveness")) is True
 
 
 class TestRequestIdFilter:

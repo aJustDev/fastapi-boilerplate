@@ -17,6 +17,9 @@ ENGINE_OPTIONS: dict[str, Any] = dict(
     pool_recycle=settings.DB_POOL_RECYCLE,
     pool_pre_ping=True,
     echo=False,
+    # A DBAPIError carries its statement and, by default, the bound values. Its text ends
+    # up in the log: without this, a failed INSERT INTO users logs the password hash.
+    hide_parameters=True,
     connect_args={
         "timeout": settings.DB_CONNECT_TIMEOUT,
         "command_timeout": settings.DB_COMMAND_TIMEOUT,
@@ -100,6 +103,11 @@ class AuditMixin:
 
 
 async def get_session() -> AsyncGenerator[AsyncSession]:
+    """One session per request: commit if the endpoint returned, roll back if it raised.
+
+    Declare it as `Depends(get_session, scope="function")` (app/deps does): the commit is
+    then part of the request, so its failure reaches the client as an error.
+    """
     async with async_session_factory() as session:
         try:
             yield session

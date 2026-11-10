@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, exists, select
 from sqlalchemy.dialects.postgresql import insert
@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert
 from app.auth.models.revoked_token import RevokedTokenORM
 from app.core.db import rowcount
 from app.core.repo import BaseRepo
+from app.core.security import JWT_LEEWAY_SECONDS
 
 
 class RevokedTokenRepo(BaseRepo[RevokedTokenORM]):
@@ -32,6 +33,9 @@ class RevokedTokenRepo(BaseRepo[RevokedTokenORM]):
         return bool(result.scalar())
 
     async def delete_expired(self) -> int:
-        """Delete revocations of tokens that have expired anyway. Returns how many."""
-        stmt = delete(RevokedTokenORM).where(RevokedTokenORM.expires_at < datetime.now(UTC))
+        """Delete revocations of tokens that are rejected as expired anyway. Returns how many."""
+        # A token is accepted until `exp` plus the leeway: purging its revocation at `exp`
+        # would let a used refresh token work once more in that window.
+        cutoff = datetime.now(UTC) - timedelta(seconds=JWT_LEEWAY_SECONDS)
+        stmt = delete(RevokedTokenORM).where(RevokedTokenORM.expires_at < cutoff)
         return rowcount(await self.session.execute(stmt))

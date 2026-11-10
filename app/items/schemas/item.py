@@ -1,7 +1,9 @@
 from datetime import datetime
 from enum import StrEnum
 
-from app.core.schema import BaseSchema
+from pydantic import field_validator
+
+from app.core.schema import BaseSchema, Int32, LongText, ShortText
 
 
 class ItemCategory(StrEnum):
@@ -22,18 +24,29 @@ class ItemSortField(StrEnum):
 
 
 class ItemCreate(BaseSchema):
-    name: str
-    description: str | None = None
+    name: ShortText
+    description: LongText | None = None
     category: ItemCategory = ItemCategory.GENERAL
-    priority: int = 0
+    priority: Int32 = 0
 
 
 class ItemUpdate(BaseSchema):
-    name: str | None = None
-    description: str | None = None
+    """Partial update: a field that is absent is left as it is."""
+
+    name: ShortText | None = None
+    description: LongText | None = None
     category: ItemCategory | None = None
-    priority: int | None = None
+    priority: Int32 | None = None
     is_active: bool | None = None
+
+    @field_validator("name", "category", "priority", "is_active", mode="before")
+    @classmethod
+    def _not_null(cls, value: object) -> object:
+        # None is only the "absent" default of these fields. Sent explicitly it would
+        # reach a NOT NULL column; `description` is nullable and may be cleared.
+        if value is None:
+            raise ValueError("null is not allowed; omit the field to leave it unchanged")
+        return value
 
 
 class ItemRead(BaseSchema):
@@ -46,3 +59,11 @@ class ItemRead(BaseSchema):
     owner_id: int
     created_at: datetime
     updated_at: datetime | None
+
+
+class ItemFilterOptions(BaseSchema):
+    """Values present in the items the caller can see, to build filter controls."""
+
+    category: list[str]
+    priority: list[int]
+    is_active: list[bool]

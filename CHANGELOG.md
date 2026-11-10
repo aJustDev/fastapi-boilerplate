@@ -12,6 +12,9 @@ not count.
 
 ### Added
 
+- API test level, `tests/integration/api/`: requests through the real app and the real `get_session` against PostgreSQL. It covers the session model, authorization with two users, malformed input and pagination across pages (#24).
+- Authorization in the example context: each `items` route requires a permission, the use case checks the owner, lists are limited to the caller, and `items:manage` lifts the limit. Registration assigns the `user` role (#24).
+- Bounded input types in `app/core/schema.py` (`ShortText`, `LongText`, `Int32`, `IdPath`, `PageQuery`, `SearchQuery`...) and error codes `invalid_cursor` (400) and `invalid_input` (422) (#24).
 - Claude Code configuration: `CLAUDE.md`, path-scoped rules in `.claude/rules/`, read-only permissions in `.claude/settings.json`, the `working-on-fastapi-boilerplate` skill; `docs/README.md` index.
 - Error contract: every error body is `{detail, code}` with a stable code, the schemas are published in OpenAPI, and `IntegrityError` answers 409 instead of 500.
 - Security headers middleware, `TrustedHostMiddleware`, `ProxyHeadersMiddleware`, and startup validators for hosts, origins and trusted proxies outside local.
@@ -26,6 +29,10 @@ not count.
 
 ### Changed
 
+- `ENVIRONMENT` has no default: the app does not start until it is set. The Docker image sets `ENVIRONMENT=production` (#24).
+- Sessions end by counter: `users.session_version` replaces `tokens_valid_after`, tokens carry it as the `sv` claim and the unused `scopes` claim is gone. Tokens issued before the upgrade are rejected (#24).
+- Password hashes use the argon2-cffi defaults and are upgraded at login when they were made with older parameters (#24).
+- `username` accepts 3-50 letters, digits, `.`, `_` and `-`; `password` at most 128 characters (#24).
 - Code grouped by bounded context (`app/auth`, `app/items`) with layers inside; infrastructure ORM in `app/core`; `app/db_registry.py` registers models and handlers; import-linter contracts and a one-use-case-per-endpoint test enforce the boundaries.
 - PostgreSQL 18 in compose and in the integration tests (volume `pgdata18`).
 - Python 3.14 and every dependency on its latest release (FastAPI 0.162, SQLAlchemy 2.1).
@@ -37,12 +44,24 @@ not count.
 
 ### Removed
 
+- `app/deps/database.py`, an unused re-export of `get_session` (#24).
 - `AUDIT-CHECKLIST.md` (its open items are done or in `ROADMAP.md`) and `docs/skill.md` (now the `working-on-fastapi-boilerplate` skill).
 - `ItemORM.owner`, a relationship across contexts; items expose `owner_id`.
 - `sql/` (schema, deltas, seeds and their shell scripts), replaced by the migrations.
 
 ### Fixed
 
+- Any registered user could read, change and delete the items of every other user (#24).
+- A deployment without `ENVIRONMENT` ran as `local` and accepted the placeholder `SECRET_KEY`, which lets anyone sign tokens (#24).
+- Responses were sent before the transaction committed: a failed commit still answered 2xx, and a read right after a write could miss it (#24).
+- A replayed refresh token did not end the session of whoever had used it first in the same second (#24).
+- Unhandled errors answered a 500 without CORS headers, security headers or request id, and logged the traceback twice (#24).
+- NUL characters, out-of-range integers, oversized text and forged pagination cursors ended as 500s, some without a login; a client request id that was not UTF-8 broke any request (#24).
+- Cursor pagination failed on the second page when sorting by `created_at` (#24).
+- `IntegrityError` answered 409 for NOT NULL and CHECK violations; they are a 422 (#24).
+- Database errors logged their bound values, password hashes included, and the message of PostgreSQL with the offending key (#24).
+- A query string containing `/v1/metrics` or `/health/liveness` removed the request from the access log, and the client request id was logged verbatim (#24).
+- Revocations were purged at `exp`, 30 s before the token stops being accepted (#24).
 - Startup without a reachable database hung for 60 s (and ignored Ctrl+C) while the banner retried the connection; connections now time out after `DB_CONNECT_TIMEOUT`.
 - `OUTBOX_MAX_RETRIES` is applied to published events (#22).
 - `RATE_LIMIT_DEFAULT` was documented but applied to no endpoint; `Retry-After` held the word `minute` instead of seconds.

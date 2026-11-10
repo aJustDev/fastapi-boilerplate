@@ -57,3 +57,34 @@ class TestRequestIdMiddleware:
         mw = RequestIdMiddleware(inner)
         await mw({"type": "lifespan"}, AsyncMock(), AsyncMock())
         inner.assert_called_once()
+
+
+class TestClientRequestIdIsValidated:
+    @staticmethod
+    async def _rid_for(header: bytes) -> str:
+        captured = ""
+
+        async def inner_app(scope, receive, send):
+            nonlocal captured
+            captured = request_id_var.get()
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+
+        mw = RequestIdMiddleware(inner_app)
+        await mw({"type": "http", "headers": [(b"x-request-id", header)]}, AsyncMock(), AsyncMock())
+        return captured
+
+    async def test_text_that_could_forge_a_log_line_is_replaced(self):
+        rid = await self._rid_for(b"] FAKE > admin logged in from 10.0.0.1 [")
+        assert len(rid) == 32
+
+    async def test_bytes_that_are_not_text_do_not_break_the_request(self):
+        rid = await self._rid_for(b"\xff\xfe")
+        assert len(rid) == 32
+
+    async def test_an_oversized_id_is_replaced(self):
+        rid = await self._rid_for(b"a" * 65)
+        assert len(rid) == 32
+
+    async def test_ids_of_the_usual_shapes_are_kept(self):
+        for value in (b"my-custom-id", b"0af7651916cd43dd8448eb211c80319c", b"req_1.2-3"):
+            assert await self._rid_for(value) == value.decode()

@@ -1,9 +1,9 @@
 import logging
-from datetime import datetime
 
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
+from app.auth.models.role import RoleORM
 from app.auth.models.user import UserORM
 from app.core.repo import BaseRepo
 
@@ -36,6 +36,16 @@ class UserRepo(BaseRepo[UserORM]):
         result = await self.session.execute(stmt)
         return result.scalars().first()
 
-    async def invalidate_tokens(self, user_id: int, at: datetime) -> None:
-        stmt = update(UserORM).where(UserORM.id == user_id).values(tokens_valid_after=at)
+    async def get_role(self, name: str) -> RoleORM | None:
+        result = await self.session.execute(select(RoleORM).where(RoleORM.name == name))
+        return result.scalars().first()
+
+    async def end_sessions(self, user_id: int) -> None:
+        """Bump the session version: no token issued so far is accepted any more."""
+        # Incremented in SQL: two invalidations at once must not lose one.
+        stmt = (
+            update(UserORM)
+            .where(UserORM.id == user_id)
+            .values(session_version=UserORM.session_version + 1)
+        )
         await self.session.execute(stmt)

@@ -18,6 +18,7 @@ def active_user() -> MagicMock:
     user.is_active = True
     user.password_hash = hash_password("correct_password")
     user.roles = []
+    user.session_version = 0
     return user
 
 

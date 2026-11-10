@@ -21,7 +21,11 @@ _MIN_SECRET_KEY_BYTES = 32
 
 
 class Settings(BaseSettings):
-    ENVIRONMENT: str = "local"
+    # No default on purpose. "local" is the only value that accepts the placeholder
+    # SECRET_KEY and the wildcard hosts: falling back to it would switch every validator
+    # below off in the deployment that forgot to set the variable. Development gets it
+    # from .env.local; the Docker image sets ENVIRONMENT=production.
+    ENVIRONMENT: str
 
     APP_NAME: str = "FastAPI App"
     APP_VERSION: str = _APP_VERSION

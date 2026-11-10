@@ -16,7 +16,7 @@ app/
   auth/            context: users, roles, permissions, tokens
     models/ schemas/ repos/ services/ use_cases/ api/ jobs/
   items/           context: the example CRUD
-    models/ schemas/ repos/ use_cases/ api/ event_handlers/
+    models/ schemas/ repos/ services/ use_cases/ api/ event_handlers/
   db_registry.py   imports every model and handler module (see below)
 ```
 
@@ -43,8 +43,8 @@ The figure follows a request from the middleware to the commit.
 | `schemas/` | Request and response shapes | Logic, database access |
 
 **Use cases orchestrate services; services hold the business rules.** A plain CRUD use case may
-call the repository directly (see `app/items/use_cases/`); as soon as a rule appears, it goes
-into a service. Errors are domain exceptions (`app/core/exceptions`), turned into HTTP responses
+call the repository directly (`app/items/use_cases/create_item.py`); as soon as a rule appears, it
+goes into a service (`app/items/services/access.py`: who may act on which item). Errors are domain exceptions (`app/core/exceptions`), turned into HTTP responses
 by global handlers.
 
 ## Rules and how they are enforced

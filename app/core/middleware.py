@@ -6,6 +6,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.core.config import settings
+from app.core.exceptions.middleware import UnhandledErrorMiddleware
 from app.core.logging.middleware import RequestIdMiddleware
 from app.core.metrics.middleware import PrometheusMiddleware
 from app.core.ratelimit import limiter
@@ -16,11 +17,14 @@ def register_middleware(app: FastAPI) -> None:
     # Execution order is bottom-to-top (last added = outermost, runs first on request).
     #
     # Request:  ProxyHeaders -> TrustedHost -> Prometheus -> RequestId -> SlowAPI
-    #           -> SecurityHeaders -> CORS -> GZip -> App
+    #           -> SecurityHeaders -> CORS -> GZip -> UnhandledError -> App
     #
     # ProxyHeaders goes first so every later layer (rate limit keys, logs) sees the real
     # client address; TrustedHost rejects a forged Host before any work is done.
+    # UnhandledError goes last, right around the routes, so the 500 it builds returns
+    # through every other layer like any response.
 
+    app.add_middleware(UnhandledErrorMiddleware)
     app.add_middleware(GZipMiddleware, minimum_size=1000)
     app.add_middleware(
         CORSMiddleware,

@@ -7,7 +7,7 @@ root_packages =
     app
 
 # Inside a context, a layer may import the layers below it, never the ones above.
-# Parentheses mark layers a context may not have (items has no services or jobs).
+# Parentheses mark layers a context may not have (items has no jobs).
 [importlinter:contract:layers]
 name = Layers inside each context
 type = layers

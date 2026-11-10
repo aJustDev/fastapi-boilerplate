@@ -11,7 +11,8 @@ paths:
 Guide: `docs/configuration.md`.
 
 - A new setting is a field in `Settings` with a safe default for local development, and a line
-  in `.env.example` (active `KEY=value` or commented `# KEY=`).
+  in `.env.example` (active `KEY=value` or commented `# KEY=`). `ENVIRONMENT` is the one field
+  without a default: an unset value must stop the process, not mean `local`.
 - A value that is only dangerous in production gets a `model_validator` that skips `local`, and
   a row in the validators table of `docs/configuration.md`.
 - Document the setting in the doc of the feature that uses it.

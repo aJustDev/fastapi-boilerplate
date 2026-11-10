@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.auth.models.role import RoleORM
 from app.auth.models.user import UserORM
 from app.core.db import get_session
 from main import app
@@ -36,7 +37,8 @@ class TestRegisterEndpoint:
         with (
             patch("app.auth.repos.user.UserRepo.get_by_email", return_value=None),
             patch("app.auth.repos.user.UserRepo.get_by_username", return_value=None),
-            patch("app.auth.repos.user.UserRepo.create", return_value=new_user),
+            patch("app.auth.repos.user.UserRepo.get_role", return_value=RoleORM(name="user")),
+            patch("app.auth.repos.user.UserRepo.create", return_value=new_user) as create,
         ):
             response = await client.post(
                 "/v1/auth/register",
@@ -52,6 +54,9 @@ class TestRegisterEndpoint:
         data = response.json()
         assert data["email"] == "new@example.com"
         assert data["username"] == "newuser"
+        stored = create.call_args.args[0]
+        assert [role.name for role in stored.roles] == ["user"]
+        assert stored.password_hash.startswith("$argon2id$")
 
     async def test_register_duplicate_email(self, client):
         existing = MagicMock(spec=UserORM)

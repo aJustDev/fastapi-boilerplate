@@ -20,14 +20,17 @@ def fake_user() -> MagicMock:
     user.full_name = "Test User"
     user.is_active = True
     user.roles = []
+    user.session_version = 0
+    user.accepts_session = MagicMock(return_value=True)
     user.has_role = MagicMock(return_value=False)
-    user.has_permission = MagicMock(return_value=False)
+    # What the `user` role grants: the route permissions, not items:manage.
+    user.has_permission = MagicMock(side_effect=lambda name: name != "items:manage")
     return user
 
 
 @pytest.fixture
 def auth_headers(fake_user: MagicMock) -> dict[str, str]:
-    token = create_access_token(subject=str(fake_user.id), scopes=[])
+    token = create_access_token(subject=str(fake_user.id))
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -228,6 +231,49 @@ class TestFilterOptions:
         assert data["category"] == ["electronics", "books"]
         assert data["priority"] == [0, 1, 2]
         assert data["is_active"] == [True, False]
+
+
+class TestItemsPermissions:
+    """The permission of the route is checked before anything else runs."""
+
+    @pytest.mark.parametrize(
+        ("method", "url", "permission"),
+        [
+            ("GET", "/v1/items", "items:read"),
+            ("GET", "/v1/items/cursor", "items:read"),
+            ("GET", "/v1/items/filters", "items:read"),
+            ("GET", "/v1/items/1", "items:read"),
+            ("POST", "/v1/items", "items:write"),
+            ("PATCH", "/v1/items/1", "items:write"),
+            ("DELETE", "/v1/items/1", "items:delete"),
+        ],
+    )
+    async def test_missing_permission_is_a_403(
+        self, client, fake_user, auth_headers, method, url, permission
+    ):
+        fake_user.has_permission = MagicMock(side_effect=lambda name: name != permission)
+        with (
+            patch("app.auth.repos.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
+            patch("app.auth.repos.user.UserRepo.get_by_id", return_value=fake_user),
+            patch("app.items.repos.item.ItemRepo.get_by_id") as get_by_id,
+        ):
+            response = await client.request(method, url, headers=auth_headers, json={"name": "x"})
+
+        assert response.status_code == 403
+        assert response.json()["code"] == "forbidden"
+        get_by_id.assert_not_called()
+
+    async def test_another_owners_item_is_a_404(self, client, fake_user, fake_item, auth_headers):
+        fake_item.owner_id = 2
+        with (
+            patch("app.auth.repos.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
+            patch("app.auth.repos.user.UserRepo.get_by_id", return_value=fake_user),
+            patch("app.items.repos.item.ItemRepo.get_by_id", return_value=fake_item),
+        ):
+            response = await client.get("/v1/items/1", headers=auth_headers)
+
+        assert response.status_code == 404
+        assert response.json()["code"] == "not_found"
 
 
 class TestItemsAuth:

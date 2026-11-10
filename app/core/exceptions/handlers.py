@@ -3,10 +3,11 @@ import math
 import time
 import traceback
 
+import asyncpg
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from slowapi.errors import RateLimitExceeded
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
@@ -163,26 +164,100 @@ async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded)
     )
 
 
+# SQLSTATE codes (PostgreSQL appendix A). Class 23 is integrity constraint violation,
+# class 22 is data exception: a value the column type cannot take.
+_NOT_NULL_VIOLATION = "23502"
+_CHECK_VIOLATION = "23514"
+_DATA_EXCEPTION_CLASS = "22"
+
+
+def _driver_error(exc: DBAPIError) -> BaseException | None:
+    """The asyncpg exception behind a SQLAlchemy DBAPIError."""
+    return exc.orig.__cause__ if exc.orig is not None else None
+
+
+def _log_rejected_by_database(request: Request, exc: DBAPIError, status_code: int) -> None:
+    # One line, and nothing of the message PostgreSQL wrote: its DETAIL quotes the
+    # offending values ("Key (lower(email))=(a@b.c) already exists").
+    driver_error = _driver_error(exc)
+    logger.warning(
+        "%s %s -> %d: the database rejected the input (%s, sqlstate=%s, constraint=%s)",
+        request.method,
+        request.url.path,
+        status_code,
+        type(driver_error or exc.orig).__name__,
+        getattr(exc.orig, "sqlstate", None),
+        getattr(driver_error, "constraint_name", None),
+    )
+
+
+def _invalid_input_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": "Validation error",
+            "code": "invalid_input",
+            "errors": ["a value was rejected by the database"],
+        },
+    )
+
+
 async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
-    # Safety net for constraint violations that slip past the checks in the services
-    # (two requests racing between the SELECT and the INSERT). Without it they would
-    # end as a 500 and an alert, while the client simply sent a duplicate.
-    ctx = _extract_context(request, exc)
-    ctx["status_code"] = 409
-    logger.warning(_format_log(ctx), exc_info=True)
+    # Safety net for constraint violations that slip past validation and the checks in
+    # the services (two requests racing between the SELECT and the INSERT). Without it
+    # they would end as a 500 and an alert, while the client simply sent something the
+    # schema does not allow. A missing or out-of-range value is a 422; a duplicate or a
+    # broken reference is a conflict with what is already stored.
+    if getattr(exc.orig, "sqlstate", None) in (_NOT_NULL_VIOLATION, _CHECK_VIOLATION):
+        _log_rejected_by_database(request, exc, 422)
+        return _invalid_input_response()
+    _log_rejected_by_database(request, exc, 409)
     return JSONResponse(
         status_code=409,
         content={"detail": "Conflict with existing resource", "code": "integrity_conflict"},
     )
 
 
-async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    ctx = _extract_context(request, exc)
-    logger.error(_format_log(ctx), exc_info=True)
+def _is_data_error(exc: DBAPIError) -> bool:
+    sqlstate = getattr(exc.orig, "sqlstate", None)
+    if isinstance(sqlstate, str) and sqlstate.startswith(_DATA_EXCEPTION_CLASS):
+        return True
+    # asyncpg refuses some values before sending them (an int beyond the column type):
+    # no SQLSTATE, but the same kind of error.
+    return isinstance(_driver_error(exc), asyncpg.DataError)
+
+
+async def database_error_handler(request: Request, exc: DBAPIError) -> JSONResponse:
+    """A value PostgreSQL or the driver could not take is the client's error: 422.
+
+    Request validation should have stopped it (app/core/schema.py); this is the net for
+    the field that was left unbounded. Every other database error is ours: it is raised
+    again and ends as a 500.
+    """
+    if not _is_data_error(exc):
+        raise exc
+    _log_rejected_by_database(request, exc, 422)
+    return _invalid_input_response()
+
+
+def describe_unhandled(request: Request, exc: Exception) -> str:
+    """Log message of an unhandled error: exception, where it was raised and the request."""
+    return _format_log(_extract_context(request, exc))
+
+
+def internal_error_response() -> JSONResponse:
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error", "code": "internal_error"},
     )
+
+
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    # Last resort. Errors raised under the middleware stack never get here:
+    # UnhandledErrorMiddleware answers them from inside it. This one only sees what a
+    # middleware itself raises.
+    logger.error(describe_unhandled(request, exc), exc_info=True)
+    return internal_error_response()
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -192,4 +267,5 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RateLimitExceeded, rate_limit_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(IntegrityError, integrity_error_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(DBAPIError, database_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, unhandled_exception_handler)

@@ -53,7 +53,7 @@ async def test_reuse_invalidation_survives_the_request_rollback(committing_facto
     stolen = create_refresh_token(subject=str(user_id))
     access_before = create_access_token(subject=str(user_id))
 
-    await refresh_in_a_request(stolen)  # legitimate rotation
+    rotated = await refresh_in_a_request(stolen)  # legitimate rotation
     with pytest.raises(RefreshTokenReuseError):
         await refresh_in_a_request(stolen)  # replay
 
@@ -61,5 +61,8 @@ async def test_reuse_invalidation_survives_the_request_rollback(committing_facto
         reloaded = (
             await session.execute(select(UserORM).where(UserORM.id == user_id))
         ).scalar_one()
-    assert reloaded.tokens_valid_after is not None
-    assert not reloaded.accepts_token_issued_at(decode_token(access_before)["iat"] - 1)
+    # Committed although the replaying request was rolled back, and it ends the pair
+    # issued a moment ago as well as the older one.
+    assert reloaded.session_version == 1
+    assert not reloaded.accepts_session(decode_token(access_before)["sv"])
+    assert not reloaded.accepts_session(decode_token(rotated.refresh_token)["sv"])
