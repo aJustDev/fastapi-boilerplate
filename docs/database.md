@@ -91,6 +91,13 @@ class ItemRepo(BaseRepo[ItemORM]):
 Unknown filter keys are ignored and logged at warning level. Inject a repository in a router with
 `Annotated[ItemRepo, Depends(get_repo(ItemRepo))]`.
 
+A cursor is base64 of a JSON object with the `id` of the last row and, when the list is sorted by
+another field, the value of that field. It is client input: `decode_cursor` raises
+`InvalidCursorError` (400, `invalid_cursor`) for anything else, for a sort value that is not of
+the column's type, and for a cursor issued for a different `order_by`. Sort values are read back
+into the Python type of their column, so a list can be sorted by a timestamp. A field offered for
+sorting must be `NOT NULL`: the comparison of the next page has nothing to compare a NULL with.
+
 ## Helpers
 
 - `rowcount(result)`: rows affected by an `UPDATE` or `DELETE` executed with `session.execute`.

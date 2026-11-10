@@ -3,10 +3,13 @@ import json
 import logging
 from typing import Any, Literal, TypedDict
 
+from pydantic import TypeAdapter, ValidationError
+from pydantic_core import to_jsonable_python
 from sqlalchemy import Select, asc, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import Base
+from app.core.exceptions import InvalidCursorError
 
 logger = logging.getLogger(__name__)
 
@@ -18,15 +21,47 @@ class FieldMapping(TypedDict):
     op: FilterOp
 
 
+_MAX_ID = 2**63 - 1
+
+
 def encode_cursor(values: dict[str, Any]) -> str:
-    payload = json.dumps(values, default=str)
+    # JSON mode: a datetime leaves as ISO 8601, which `_cursor_value` reads back.
+    payload = json.dumps(to_jsonable_python(values))
     return base64.urlsafe_b64encode(payload.encode()).decode()
 
 
 def decode_cursor(cursor: str) -> dict[str, Any]:
-    payload = base64.urlsafe_b64decode(cursor.encode()).decode()
-    decoded: dict[str, Any] = json.loads(payload)
+    """The values of a cursor issued by `encode_cursor`.
+
+    A cursor is client input: anything that is not base64 of a JSON object with an
+    integer `id` raises InvalidCursorError instead of failing somewhere below.
+    """
+    try:
+        decoded = json.loads(base64.urlsafe_b64decode(cursor.encode()))
+    except ValueError as e:  # bad base64, bad UTF-8 and bad JSON are all ValueError
+        raise InvalidCursorError from e
+    if not isinstance(decoded, dict):
+        raise InvalidCursorError
+    cursor_id = decoded.get("id")
+    if type(cursor_id) is not int or not 1 <= cursor_id <= _MAX_ID:
+        raise InvalidCursorError
     return decoded
+
+
+def _cursor_value(column: Any, raw: Any) -> Any:
+    """The sort value of a cursor, back in the Python type of its column.
+
+    JSON has no datetime (or Decimal, or UUID): the value travels as a string and has to
+    be compared with the column as what it was. A value of another type is a forged cursor.
+    """
+    try:
+        python_type = column.type.python_type
+    except NotImplementedError:
+        return raw
+    try:
+        return TypeAdapter(python_type).validate_python(raw)
+    except ValidationError as e:
+        raise InvalidCursorError from e
 
 
 class BaseRepo[T: Base]:
@@ -188,7 +223,10 @@ class BaseRepo[T: Base]:
                 return stmt.where(self._pk > cursor_id)
             return stmt.where(self._pk < cursor_id)
 
-        cursor_value = cursor_data.get(sort_field)
+        if sort_field not in cursor_data:
+            # Issued for another order: paging on with it would skip or repeat rows.
+            raise InvalidCursorError
+        cursor_value = _cursor_value(sort_column, cursor_data[sort_field])
 
         if direction is asc:
             return stmt.where(

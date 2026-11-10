@@ -1,11 +1,20 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Request
 
 from app.core.config import settings
 from app.core.events.bus import EventBus
 from app.core.ratelimit import limiter
-from app.core.schema import CursorPaginatedResponse, PaginatedResponse, SortDir
+from app.core.schema import (
+    CursorPaginatedResponse,
+    CursorQuery,
+    IdPath,
+    PageQuery,
+    PageSizeQuery,
+    PaginatedResponse,
+    SearchQuery,
+    SortDir,
+)
 from app.deps.auth import CurrentUser
 from app.deps.events import get_event_bus
 from app.deps.repository import get_repo
@@ -41,11 +50,11 @@ async def list_items(
     request: Request,
     repo: ItemRepoDep,
     user: CurrentUser,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page: PageQuery = 1,
+    page_size: PageSizeQuery = 20,
     order_by: ItemSortField | None = None,
     order_dir: SortDir = SortDir.ASC,
-    name: str | None = None,
+    name: SearchQuery = None,
     category: ItemCategory | None = None,
     is_active: bool | None = None,
 ):
@@ -79,11 +88,11 @@ async def list_items_cursor(
     request: Request,
     repo: ItemRepoDep,
     user: CurrentUser,
-    cursor: str | None = None,
-    limit: int = Query(20, ge=1, le=100),
+    cursor: CursorQuery = None,
+    limit: PageSizeQuery = 20,
     order_by: ItemSortField | None = None,
     order_dir: SortDir = SortDir.ASC,
-    name: str | None = None,
+    name: SearchQuery = None,
     category: ItemCategory | None = None,
     is_active: bool | None = None,
 ):
@@ -112,7 +121,7 @@ async def list_items_cursor(
 
 @router.get("/{item_id}", response_model=ItemRead)
 @limiter.limit(settings.RATE_LIMIT_DEFAULT)
-async def get_item(request: Request, item_id: int, repo: ItemRepoDep, user: CurrentUser):
+async def get_item(request: Request, item_id: IdPath, repo: ItemRepoDep, user: CurrentUser):
     uc = GetItemUseCase(repo)
     item = await uc.execute(item_id)
     return ItemRead.model_validate(item)
@@ -136,7 +145,7 @@ async def create_item(
 @limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def update_item(
     request: Request,
-    item_id: int,
+    item_id: IdPath,
     body: ItemUpdate,
     repo: ItemRepoDep,
     user: CurrentUser,
@@ -152,7 +161,7 @@ async def update_item(
 @limiter.limit(settings.RATE_LIMIT_DEFAULT)
 async def delete_item(
     request: Request,
-    item_id: int,
+    item_id: IdPath,
     repo: ItemRepoDep,
     user: CurrentUser,
     event_bus: EventBusDep,

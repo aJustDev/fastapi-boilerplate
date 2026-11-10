@@ -10,7 +10,7 @@ requires an access token except the ones explicitly public (`docs/security.md`).
 
 | Endpoint | Input | Result |
 |---|---|---|
-| `POST /v1/auth/register` | JSON: `email`, `username`, `password` (8+ chars), `full_name` | 201 with the user |
+| `POST /v1/auth/register` | JSON: `email`, `username` (3-50 letters, digits, `.`, `_`, `-`), `password` (8-128 chars), `full_name` | 201 with the user |
 | `POST /v1/auth/login` | OAuth2 form: `username` (email or username), `password` | Access and refresh token |
 | `POST /v1/auth/refresh` | JSON: `refresh_token` | A new pair; the presented refresh token is revoked |
 | `POST /v1/auth/logout` | Bearer access token; optional JSON `refresh_token` | 204; revokes both |
@@ -30,7 +30,9 @@ issued before that second stops working; the user logs in again.
 **Login.** An unknown account still verifies the password against a dummy Argon2 hash, so the
 response time does not reveal which accounts exist. Email and username are matched
 case-insensitively, like their unique indexes. Hashing runs in the thread pool
-(`run_blocking`, `app/core/concurrency.py`).
+(`run_blocking`, `app/core/concurrency.py`). A username cannot contain `@`, so it can never be
+mistaken for another account's email. The login form is bounded in the service: an identifier or
+a password longer than registration allows, or with a NUL character, is a 401 before any query.
 
 ## Usage
 

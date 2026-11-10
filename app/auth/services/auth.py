@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from app.auth.models.user import UserORM
 from app.auth.repos.revoked_token import RevokedTokenRepo
 from app.auth.repos.user import UserRepo
-from app.auth.schemas.token import TokenResponse
+from app.auth.schemas.token import MAX_IDENTIFIER_LENGTH, MAX_PASSWORD_LENGTH, TokenResponse
 from app.core.concurrency import run_blocking
 from app.core.exceptions import AuthenticationError, ConflictError, RefreshTokenReuseError
 from app.core.security import (
@@ -36,6 +36,16 @@ class AuthService:
         self.revoked_token_repo = revoked_token_repo
 
     async def login(self, username: str, password: str) -> TokenResponse:
+        # The login form is not a schema: bound it here. Credentials no account can have
+        # (longer than registration allows, or with a NUL that PostgreSQL would refuse)
+        # are wrong credentials, not a query.
+        if (
+            len(username) > MAX_IDENTIFIER_LENGTH
+            or len(password) > MAX_PASSWORD_LENGTH
+            or "\x00" in username + password
+        ):
+            raise AuthenticationError("Invalid credentials")
+
         logger.debug("Looking up user credentials")
         user = await self.user_repo.get_by_email(username)
         if not user:

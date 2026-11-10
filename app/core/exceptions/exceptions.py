@@ -47,6 +47,16 @@ class BusinessValidationError(UseCaseException):
     code = "business_validation"
 
 
+class InvalidCursorError(UseCaseException):
+    """The pagination cursor was not issued by this API, or not for this ordering."""
+
+    status_code = 400
+    code = "invalid_cursor"
+
+    def __init__(self) -> None:
+        super().__init__("Invalid pagination cursor")
+
+
 class RepoException(DomainException):
     """Base for data access errors."""
 
