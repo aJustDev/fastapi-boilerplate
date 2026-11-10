@@ -46,7 +46,8 @@ The `PrometheusMiddleware` is an ASGI middleware (outermost in the stack) that w
 
 ### Label conventions
 
-- `path_template` uses the FastAPI route template (e.g., `/v1/items/{item_id}`), not the raw path. This prevents high-cardinality label explosion.
+- `path_template` is the template of the route that served the request (e.g., `/v1/items/{item_id}`), read from `scope["route"]` after the router matched it. A request that matches no route (404) is labeled `__unmatched__`, never with its raw path: every URL a scanner makes up would otherwise become its own series and the label cardinality would be unbounded. A wrong method on an existing path (405) keeps the route template.
+- `OPTIONS` (CORS preflights) and `HEAD` requests count in `http_requests_total` but do not observe `http_request_duration_seconds`: they are not API work and would skew the latency percentiles.
 - `status` is the HTTP status code as a string (e.g., `"200"`, `"404"`).
 - Requests to `/v1/metrics` and `/v1/health/*` are excluded from metrics to avoid self-referential noise.
 

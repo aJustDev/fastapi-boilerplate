@@ -41,3 +41,15 @@ class TestMetricsEndpoint:
             line for line in body.splitlines() if not line.startswith("#") and "/v1/metrics" in line
         ]
         assert sample_lines == [], f"Metrics endpoint should not track itself: {sample_lines}"
+
+    async def test_path_template_comes_from_the_real_router(self, client: AsyncClient):
+        # Through the real middleware stack: the label is the route template, and a
+        # path that matches no route gets a single fixed label.
+        await client.get("/v1/items/42")
+        await client.get("/v1/does-not-exist/42")
+
+        body = (await client.get("/v1/metrics")).text
+        assert 'path_template="/v1/items/{item_id}"' in body
+        assert 'path_template="__unmatched__"' in body
+        assert "/v1/items/42" not in body
+        assert "/v1/does-not-exist" not in body
