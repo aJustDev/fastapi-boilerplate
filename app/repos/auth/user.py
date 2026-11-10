@@ -1,6 +1,7 @@
 import logging
+from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
 from app.models.auth.user import UserORM
@@ -34,3 +35,7 @@ class UserRepo(BaseRepo[UserORM]):
         )
         result = await self.session.execute(stmt)
         return result.scalars().first()
+
+    async def invalidate_tokens(self, user_id: int, at: datetime) -> None:
+        stmt = update(UserORM).where(UserORM.id == user_id).values(tokens_valid_after=at)
+        await self.session.execute(stmt)

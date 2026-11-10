@@ -54,6 +54,14 @@ class AuthenticationError(AuthException):
         super().__init__(message)
 
 
+class RefreshTokenReuseError(AuthenticationError):
+    """A refresh token that was already rotated came back: it was stolen or leaked."""
+
+    def __init__(self, user_id: int):
+        self.user_id = user_id
+        super().__init__("Refresh token has been revoked")
+
+
 class AuthorizationError(AuthException):
     status_code = 403
 

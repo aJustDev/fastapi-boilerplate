@@ -18,6 +18,7 @@ CREATE TABLE users (
     password_hash   TEXT        NOT NULL,
     full_name       TEXT,
     is_active       BOOLEAN     NOT NULL DEFAULT TRUE,
+    tokens_valid_after TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ,
     created_by      TEXT,

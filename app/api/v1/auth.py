@@ -10,7 +10,12 @@ from app.deps.auth import CurrentUser, oauth2_scheme
 from app.deps.repository import get_repo
 from app.repos.auth.revoked_token import RevokedTokenRepo
 from app.repos.auth.user import UserRepo
-from app.schemas.auth.token import RefreshRequest, RegisterRequest, TokenResponse
+from app.schemas.auth.token import (
+    LogoutRequest,
+    RefreshRequest,
+    RegisterRequest,
+    TokenResponse,
+)
 from app.schemas.auth.user import UserRead
 from app.services.auth import AuthService
 from app.use_cases.auth.login import LoginUseCase
@@ -65,9 +70,10 @@ async def logout(
     request: Request,
     token: Annotated[str, Depends(oauth2_scheme)],
     service: AuthServiceDep,
+    body: LogoutRequest | None = None,
 ):
     uc = LogoutUseCase(service)
-    await uc.execute(token)
+    await uc.execute(token, body.refresh_token if body else None)
 
 
 @router.get("/me", response_model=UserRead)
