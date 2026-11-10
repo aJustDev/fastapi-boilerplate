@@ -33,6 +33,8 @@ def fake_user() -> UserORM:
     user.is_active = True
     user.password_hash = hash_password("testpass123")
     user.roles = []
+    user.session_version = 0
+    user.accepts_session = MagicMock(return_value=True)
     user.has_role = MagicMock(return_value=False)
     user.has_permission = MagicMock(return_value=False)
     return user
@@ -40,7 +42,7 @@ def fake_user() -> UserORM:
 
 @pytest.fixture
 def auth_headers(fake_user: UserORM) -> dict[str, str]:
-    token = create_access_token(subject=str(fake_user.id), scopes=[])
+    token = create_access_token(subject=str(fake_user.id))
     return {"Authorization": f"Bearer {token}"}
 
 

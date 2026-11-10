@@ -11,7 +11,8 @@ def _user() -> MagicMock:
     user.id = 1
     user.is_active = True
     user.roles = []
-    user.accepts_token_issued_at.return_value = True
+    user.session_version = 0
+    user.accepts_session.return_value = True
     return user
 
 

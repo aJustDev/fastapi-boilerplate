@@ -15,6 +15,7 @@ from app.core.security import (
     create_refresh_token,
     decode_token,
     hash_password,
+    needs_rehash,
     verify_password,
 )
 
@@ -62,6 +63,11 @@ class AuthService:
 
         if not user.is_active:
             raise AuthenticationError("Account is inactive")
+
+        if needs_rehash(user.password_hash):
+            # Hashed with parameters older than the current ones: this is the only moment
+            # the plain password is at hand to hash it again.
+            user.password_hash = await run_blocking(hash_password, password)
 
         return self._generate_tokens(user)
 
@@ -114,15 +120,9 @@ class AuthService:
                 raise AuthenticationError("Refresh token belongs to another user")
             await self._revoke(refresh)
 
-    async def invalidate_sessions(self, user_id: int) -> datetime:
-        """Reject every token of the user issued until now.
-
-        Truncated to the second because `iat` is an integer: a token issued later in the
-        same second must stay valid.
-        """
-        at = datetime.now(UTC).replace(microsecond=0)
-        await self.user_repo.invalidate_tokens(user_id, at)
-        return at
+    async def invalidate_sessions(self, user_id: int) -> None:
+        """End every session of the user: no token issued so far is accepted again."""
+        await self.user_repo.end_sessions(user_id)
 
     @staticmethod
     def _decode(token: str, expected_type: str) -> TokenPayload:
@@ -140,7 +140,7 @@ class AuthService:
             raise AuthenticationError("User not found")
         if not user.is_active:
             raise AuthenticationError("Account is inactive")
-        if not user.accepts_token_issued_at(payload["iat"]):
+        if not user.accepts_session(payload["sv"]):
             raise AuthenticationError("Session has been invalidated")
         return user
 
@@ -149,7 +149,8 @@ class AuthService:
         await self.revoked_token_repo.revoke(uuid.UUID(payload["jti"]), expires_at)
 
     def _generate_tokens(self, user: UserORM) -> TokenResponse:
-        role_names = [r.name for r in user.roles]
-        access_token = create_access_token(subject=str(user.id), scopes=role_names)
-        refresh_token = create_refresh_token(subject=str(user.id))
-        return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+        subject, version = str(user.id), user.session_version
+        return TokenResponse(
+            access_token=create_access_token(subject, version),
+            refresh_token=create_refresh_token(subject, version),
+        )

@@ -5,6 +5,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.repos.revoked_token import RevokedTokenRepo
+from app.core.security import JWT_LEEWAY_SECONDS
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
@@ -32,3 +33,14 @@ async def test_delete_expired_keeps_live_revocations(repo: RevokedTokenRepo):
     assert await repo.delete_expired() >= 1
     assert not await repo.is_revoked(expired)
     assert await repo.is_revoked(live)
+
+
+async def test_delete_expired_waits_for_the_leeway(repo: RevokedTokenRepo):
+    # A token is still accepted for JWT_LEEWAY_SECONDS after its `exp`. Its revocation
+    # must outlive that window, or a refresh token already used would work once more.
+    just_expired = uuid.uuid4()
+    await repo.revoke(just_expired, datetime.now(UTC) - timedelta(seconds=JWT_LEEWAY_SECONDS // 2))
+
+    await repo.delete_expired()
+
+    assert await repo.is_revoked(just_expired)

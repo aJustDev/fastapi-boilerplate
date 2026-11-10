@@ -18,14 +18,15 @@ requires an access token except the ones explicitly public (`docs/security.md`).
 
 On every authenticated request `get_current_user` (`app/deps/auth.py`) checks that the token is
 a valid `access` token, its `jti` is not revoked, the user exists and is active, and the token's
-`iat` is not older than `users.tokens_valid_after`.
+session version (claim `sv`) is the account's current `users.session_version`.
 
 **Refresh rotation and reuse.** Each refresh token works once: `RevokedTokenRepo.revoke` is an
 `INSERT ... ON CONFLICT DO NOTHING`, so of two requests with the same token only one succeeds.
 A token that was already used raises `RefreshTokenReuseError` (401, code `refresh_token_reused`)
-and `RefreshTokenUseCase` sets `tokens_valid_after = now()` (truncated to the second) in its own
-transaction, so it survives the rollback of the failing request. Every token of that user
-issued before that second stops working; the user logs in again.
+and `RefreshTokenUseCase` adds one to `users.session_version` in its own transaction, so it
+survives the rollback of the failing request. Every token issued so far carries the previous
+version and stops working, the pair handed out a moment before the replay included: whoever used
+the stolen token first loses the session too. The user logs in again.
 
 **Login.** An unknown account still verifies the password against a dummy Argon2 hash, so the
 response time does not reveal which accounts exist. Email and username are matched
@@ -62,15 +63,19 @@ roles `admin` and `user` and their permissions come from the migrations.
 
 ## Guarantees and limits
 
-- Tokens carry `sub`, `type`, `scopes` (role names), `jti`, `iat` and `exp`; `exp` is checked
-  with 30 s of leeway for clock skew.
-- Revocations live in `revoked_tokens` until the token would have expired anyway; the
-  `revoked_tokens_cleanup` job deletes them hourly.
+- Tokens carry `sub`, `type`, `sv` (session version), `jti`, `iat` and `exp`; `exp` is checked
+  with 30 s of leeway for clock skew. Roles and permissions are not in the token: they are read
+  from the database on every request, so a change applies at once.
+- Revocations live in `revoked_tokens` until the token would be rejected as expired anyway (`exp`
+  plus the leeway); the `revoked_tokens_cleanup` job deletes them hourly.
 - Logout without the refresh token leaves that refresh token valid until it expires.
 - Two clients refreshing with the same token at the same time (two tabs) look like a reuse and
   end the session: clients must serialize refreshes.
-- `iat` has second precision: a token issued in the same second as an invalidation stays valid.
-- Argon2id with time_cost=2, memory_cost=64 MiB, parallelism=2.
+- Ending the sessions of an account is a counter, not a timestamp: no token issued before it
+  survives, whatever its second. Tokens issued without an `sv` claim are rejected.
+- Argon2id with the argon2-cffi defaults (RFC 9106 low-memory profile). A hash made with older
+  parameters is replaced at its owner's next successful login (`needs_rehash`), and a stored
+  value that is not an Argon2 hash is a failed login, not an error.
 
 ## Files
 

@@ -33,7 +33,7 @@ def tokens():
                 "down": "yes",
                 "branch": (
                     "no",
-                    "Replay: every token of the user issued until now is rejected, then 401.",
+                    "Replay: every session of the account ends, then 401. The user logs in again.",
                     "bad",
                 ),
             },
@@ -48,7 +48,7 @@ def tokens():
             },
         ],
         note="Every authenticated request checks the access token: signature and expiry, not "
-        "revoked, user active, and issued after the last invalidation of the account.",
+        "revoked, user active, and issued for the current session version of the account.",
     )
 
 

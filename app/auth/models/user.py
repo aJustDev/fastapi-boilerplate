@@ -1,6 +1,4 @@
-from datetime import datetime
-
-from sqlalchemy import Boolean, DateTime, Index, Text, func, text
+from sqlalchemy import Boolean, Index, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.auth.models.role import RoleORM
@@ -23,10 +21,12 @@ class UserORM(Base, IntPkMixin, AuditMixin):
     is_active: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default=text("true"), nullable=False
     )
-    # Tokens issued before this instant are rejected: set when the account's sessions
-    # must end (a stolen refresh token was replayed).
-    tokens_valid_after: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), default=None
+    # Every token carries the value this had when it was issued (claim `sv`) and is
+    # accepted only while they match. Adding one ends every session of the account at
+    # once (a stolen refresh token was replayed). A counter, not a timestamp: `iat` has
+    # second precision, and a token issued in the same second as the cut would survive it.
+    session_version: Mapped[int] = mapped_column(
+        default=0, server_default=text("0"), nullable=False
     )
 
     roles: Mapped[list[RoleORM]] = relationship(
@@ -34,9 +34,9 @@ class UserORM(Base, IntPkMixin, AuditMixin):
         lazy="selectin",
     )
 
-    def accepts_token_issued_at(self, iat: float) -> bool:
-        """Whether a token with this `iat` (seconds) was issued after the last invalidation."""
-        return self.tokens_valid_after is None or iat >= self.tokens_valid_after.timestamp()
+    def accepts_session(self, session_version: object) -> bool:
+        """Whether a token issued at `session_version` still belongs to a live session."""
+        return type(session_version) is int and session_version == self.session_version
 
     def has_role(self, role_name: str) -> bool:
         return any(r.name == role_name for r in self.roles)

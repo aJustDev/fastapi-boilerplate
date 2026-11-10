@@ -1,12 +1,19 @@
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from argon2 import PasswordHasher
 
 from app.auth.models.user import UserORM
 from app.auth.services.auth import AuthService
 from app.core.exceptions import AuthenticationError, ConflictError, RefreshTokenReuseError
-from app.core.security import create_access_token, create_refresh_token, decode_token, hash_password
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    hash_password,
+    needs_rehash,
+    verify_password,
+)
 
 
 @pytest.fixture
@@ -36,7 +43,8 @@ def active_user() -> MagicMock:
     user.is_active = True
     user.password_hash = hash_password("correct_password")
     user.roles = []
-    user.accepts_token_issued_at.return_value = True
+    user.session_version = 0
+    user.accepts_session.return_value = True
     return user
 
 
@@ -49,6 +57,27 @@ class TestLogin:
         assert result.access_token
         assert result.refresh_token
         assert result.token_type == "bearer"
+
+    async def test_login_upgrades_a_hash_made_with_older_parameters(
+        self, auth_service, user_repo, active_user
+    ):
+        old = PasswordHasher(time_cost=1, memory_cost=8192, parallelism=1).hash("correct_password")
+        active_user.password_hash = old
+        user_repo.get_by_email.return_value = active_user
+
+        await auth_service.login("test@example.com", "correct_password")
+
+        assert active_user.password_hash != old
+        assert not needs_rehash(active_user.password_hash)
+        assert verify_password("correct_password", active_user.password_hash)
+
+    async def test_login_keeps_a_current_hash(self, auth_service, user_repo, active_user):
+        current = active_user.password_hash
+        user_repo.get_by_email.return_value = active_user
+
+        await auth_service.login("test@example.com", "correct_password")
+
+        assert active_user.password_hash == current
 
     async def test_login_by_username_success(self, auth_service, user_repo, active_user):
         user_repo.get_by_email.return_value = None
@@ -144,13 +173,35 @@ class TestRefresh:
 
         assert exc.value.user_id == 1
 
-    async def test_refresh_rejects_tokens_issued_before_invalidation(
+    async def test_refresh_rejects_a_token_of_an_ended_session(
         self, auth_service, user_repo, active_user
     ):
-        active_user.accepts_token_issued_at.return_value = False
+        active_user.accepts_session.return_value = False
         user_repo.get_by_id.return_value = active_user
 
         with pytest.raises(AuthenticationError, match="invalidated"):
+            await auth_service.refresh(create_refresh_token(subject="1", session_version=4))
+
+        active_user.accepts_session.assert_called_once_with(4)
+
+    async def test_new_tokens_carry_the_session_version_of_the_account(
+        self, auth_service, user_repo, active_user
+    ):
+        active_user.session_version = 5
+        user_repo.get_by_id.return_value = active_user
+
+        result = await auth_service.refresh(create_refresh_token(subject="1", session_version=5))
+
+        assert decode_token(result.access_token)["sv"] == 5
+        assert decode_token(result.refresh_token)["sv"] == 5
+
+    async def test_refresh_of_an_inactive_account_is_rejected(
+        self, auth_service, user_repo, active_user
+    ):
+        active_user.is_active = False
+        user_repo.get_by_id.return_value = active_user
+
+        with pytest.raises(AuthenticationError, match="inactive"):
             await auth_service.refresh(create_refresh_token(subject="1"))
 
     async def test_access_token_is_not_a_refresh_token(self, auth_service):
@@ -176,9 +227,7 @@ class TestLogout:
 
 
 class TestInvalidateSessions:
-    async def test_cut_off_is_truncated_to_the_second(self, auth_service, user_repo):
-        at = await auth_service.invalidate_sessions(1)
+    async def test_ends_the_sessions_of_that_user(self, auth_service, user_repo):
+        await auth_service.invalidate_sessions(1)
 
-        user_repo.invalidate_tokens.assert_called_once_with(1, at)
-        assert at.microsecond == 0
-        assert at <= datetime.now(UTC)
+        user_repo.end_sessions.assert_called_once_with(1)

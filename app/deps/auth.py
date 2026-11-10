@@ -46,7 +46,7 @@ async def get_current_user(
     if not user.is_active:
         raise AuthenticationError("Account is inactive")
 
-    if not user.accepts_token_issued_at(payload["iat"]):
+    if not user.accepts_session(payload["sv"]):
         raise AuthenticationError("Session has been invalidated")
 
     return user

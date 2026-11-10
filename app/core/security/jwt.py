@@ -6,42 +6,51 @@ import jwt
 
 from app.core.config import settings
 
+# Clock skew tolerated when checking `exp`. Whatever keeps a list of revoked tokens has to
+# keep each entry this much longer than the token's `exp`.
+JWT_LEEWAY_SECONDS = 30
+
 
 class TokenPayload(TypedDict):
     sub: str
     exp: float
     iat: float
     type: str
-    scopes: list[str]
+    sv: int
     jti: str
 
 
-def create_access_token(subject: str, scopes: list[str] | None = None) -> str:
+def _encode(subject: str, token_type: str, session_version: int, lifetime: timedelta) -> str:
     now = datetime.now(UTC)
-    expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {
         "sub": subject,
-        "scopes": scopes or [],
-        "exp": expire,
+        # Session version of the account when the token was issued: a token is accepted
+        # only while it matches the stored one (see UserORM.accepts_session).
+        "sv": session_version,
+        "exp": now + lifetime,
         "iat": now,
-        "type": "access",
+        "type": token_type,
         "jti": str(uuid.uuid4()),
     }
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def create_refresh_token(subject: str) -> str:
-    now = datetime.now(UTC)
-    expire = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    payload = {
-        "sub": subject,
-        "scopes": [],
-        "exp": expire,
-        "iat": now,
-        "type": "refresh",
-        "jti": str(uuid.uuid4()),
-    }
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+def create_access_token(subject: str, session_version: int = 0) -> str:
+    return _encode(
+        subject,
+        "access",
+        session_version,
+        timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+
+
+def create_refresh_token(subject: str, session_version: int = 0) -> str:
+    return _encode(
+        subject,
+        "refresh",
+        session_version,
+        timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+    )
 
 
 def decode_token(token: str) -> TokenPayload:
@@ -50,8 +59,8 @@ def decode_token(token: str) -> TokenPayload:
         token,
         settings.SECRET_KEY,
         algorithms=[settings.ALGORITHM],
-        options={"require": ["exp", "iat", "sub", "jti"], "verify_iat": True},
+        options={"require": ["exp", "iat", "sub", "jti", "sv"], "verify_iat": True},
         # An argument, not an option: PyJWT ignores a "leeway" key inside `options`.
-        leeway=30,
+        leeway=JWT_LEEWAY_SECONDS,
     )
     return cast("TokenPayload", payload)

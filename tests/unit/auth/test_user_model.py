@@ -1,19 +1,21 @@
-from datetime import UTC, datetime
-
 from app.auth.models.user import UserORM
 
 
-class TestAcceptsTokenIssuedAt:
-    cut_off = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+class TestAcceptsSession:
+    def test_a_token_of_the_current_version_is_accepted(self):
+        assert UserORM(session_version=3).accepts_session(3)
 
-    def test_no_cut_off_accepts_everything(self):
-        assert UserORM(tokens_valid_after=None).accepts_token_issued_at(0)
+    def test_a_token_of_an_earlier_version_is_rejected(self):
+        # The version was bumped after the token was issued: its session has ended.
+        assert not UserORM(session_version=3).accepts_session(2)
 
-    def test_token_issued_before_the_cut_off_is_rejected(self):
-        user = UserORM(tokens_valid_after=self.cut_off)
-        assert not user.accepts_token_issued_at(self.cut_off.timestamp() - 1)
+    def test_a_token_of_a_later_version_is_rejected(self):
+        assert not UserORM(session_version=3).accepts_session(4)
 
-    def test_token_issued_in_the_same_second_is_accepted(self):
-        # `iat` has second precision: a login right after the invalidation must work.
-        user = UserORM(tokens_valid_after=self.cut_off)
-        assert user.accepts_token_issued_at(self.cut_off.timestamp())
+    def test_only_an_integer_can_match(self):
+        # The claim comes from a token: "3", 3.0 or True are not the version 3.
+        user = UserORM(session_version=1)
+        assert not user.accepts_session("1")
+        assert not user.accepts_session(1.0)
+        assert not user.accepts_session(True)
+        assert not user.accepts_session(None)

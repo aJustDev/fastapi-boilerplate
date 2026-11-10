@@ -99,6 +99,20 @@ class TestGetCurrentUser:
                 revoked_token_repo=_revoked_token_repo(is_revoked=True),
             )
 
+    async def test_token_of_an_ended_session_raises_authentication_error(self, fake_user: UserORM):
+        # The account's session version moved on after this token was issued.
+        fake_user.accepts_session.return_value = False
+        token = create_access_token(subject=str(fake_user.id), session_version=2)
+        user_repo = AsyncMock()
+        user_repo.get_by_id.return_value = fake_user
+
+        with pytest.raises(AuthenticationError, match="Session has been invalidated"):
+            await get_current_user(
+                token=token, user_repo=user_repo, revoked_token_repo=_revoked_token_repo()
+            )
+
+        fake_user.accepts_session.assert_called_once_with(2)
+
 
 class TestRequirePermissions:
     async def test_role_check_passes(self, fake_user: UserORM):
