@@ -13,7 +13,7 @@ The `Dockerfile` has two stages:
 | Stage | What it does |
 |---|---|
 | `builder` | Installs the locked dependencies (`uv sync --frozen --no-dev`) into `/build/.venv`, then installs the project itself so `importlib.metadata` can read its version |
-| `runtime` | Copies the virtualenv and an allow-list of files (`main.py`, `app/`), removes pip, runs as uid 1000 with `TZ=UTC` |
+| `runtime` | Copies the virtualenv and an allow-list of files (`main.py`, `app/`, `alembic.ini`, `migrations/`), removes pip, runs as uid 1000 with `TZ=UTC` |
 
 Dependencies are installed before the code is copied, so a code change reuses the cached
 dependency layer. `uv` comes from a pinned image tag (`ghcr.io/astral-sh/uv:<version>`) so a uv
@@ -43,11 +43,13 @@ comment.
 ## Local development with compose
 
 ```bash
-docker compose up db -d          # PostgreSQL on localhost:${DB_PORT:-5434}
-docker compose up --build        # PostgreSQL + API with --reload, code mounted from the host
+docker compose up db -d          # PostgreSQL 18 on localhost:${DB_PORT:-5434}
+docker compose up --build        # db, then migrate (alembic upgrade head), then the API
 ```
 
-The `api` service mounts the repository on `/app` and runs uvicorn with `--reload`, so the image
+`migrate` runs the image with `alembic upgrade head` and exits; `api` starts only if it
+succeeded (see `docs/migrations.md`). The data volume is `pgdata18`: a volume created by an older
+PostgreSQL major version cannot be reused, so the name changes with the major version. The `api` service mounts the repository on `/app` and runs uvicorn with `--reload`, so the image
 content is only used for its virtualenv. `docker-compose.observability.yml` adds Prometheus and
 Grafana (see `docs/metrics.md`).
 

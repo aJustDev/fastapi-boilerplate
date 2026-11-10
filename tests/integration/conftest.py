@@ -8,13 +8,14 @@ import app.models  # noqa: F401 -- register all ORM models in Base.metadata
 from app.core.db import Base
 from app.core.security import hash_password
 from app.models.auth.user import UserORM
+from tests.integration.alembic_helpers import run_alembic
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
 
 @pytest.fixture(scope="session")
 def pg_container():
-    with PostgresContainer("postgres:16-alpine", driver="asyncpg") as pg:
+    with PostgresContainer("postgres:18-alpine", driver="asyncpg") as pg:
         yield pg
 
 
@@ -25,9 +26,16 @@ def pg_url(pg_container):
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
 async def async_engine(pg_url):
+    """Engine on a database built by the migrations, the same way production is.
+
+    `create_all` would build the schema from the ORM and hide any drift between the
+    models and the migrations. AUTOCOMMIT lets migrations that need it run their own
+    statements outside a transaction (CREATE INDEX CONCURRENTLY).
+    """
     engine = create_async_engine(pg_url, echo=False)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    async with engine.connect() as conn:
+        autocommit = await conn.execution_options(isolation_level="AUTOCOMMIT")
+        await autocommit.run_sync(run_alembic)
     yield engine
     await engine.dispose()
 

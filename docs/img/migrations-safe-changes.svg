@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-3 -3 766 304" width="766" height="304" font-family="Liberation Sans, DejaVu Sans, Arial, sans-serif">
+<g class="mig-f2">
+<text x="306.0" y="20" text-anchor="middle"><tspan font-weight="bold" fill="#b03a2e" font-size="12">Unsafe</tspan></text>
+<text x="615.0" y="20" text-anchor="middle"><tspan font-weight="bold" fill="#2e7d32" font-size="12">Safe</tspan></text>
+<text x="0" y="58" text-anchor="start"><tspan font-weight="bold" fill="#222" font-size="13">Rename a column</tspan></text>
+<text x="0" y="75" text-anchor="start"><tspan fill="#6b7785" font-size="11.5">the old code is still</tspan></text>
+<text x="0" y="90" text-anchor="start"><tspan fill="#6b7785" font-size="11.5">running</tspan></text>
+<rect x="170" y="34" width="272" height="80" rx="8" fill="#fbeaea" stroke="#b03a2e" stroke-width="1.2"/>
+<path d="M192 44 L204 65 H180 Z" fill="#b03a2e" stroke="#b03a2e" stroke-width="2" stroke-linejoin="round"/>
+<path d="M192 51 V58 M192 61.5 V62" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+<text x="214" y="60" text-anchor="start"><tspan fill="#222" font-size="12">One migration renames it: the running</tspan></text>
+<text x="214" y="75" text-anchor="start"><tspan fill="#222" font-size="12">version fails until the deploy ends.</tspan></text>
+<polyline points="446.0,74.0 460.0,74.0" fill="none" stroke="#2e7d32" stroke-width="2"/>
+<polygon points="466,74.0 458.9,77.8 458.9,70.2" fill="#2e7d32"/>
+<rect x="470" y="34" width="290" height="80" rx="8" fill="#e8f3e9" stroke="#2e7d32" stroke-width="1.2"/>
+<circle cx="492" cy="56" r="12" fill="#2e7d32"/>
+<path d="M486.5 56.5 l3.8 4 l7.5 -8.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="514" y="60" text-anchor="start"><tspan fill="#222" font-size="12">Add the new column, write both,</tspan></text>
+<text x="514" y="75" text-anchor="start"><tspan fill="#222" font-size="12">backfill, read the new one, drop the old</tspan></text>
+<text x="514" y="90" text-anchor="start"><tspan fill="#222" font-size="12">one later.</tspan></text>
+<text x="0" y="150" text-anchor="start"><tspan font-weight="bold" fill="#222" font-size="13">Index a big table</tspan></text>
+<text x="0" y="167" text-anchor="start"><tspan fill="#6b7785" font-size="11.5">writes keep coming</tspan></text>
+<rect x="170" y="126" width="272" height="80" rx="8" fill="#fbeaea" stroke="#b03a2e" stroke-width="1.2"/>
+<path d="M192 136 L204 157 H180 Z" fill="#b03a2e" stroke="#b03a2e" stroke-width="2" stroke-linejoin="round"/>
+<path d="M192 143 V150 M192 153.5 V154" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+<text x="214" y="152" text-anchor="start"><tspan fill="#222" font-size="12">CREATE INDEX blocks every write until</tspan></text>
+<text x="214" y="167" text-anchor="start"><tspan fill="#222" font-size="12">the index is built.</tspan></text>
+<polyline points="446.0,166.0 460.0,166.0" fill="none" stroke="#2e7d32" stroke-width="2"/>
+<polygon points="466,166.0 458.9,169.8 458.9,162.2" fill="#2e7d32"/>
+<rect x="470" y="126" width="290" height="80" rx="8" fill="#e8f3e9" stroke="#2e7d32" stroke-width="1.2"/>
+<circle cx="492" cy="148" r="12" fill="#2e7d32"/>
+<path d="M486.5 148.5 l3.8 4 l7.5 -8.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="514" y="152" text-anchor="start"><tspan fill="#222" font-size="12">Build it CONCURRENTLY, outside the</tspan></text>
+<text x="514" y="167" text-anchor="start"><tspan fill="#222" font-size="12">migration transaction.</tspan></text>
+<text x="0" y="242" text-anchor="start"><tspan font-weight="bold" fill="#222" font-size="13">Add a foreign key or</tspan></text>
+<text x="0" y="259" text-anchor="start"><tspan font-weight="bold" fill="#222" font-size="13">CHECK</tspan></text>
+<text x="0" y="276" text-anchor="start"><tspan fill="#6b7785" font-size="11.5">on a table with data</tspan></text>
+<rect x="170" y="218" width="272" height="80" rx="8" fill="#fbeaea" stroke="#b03a2e" stroke-width="1.2"/>
+<path d="M192 228 L204 249 H180 Z" fill="#b03a2e" stroke="#b03a2e" stroke-width="2" stroke-linejoin="round"/>
+<path d="M192 235 V242 M192 245.5 V246" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+<text x="214" y="244" text-anchor="start"><tspan fill="#222" font-size="12">Validating every row holds a lock</tspan></text>
+<text x="214" y="259" text-anchor="start"><tspan fill="#222" font-size="12">that blocks writes for the whole</tspan></text>
+<text x="214" y="274" text-anchor="start"><tspan fill="#222" font-size="12">scan.</tspan></text>
+<polyline points="446.0,258.0 460.0,258.0" fill="none" stroke="#2e7d32" stroke-width="2"/>
+<polygon points="466,258.0 458.9,261.8 458.9,254.2" fill="#2e7d32"/>
+<rect x="470" y="218" width="290" height="80" rx="8" fill="#e8f3e9" stroke="#2e7d32" stroke-width="1.2"/>
+<circle cx="492" cy="240" r="12" fill="#2e7d32"/>
+<path d="M486.5 240.5 l3.8 4 l7.5 -8.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="514" y="244" text-anchor="start"><tspan fill="#222" font-size="12">Add it NOT VALID, then VALIDATE in a</tspan></text>
+<text x="514" y="259" text-anchor="start"><tspan fill="#222" font-size="12">later step with a weaker lock.</tspan></text>
+</g>
+</svg>

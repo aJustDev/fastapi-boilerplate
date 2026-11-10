@@ -1,6 +1,8 @@
 from collections.abc import AsyncGenerator
+from datetime import datetime
 from typing import Any, cast
 
+from sqlalchemy import DateTime, MetaData, Text
 from sqlalchemy.engine import CursorResult, Result, make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
@@ -42,8 +44,22 @@ def rowcount(result: Result[Any]) -> int:
     return cast("CursorResult[Any]", result).rowcount
 
 
+# Deterministic constraint and index names: Alembic needs a name to drop or alter
+# anything, and generated names would differ between databases.
+NAMING_CONVENTION = {
+    "ix": "ix_%(table_name)s_%(column_0_N_name)s",
+    "uq": "uq_%(table_name)s_%(column_0_N_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
+
 class Base(DeclarativeBase):
-    pass
+    metadata = MetaData(naming_convention=NAMING_CONVENTION)
+    # Every timestamp is timezone-aware and every unbounded string is TEXT, like the
+    # database; a column declares another type explicitly when it needs one.
+    type_annotation_map = {datetime: DateTime(timezone=True), str: Text}
 
 
 async def get_session() -> AsyncGenerator[AsyncSession]:

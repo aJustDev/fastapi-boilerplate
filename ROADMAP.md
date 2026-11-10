@@ -8,7 +8,7 @@ Current state of the boilerplate and what comes next. Items are grouped by prior
 - [x] Async SQLAlchemy 2.x + asyncpg
 - [x] Domain exception hierarchy with global HTTP handlers
 - [x] CORS configuration
-- [x] SQL-first migrations (schema, deltas, seeds)
+- [x] Alembic migrations (async env, reference data as migrations, drift test)
 - [x] Health check endpoints (used by Docker and scheduled jobs)
 - [x] JWT auth with access + refresh tokens, Argon2 hashing, permission guards
 - [x] Repository pattern with offset + cursor pagination and field filtering

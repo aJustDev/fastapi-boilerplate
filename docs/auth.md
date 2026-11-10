@@ -44,7 +44,9 @@ figure compares the old behavior with the current one for this and three other c
   back, which would otherwise undo the countermeasure. From then on every token with an older
   `iat` is rejected, the thief's and the user's alike; the user logs in again.
 - **Second precision.** `iat` is an integer, so the cut-off is truncated to the second: a login
-  right after the invalidation must not be rejected.
+  right after the invalidation must not be rejected. The flip side: a token issued in the same
+  second as the invalidation (for example by the refresh that preceded the replay) stays valid
+  until it expires.
 - **Timing.** A login for an unknown account verifies the password against a dummy argon2 hash,
   so it takes as long as a wrong password and does not reveal which accounts exist.
 - **Case.** Email and username lookups use `LOWER(...)`, like the unique indexes.

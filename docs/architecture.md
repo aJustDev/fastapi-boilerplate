@@ -51,17 +51,16 @@ Response ← Router ← Schema.model_validate(orm_obj) ←───────�
 5. `app/use_cases/{domain}/` — Use case(s) orchestrating the service
 6. `app/api/v1/{domain}.py` — Router with endpoints
 7. Register router in `app/api/v1/__init__.py`
-8. Add SQL to `sql/schema.sql` + delta in `sql/deltas/`
+8. Add a migration in `migrations/versions/` (see `docs/migrations.md`)
 9. Add tests in `tests/unit/{domain}/` and `tests/integration/{domain}/`
 10. If the module publishes events: inject `EventBus` in use cases, add handlers in `app/core/events/handlers/`, register in `handlers/__init__.py`. See `docs/event-bus.md`.
 
-## SQL management
+## Schema management
 
-- `sql/schema.sql` — full DDL (source of truth)
-- `sql/deltas/NNN_description.sql` — incremental changes
-- `sql/seeds/` — initial data
-- `bash sql/reset.sh` — drop + recreate + schema + seeds
-- `bash sql/apply.sh` — apply pending deltas (tracked in `_schema_migrations`)
+- `migrations/versions/` — Alembic revisions, the only source of truth for the schema
+- `uv run alembic upgrade head` — apply them; in compose, the `migrate` service does it
+- `scripts/seed_dev.py` — development data (admin user, sample items)
+- See `docs/migrations.md` and `docs/database.md`
 
 ## Conventions
 
@@ -70,4 +69,4 @@ Response ← Router ← Schema.model_validate(orm_obj) ←───────�
 - Absolute imports from `app.`
 - English
 - Composition over inheritance
-- No Alembic — SQL scripts only
+- Alembic for schema changes; migrations never run in the app lifespan

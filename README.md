@@ -12,12 +12,12 @@ A solid foundation for building production-grade backends that scale from small 
 - **Prometheus metrics** — Request count, latency histograms, DB pool health at `/v1/metrics`. See `docs/metrics.md`
 - **Repository pattern** — Generic `BaseRepo[T]` with offset and cursor pagination, filtering, and field mapping
 - **Use-case orchestration** — Thin use cases coordinate services and publish events, keeping business logic reusable
-- **SQL-first migrations** — No Alembic; plain SQL schema, deltas, and seeds managed via shell scripts
+- **Alembic migrations** — Async `env.py`, reference data as migrations, applied by a separate `migrate` step; tests fail if the models and the migrated schema drift apart
 
 ## Stack
 
 - Python 3.14 / FastAPI / Pydantic v2
-- SQLAlchemy 2.1 async + asyncpg + PostgreSQL 16
+- SQLAlchemy 2.1 async + asyncpg + PostgreSQL 18, Alembic
 - JWT (PyJWT) + Argon2 password hashing
 - Docker + docker-compose
 
@@ -27,11 +27,12 @@ A solid foundation for building production-grade backends that scale from small 
 # 1. Start PostgreSQL
 docker compose up db -d
 
-# 2. Create schema and seed initial data
-bash sql/reset.sh
-
-# 3. Install dependencies (dev group included)
+# 2. Install dependencies (dev group included)
 uv sync
+
+# 3. Apply migrations and add development data (admin@example.com / admin123)
+uv run alembic upgrade head
+uv run python scripts/seed_dev.py
 
 # 4. Install git hooks (pre-commit + pre-push)
 bash scripts/install-hooks.sh
@@ -46,8 +47,8 @@ open http://localhost:8000/docs
 ## Docker setup
 
 ```bash
-docker compose up --build
-bash sql/reset.sh  # in another terminal
+docker compose up --build   # db, then migrate (alembic upgrade head), then api
+docker compose exec api python scripts/seed_dev.py
 ```
 
 ## Project structure
@@ -131,21 +132,21 @@ bash scripts/ci-local.sh          # everything CI checks, in the same order
 
 See `docs/testing.md` and `docs/tooling.md`.
 
-## SQL migrations
+## Migrations
 
 ```bash
-# Full reset (drop + schema + seeds)
-bash sql/reset.sh
-
-# Apply pending deltas
-bash sql/apply.sh
+uv run alembic upgrade head                                  # apply pending migrations
+uv run alembic revision --autogenerate -m "describe change"  # draft one from the models
 ```
+
+See `docs/migrations.md`.
 
 See `docs/architecture.md` for the full guide on adding a new module.
 
 ## Docs
 
 - `docs/architecture.md`: layers and how to add a module
+- `docs/database.md`, `docs/migrations.md`: sessions, models, repositories and schema changes
 - `docs/configuration.md`: settings, env files and validators
 - `docs/auth.md`, `docs/event-bus.md`, `docs/jobs.md`, `docs/logging.md`, `docs/metrics.md`
 - `docs/testing.md`, `docs/tooling.md`, `docs/docker.md`

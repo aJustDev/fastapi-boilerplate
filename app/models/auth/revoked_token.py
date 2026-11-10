@@ -12,7 +12,9 @@ class RevokedTokenORM(Base):
     __tablename__ = "revoked_tokens"
 
     jti: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
     revoked_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

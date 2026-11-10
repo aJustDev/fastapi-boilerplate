@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -55,18 +55,19 @@ class OutboxEventORM(Base):
     )
 
     __table_args__ = (
+        CheckConstraint("status IN ('PENDING', 'PROCESSED', 'FAILED')", name="status"),
         Index(
-            "outbox_events_pending_idx",
+            "ix_outbox_events_pending",
             "scheduled_at",
             postgresql_where=(status == "PENDING"),
         ),
         Index(
-            "outbox_events_aggregate_idx",
+            "ix_outbox_events_aggregate_id",
             "aggregate_id",
             postgresql_where=(aggregate_id.isnot(None)),
         ),
         Index(
-            "outbox_events_correlation_idx",
+            "ix_outbox_events_correlation_id",
             "correlation_id",
             postgresql_where=(correlation_id.isnot(None)),
         ),

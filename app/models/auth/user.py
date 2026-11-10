@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Text
+from sqlalchemy import Boolean, DateTime, Index, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -11,12 +11,20 @@ from app.models.mixins.id import IntPkMixin
 
 class UserORM(Base, IntPkMixin, AuditMixin):
     __tablename__ = "users"
+    __table_args__ = (
+        # Uniqueness ignores case: "Foo@x.com" and "foo@x.com" are the same account.
+        Index("uq_users_email_lower", func.lower(text("email")), unique=True),
+        Index("uq_users_username_lower", func.lower(text("username")), unique=True),
+        Index("ix_users_is_active", "is_active", postgresql_where=text("is_active = true")),
+    )
 
-    email: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    username: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    username: Mapped[str] = mapped_column(Text, nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     full_name: Mapped[str | None] = mapped_column(Text, default=None)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=text("true"), nullable=False
+    )
     # Tokens issued before this instant are rejected: set when the account's sessions
     # must end (a stolen refresh token was replayed).
     tokens_valid_after: Mapped[datetime | None] = mapped_column(
