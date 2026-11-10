@@ -72,7 +72,7 @@ class PrometheusMiddleware:
         """Full template (e.g. /v1/items/{item_id}) of the route that served the request.
 
         FastAPI's router sets `scope["route"]` when a path matches (also on a 405 for a
-        wrong method); no route means the path matched nothing (404). Since FastAPI 0.140
+        wrong method); no route means the path matched nothing (404). Since FastAPI 0.137
         included routers are not flattened: `route.path` is the path declared in the child
         router, without the prefixes, so the full one comes from the route contexts.
         """

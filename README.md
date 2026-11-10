@@ -1,20 +1,23 @@
 # FastAPI Boilerplate
 
-A solid foundation for building production-grade backends that scale from small projects to mid-large ones without accumulating infrastructure complexity. Includes a transactional event bus and a recurring job scheduler built entirely on PostgreSQL — no Redis, RabbitMQ, or Celery needed. A single database handles persistence, messaging, and scheduling, keeping the stack minimal while supporting multi-worker deployments out of the box.
+A solid foundation for building production-grade backends that scale from small projects to mid-large ones without accumulating infrastructure complexity. Includes a transactional event bus and a recurring job scheduler built entirely on PostgreSQL — no Redis, RabbitMQ, or Celery needed. A single database handles persistence, messaging, and scheduling, and both the event bus and the scheduler are safe with any number of processes or replicas.
 
 - **Async everything** — SQLAlchemy 2.x + asyncpg, fully non-blocking from route to database
-- **JWT auth** — Access + refresh tokens, Argon2 password hashing, permission-based guards
+- **JWT auth** — Access tokens and single-use refresh tokens with reuse detection, Argon2 password hashing
+- **Authorization** — A permission on every route and an ownership check on every resource, with a test that sends a second user against each route
 - **Transactional Outbox event bus** — Domain events persisted atomically and dispatched via PostgreSQL `LISTEN/NOTIFY` with per-handler retry, isolation, and timeout
-- **Scheduled jobs** — Recurring tasks with `FOR UPDATE SKIP LOCKED` for multi-worker safety, no Redis or Celery required
+- **Scheduled jobs** — Recurring tasks claimed with an atomic conditional update and a lease, safe with several workers, no Redis or Celery required
 - **Configurable connection pool** — `pool_size`, `max_overflow`, `pool_timeout` via env vars, safe defaults for multi-worker deployments
 - **Structured logging + request tracing** — JSON logs in production, colored in development, per-request `request_id` across all layers. See `docs/logging.md`
-- **Rate limiting** — Every endpoint declares a limit (`strict` for login/register/refresh, `default` for the rest), checked by a test
-- **Error contract** — Every error is `{detail, code}` with a stable code, published in OpenAPI; see `docs/errors.md`
+- **Rate limiting** — Every endpoint is limited at its tier (`strict` for login/register/refresh, `default` for the rest), checked by a test. Counters are in memory, per process
+- **Error contract** — Every error is `{detail, code}` with a stable code, and every route declares in OpenAPI the errors it answers; see `docs/errors.md`
 - **HTTP hardening** — Security headers, trusted hosts and proxies, database timeouts; see `docs/security.md`
-- **Prometheus metrics** — Request count, latency histograms, DB pool health at `/v1/metrics`. See `docs/metrics.md`
+- **Prometheus metrics** — Request count, latency histograms, DB pool health and outbox counters at `/v1/metrics`, per process. See `docs/metrics.md`
+- **Operations** — Health probes that follow the database, `python -m app.cli` (first admin, outbox replay, a worker-only process) and a deployment guide. See `docs/operations.md` and `docs/deployment.md`
 - **Repository pattern** — Generic `BaseRepo[T]` with offset and cursor pagination, filtering, and field mapping
 - **Bounded contexts** — `app/<context>/` with its own layers; use cases orchestrate services; import-linter enforces the boundaries
 - **Alembic migrations** — Async `env.py`, reference data as migrations, applied by a separate `migrate` step; tests fail if the models and the migrated schema drift apart
+- **Tests at four levels** — Unit, functional, integration on real PostgreSQL, and whole requests against it; meta-tests keep the rules above true
 
 ## Stack
 
@@ -67,6 +70,7 @@ app/
   auth/          Context: users, roles, permissions, tokens
   items/         Context: example CRUD with events
   db_registry.py Imports every model and handler module
+  cli.py         python -m app.cli: first admin, outbox maintenance, worker process
 migrations/      Alembic revisions
 tests/           unit/, functional/, integration/, each split by context
 ```
@@ -82,8 +86,8 @@ Persistent event bus using the **Transactional Outbox** pattern with PostgreSQL 
 - One event per transaction: safe with several workers or replicas
 - Woken up by NOTIFY on commit, with polling as fallback
 - Per-handler isolation with timeout and exponential backoff
-- Succeeded handlers are skipped on retry (no duplicate side effects)
-- Cleanup and replay utilities for production operations
+- Succeeded handlers are skipped on retry; delivery is at least once, so handlers are idempotent
+- A daily cleanup job, and a command to replay failed events
 
 See `docs/event-bus.md` for the full guide.
 
@@ -132,7 +136,8 @@ See `docs/auth.md` for rotation, reuse detection and the rest of the session mod
 ```bash
 uv run pytest tests/unit          # unit: no DB, no HTTP
 uv run pytest tests/functional    # functional: HTTP through the app, DB mocked
-uv run pytest tests/integration   # integration: real PostgreSQL via testcontainers (Docker)
+uv run pytest tests/integration   # integration: real PostgreSQL via testcontainers (Docker),
+                                  # including whole requests in tests/integration/api
 uv run pytest                     # all of them
 
 bash scripts/ci-local.sh          # everything CI checks, in the same order
@@ -144,7 +149,7 @@ See `docs/testing.md` and `docs/tooling.md`.
 
 ```bash
 uv run alembic upgrade head                                  # apply pending migrations
-uv run alembic revision --autogenerate -m "describe change"  # draft one from the models
+uv run alembic revision --autogenerate --rev-id 0008 -m "describe change"  # draft the next one
 ```
 
 See `docs/migrations.md`.
@@ -158,6 +163,7 @@ See `docs/architecture.md` for the full guide on adding a new module.
 - `docs/configuration.md`: settings, env files and validators
 - `docs/auth.md`, `docs/event-bus.md`, `docs/jobs.md`, `docs/logging.md`, `docs/metrics.md`
 - `docs/errors.md`, `docs/security.md`
+- `docs/operations.md`, `docs/deployment.md`: health endpoints, the command line, going to production
 - `docs/testing.md`, `docs/tooling.md`, `docs/docker.md`
 - `docs/adr/`: architecture decision records
 - `CHANGELOG.md`

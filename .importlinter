@@ -19,7 +19,7 @@ layers =
     use_cases
     (services)
     repos
-    models | schemas
+    models | schemas | (exceptions)
 exhaustive = true
 
 # Infrastructure does not know the domain: contexts plug into it (handlers register

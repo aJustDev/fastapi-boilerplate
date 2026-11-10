@@ -21,12 +21,16 @@ app/api/v1/       composes the context routers, plus health and metrics
 app/<context>/    auth, items: models/ schemas/ repos/ services/ use_cases/ api/
                   (+ event_handlers/, jobs/)
 app/db_registry.py  imports every model and handler module
+app/cli.py        python -m app.cli: create-admin, outbox replay/cleanup, worker
 migrations/       Alembic revisions
-tests/            unit/ functional/ integration/, each split by context
+tests/            unit/ functional/ integration/ (with integration/api/: whole requests on
+                  PostgreSQL), each split by context
 ```
 
 Request flow: router -> one use case -> services (business rules) -> repos -> models.
-Use cases orchestrate; plain CRUD may go from use case to repository.
+Use cases orchestrate; plain CRUD may go from use case to repository. Every route has a
+permission guard and a rate limit; anything addressed by id is checked for ownership in its use
+case; the session commits before the response is sent.
 
 ## Commands
 
@@ -38,7 +42,8 @@ Use cases orchestrate; plain CRUD may go from use case to repository.
 - `uv run mypy app main.py`, `uv run lint-imports`
 - `uv run alembic upgrade head`, `uv run alembic revision --autogenerate --rev-id NNNN -m "..."`
 - `uv run python scripts/seed_dev.py` - local admin (admin@example.com / admin123) and sample items
-- `docker compose up --build` - db, migrate, api
+- `uv run python -m app.cli --help` - create-admin, outbox replay/cleanup, worker
+- `docker compose up --build` - db, migrate, api (needs `.env.local`: `cp .env.example .env.local`)
 
 ## Conventions
 
@@ -58,10 +63,19 @@ Use cases orchestrate; plain CRUD may go from use case to repository.
   `Base.metadata`, the dispatcher or the job registry.
 - Migrations never run in the app lifespan; the `migrate` step runs them before the API.
 - The test suite reads no `.env` file (`SETTINGS_ENV_FILE=""` in `tests/conftest.py`).
+- `ENVIRONMENT` has no default: outside a test or a checkout with `.env.local`, the app does not
+  import without it. Outside `local`, hosts, origins and trusted proxies must be set explicitly.
+- A session dependency must be `Depends(get_session, scope="function")`: with the default scope
+  the commit runs after the response is sent.
+- `@limiter.limit(...)` goes under `@router...`; above it the route is not limited.
+- Event handlers take `(payload, event_id)` and must raise unless the work was done.
+- Fix a bug with a test that fails first; what a mocked session cannot show (what is stored, who
+  may touch it, malformed input) is tested in `tests/integration/api/`.
 - The pre-commit hook stashes unstaged changes and runs `uv run`, which syncs the venv to the
   stashed `pyproject.toml`: commit dependency changes first, in their own commit.
 
 ## Rules (`.claude/rules/`)
 
 `api-endpoints`, `context-boundaries`, `migrations`, `tests`, `env-vars`, `docs`. Each ends with
-how it is enforced.
+how it is enforced. Guides worth reading first: `docs/security.md` (authorization),
+`docs/operations.md`, `docs/deployment.md`.

@@ -56,6 +56,7 @@ by global handlers.
 | Contexts do not import each other | `.importlinter`, contracts `items-auth`, `auth-items` |
 | An endpoint runs at most one use case | `tests/unit/test_api_endpoint_single_use_case.py` |
 | The models match the migrations | `tests/integration/test_migrations.py` |
+| A route does not serve the resource of another user | `tests/integration/api/test_authorization.py` |
 
 `uv run lint-imports` runs the contracts; CI runs it on every PR. A justified exception goes in
 `ignore_imports` with a comment; several of the same kind mean the rule needs revisiting.
@@ -71,14 +72,24 @@ never runs: the event bus then retries its events until they fail (see `docs/eve
 ## Adding a context
 
 1. `app/<context>/` with the layers it needs (`models/ schemas/ repos/ services/ use_cases/
-   api/`, plus `event_handlers/` or `jobs/`), each with an `__init__.py`.
-2. Models on `app.core.db.Base` with `IntPkMixin`/`AuditMixin`; repositories on `BaseRepo[T]`.
-3. Router in `app/<context>/api/router.py`, included in `app/api/v1/__init__.py`.
+   api/`, plus `event_handlers/` or `jobs/`), each with an `__init__.py`. Every module of a
+   context is in one of those layers; its own exceptions may go in `app/<context>/exceptions.py`.
+2. Models on `app.core.db.Base` with `IntPkMixin`/`AuditMixin`; repositories on `BaseRepo[T]`;
+   request schemas with the bounded types of `app/core/schema.py`.
+3. Router in `app/<context>/api/router.py`, included in `app/api/v1/__init__.py`. Each route
+   gets a permission guard, a rate limit and the error responses it can answer; anything
+   addressed by id gets an ownership check in its use case (`docs/security.md`).
 4. Imports of its models and handlers in `app/db_registry.py`.
-5. The context in the `containers` of the `layers` contract, and `forbidden` contracts against
-   the other contexts, in `.importlinter`.
-6. A migration (`docs/migrations.md`) and tests in `tests/{unit,functional,integration}/<context>/`.
-7. A doc in `docs/` if it brings a new piece of infrastructure or a non-obvious flow.
+5. In `.importlinter`: the context in the `containers` of the `layers` contract, and a
+   `forbidden` contract against each other context. A context that takes the current user from
+   `app.deps` needs `allow_indirect_imports = true` in its contract against `app.auth`, like
+   `items-auth`: `app.deps.auth` imports the user model.
+6. A migration for its tables, its permissions and the roles that get them, and the rows of its
+   jobs (`docs/migrations.md`).
+7. Tests in `tests/{unit,functional,integration}/<context>/`, requests in
+   `tests/integration/api/`, and its resources in `RESOURCES` of
+   `tests/integration/api/test_authorization.py`.
+8. A doc in `docs/` if it brings a new piece of infrastructure or a non-obvious flow.
 
 To add a feature to an existing context, add files to its layers; nothing outside the context
 changes except the registry, the router composition or the migrations.

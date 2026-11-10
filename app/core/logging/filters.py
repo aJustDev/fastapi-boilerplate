@@ -35,7 +35,7 @@ ANSI_RESET = "\033[0m"
 class LayerModuleFilter(logging.Filter):
     """Extracts architectural layer and module from logger path.
 
-    No fixed padding — natural width like siba.
+    No fixed padding: each name takes its natural width.
     Module name is title-cased for readability.
     """
 

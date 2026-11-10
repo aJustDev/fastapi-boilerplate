@@ -26,7 +26,8 @@ Guide: `docs/architecture.md`, decision: `docs/adr/003-bounded-contexts.md`.
   repository from the use case.
 - A new context: layers with `__init__.py`, router in `app/api/v1`, imports in the registry, and
   `.importlinter` updated (add it to the `layers` containers and a `forbidden` contract against
-  each other context).
+  each other context, with `allow_indirect_imports = true` against `app.auth` if it uses
+  `app.deps`). Every module of a context is a layer; its exceptions go in `exceptions.py`.
 
 ## Enforcement
 

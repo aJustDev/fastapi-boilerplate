@@ -1,8 +1,8 @@
 # Tooling and CI
 
 The same checks run on every change, in the same order, locally and in CI: lint, format, types,
-generated diagrams, known vulnerabilities, the Dockerfile and the tests. A PR merges only when all
-of them pass.
+generated diagrams, known vulnerabilities, the Dockerfile, the tests and the image. `main` is a
+protected branch: a change reaches it through a PR whose `lint`, `test` and `image` jobs passed.
 
 ## What runs where
 
@@ -12,15 +12,20 @@ of them pass.
 | `pre-push` hook | Blocks direct pushes to `main` (`git push --no-verify` to bypass once) |
 | CI `lint` job | `uv lock --check`, ruff, mypy, import contracts (`lint-imports`), a single Alembic head, diagrams up to date, pip-audit (warning only), hadolint |
 | CI `test` job | The whole suite (unit, functional, integration with testcontainers) with coverage >= 80% |
-| `audit` workflow | pip-audit on the full dependency tree, daily; this one fails |
-| Dependabot | `uv`, GitHub Actions and the Docker base image, weekly and grouped |
+| CI `image` job | Builds the image; it must refuse to start unconfigured and become healthy with production settings |
+| `audit` workflow | Daily, and this one fails: pip-audit on the full dependency tree, and a scan of the image for vulnerabilities that have a fix |
+| Dependabot | `uv`, GitHub Actions (pinned by commit) and the Docker base image (pinned by digest), weekly and grouped |
 
 Install both hooks with `bash scripts/install-hooks.sh`. Run what CI runs with
-`bash scripts/ci-local.sh` (`SKIP_INTEGRATION=1` without Docker).
+`bash scripts/ci-local.sh` (`SKIP_INTEGRATION=1` without Docker). Two differences with CI:
+hadolint and the start-up checks of the image run only there, and pip-audit fails locally while
+in a PR it only warns (the daily audit is the one that fails).
+
+The workflows read the repository and nothing else (`permissions: contents: read`).
 
 ## Lint rules worth knowing
 
-Ruff runs with `E W F I N UP B BLE SIM TCH G S TID251`:
+Ruff runs with `E W F I N UP B BLE SIM TC G S TID251`:
 
 - **`BLE` (blind except).** An `except Exception` must re-raise or log the traceback
   (`exc_info=True`, `logger.exception`). When swallowing it is intended, the `noqa: BLE001`
@@ -43,7 +48,8 @@ code and, if not obvious, a comment.
 
 pytest turns `DeprecationWarning` raised from `app` or `tests` into errors and ignores the ones
 from third-party packages. The ignore entry comes first on purpose: pytest applies the last
-filter that matches.
+filter that matches. Every test directory is a package (`__init__.py`): the filter matches
+module names, and a module outside `tests.` would escape it.
 
 ## Diagrams
 

@@ -28,6 +28,8 @@ def _ids(operations: list[tuple[str, str, dict]]) -> list[str]:
 ALL = _operations()
 PROTECTED = [op for op in ALL if op[2].get("security")]
 WITH_ID = [op for op in ALL if "{" in op[1]]
+# Probes are exempt from rate limits (tests/unit/test_every_endpoint_has_a_rate_limit.py).
+LIMITED = [op for op in ALL if "/health/" not in op[1]]
 
 
 def _ref(operation: dict, status: str) -> str | None:
@@ -51,10 +53,8 @@ def test_an_operation_on_a_resource_declares_404(method: str, path: str, operati
     assert _ref(operation, "404") == ERROR
 
 
-@pytest.mark.parametrize(("method", "path", "operation"), ALL, ids=_ids(ALL))
+@pytest.mark.parametrize(("method", "path", "operation"), LIMITED, ids=_ids(LIMITED))
 def test_a_rate_limited_operation_declares_429(method: str, path: str, operation: dict):
-    if "/health/" in path:
-        pytest.skip("probes are exempt from rate limits")
     assert _ref(operation, "429") == ERROR
     assert "Retry-After" in operation["responses"]["429"]["headers"]
 
