@@ -37,6 +37,9 @@ jobs:
       - name: Mypy
         run: uv run mypy app/ main.py
 
+      - name: Import contracts
+        run: uv run lint-imports
+
       # Two branches whose migrations share a parent pass separately and leave two heads
       # once merged; upgrade would then refuse to run.
       - name: Single Alembic head
