@@ -1,8 +1,13 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
 from app.models.mixins.id import IntPkMixin
+
+if TYPE_CHECKING:
+    from app.models.auth.permission import PermissionORM
 
 
 class RoleORM(Base, IntPkMixin):

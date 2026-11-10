@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import delete, select, update
 
 from app.core.config import settings
-from app.core.db import async_session_factory
+from app.core.db import async_session_factory, rowcount
 from app.models.events.outbox import OutboxEventORM
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ async def cleanup_processed_events(days: int | None = None) -> int:
             result = await session.execute(stmt)
             await session.commit()
 
-            deleted = result.rowcount
+            deleted = rowcount(result)
             total_deleted += deleted
 
             if deleted < settings.OUTBOX_CLEANUP_BATCH_SIZE:
@@ -80,6 +80,6 @@ async def replay_failed_events(
         result = await session.execute(stmt)
         await session.commit()
 
-        count = result.rowcount
+        count = rowcount(result)
         logger.info("Replayed %d failed outbox events", count)
         return count

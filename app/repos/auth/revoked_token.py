@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, exists, select
 from sqlalchemy.dialects.postgresql import insert
 
+from app.core.db import rowcount
 from app.models.auth.revoked_token import RevokedTokenORM
 from app.repos.base import BaseRepo
 
@@ -33,5 +34,4 @@ class RevokedTokenRepo(BaseRepo[RevokedTokenORM]):
     async def delete_expired(self) -> int:
         """Delete revocations of tokens that have expired anyway. Returns how many."""
         stmt = delete(RevokedTokenORM).where(RevokedTokenORM.expires_at < datetime.now(UTC))
-        result = await self.session.execute(stmt)
-        return result.rowcount
+        return rowcount(await self.session.execute(stmt))

@@ -1,4 +1,4 @@
-from sqlalchemy import Select, distinct, select
+from sqlalchemy import Select, select
 from sqlalchemy.orm import selectinload
 
 from app.models.items.item import ItemORM
@@ -19,11 +19,11 @@ class ItemRepo(BaseRepo[ItemORM]):
         return select(ItemORM).options(selectinload(ItemORM.owner))
 
     async def get_distinct_categories(self) -> list[str]:
-        stmt = select(distinct(ItemORM.category)).order_by(ItemORM.category)
+        stmt = select(ItemORM.category).distinct().order_by(ItemORM.category)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
     async def get_distinct_priorities(self) -> list[int]:
-        stmt = select(distinct(ItemORM.priority)).order_by(ItemORM.priority)
+        stmt = select(ItemORM.priority).distinct().order_by(ItemORM.priority)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())

@@ -180,7 +180,7 @@ class OutboxWorker:
             else:
                 # Exponential backoff with jitter and cap
                 backoff_seconds = min(
-                    2**event.retry_count + random.uniform(0, 5),
+                    2**event.retry_count + random.uniform(0, 5),  # noqa: S311 -- jitter, not crypto
                     MAX_BACKOFF_HOURS * 3600,
                 )
                 event.scheduled_at = datetime.now(UTC) + timedelta(

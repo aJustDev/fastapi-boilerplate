@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import Generic, TypeVar
+from typing import TypeVar
 
 from pydantic import BaseModel
 
@@ -11,7 +11,7 @@ class SortDir(StrEnum):
     DESC = "desc"
 
 
-class PaginatedResponse(BaseModel, Generic[T]):
+class PaginatedResponse[T](BaseModel):
     """Classic offset-based pagination."""
 
     items: list[T]
@@ -24,7 +24,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
         return (self.total + self.page_size - 1) // self.page_size if self.page_size > 0 else 0
 
 
-class CursorPaginatedResponse(BaseModel, Generic[T]):
+class CursorPaginatedResponse[T](BaseModel):
     """Cursor-based pagination for large datasets."""
 
     items: list[T]

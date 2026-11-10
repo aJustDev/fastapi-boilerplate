@@ -1,6 +1,7 @@
 from collections.abc import AsyncGenerator
+from typing import Any, cast
 
-from sqlalchemy.engine import make_url
+from sqlalchemy.engine import CursorResult, Result, make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -30,6 +31,15 @@ def build_asyncpg_dsn() -> str:
         .set(drivername="postgresql")
         .render_as_string(hide_password=False)
     )
+
+
+def rowcount(result: Result[Any]) -> int:
+    """Rows affected by an UPDATE or DELETE.
+
+    `AsyncSession.execute` is typed as returning Result; for DML it is a CursorResult,
+    which is the one exposing rowcount.
+    """
+    return cast("CursorResult[Any]", result).rowcount
 
 
 class Base(DeclarativeBase):

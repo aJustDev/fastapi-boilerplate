@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Awaitable, Callable
 from typing import Annotated
 
 from fastapi import Depends
@@ -58,7 +59,7 @@ def require_permissions(
     *,
     role: str | None = None,
     permission: str | None = None,
-):
+) -> Callable[[UserORM], Awaitable[UserORM]]:
     """Returns a dependency that validates the user has the required role/permission."""
 
     async def _check(user: CurrentUser) -> UserORM:
