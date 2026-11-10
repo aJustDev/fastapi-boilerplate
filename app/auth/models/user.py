@@ -11,7 +11,6 @@ class UserORM(Base, IntPkMixin, AuditMixin):
         # Uniqueness ignores case: "Foo@x.com" and "foo@x.com" are the same account.
         Index("uq_users_email_lower", func.lower(text("email")), unique=True),
         Index("uq_users_username_lower", func.lower(text("username")), unique=True),
-        Index("ix_users_is_active", "is_active", postgresql_where=text("is_active = true")),
     )
 
     email: Mapped[str] = mapped_column(Text, nullable=False)
