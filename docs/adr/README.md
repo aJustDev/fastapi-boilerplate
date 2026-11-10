@@ -13,3 +13,4 @@ with the next number.
 |---|---|---|
 | [001](001-stack.md) | Base stack | accepted |
 | [002](002-alembic.md) | Schema migrations with Alembic | accepted |
+| [003](003-bounded-contexts.md) | Light bounded contexts, use cases orchestrate services | accepted |

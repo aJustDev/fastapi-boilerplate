@@ -1,72 +1,110 @@
-# Architecture Spec
+# Architecture
 
-## Layers (top → bottom)
+## What it solves
 
-```
-api/v1/        → HTTP routers. Receives requests, delegates to use cases, returns schemas.
-use_cases/     → Orchestrators. Thin classes that coordinate one or more services. No business logic.
-services/      → Business logic. Each service owns the rules for its domain. Reusable across use cases.
-repos/         → Data access. BaseRepo[T] async with offset + cursor pagination. One repo per model.
-models/        → SQLAlchemy 2.x ORM. Mixins: IntPkMixin (BIGINT IDENTITY PK), AuditMixin (timestamps).
-schemas/       → Pydantic v2. Request/response validation. from_attributes=True.
-deps/          → FastAPI dependencies. get_session, get_repo(RepoClass), get_current_user, require_permissions.
-core/          → Config, DB engine, security (JWT+Argon2), logging, exceptions, lifespan, middleware, rate limiting.
-core/events/   → Transactional Outbox event bus: dispatcher, worker, handlers, cleanup.
-core/jobs/     → Scheduled jobs: registry, worker, handlers. FOR UPDATE SKIP LOCKED.
-core/metrics/  → Prometheus metrics: instruments, ASGI middleware, DB pool collector.
-```
+Code is grouped by what it is about (a bounded context: `auth`, `items`), and inside each
+context by layer. A new feature touches one folder; the rules for what may import what are
+written down and checked, so the structure does not erode as the project grows.
 
-## Data flow
+## Layout
 
 ```
-Request → PrometheusMiddleware → RequestIdMiddleware → SlowAPIMiddleware → Router → DI → UseCase → Service → Repo → ORM → DB
-                                                     │                              ↓
-                                                     └→ EventBus.publish() ──→ outbox_events
-                                                                                    ↓
-                                                                              Worker (async)
-                                                                                    ↓
-Response ← Router ← Schema.model_validate(orm_obj) ←──────────────────────←── Handlers
+app/
+  core/            infrastructure: config, db (Base, mixins), repo.py (BaseRepo), schema.py,
+                   security, events (bus, worker, outbox model), jobs (worker, model, heartbeat),
+                   logging, metrics, middleware, rate limiting, exceptions, lifespan
+  deps/            FastAPI dependencies shared by every context (session, repos, current user)
+  api/v1/          composes the context routers, plus health and metrics
+  auth/            context: users, roles, permissions, tokens
+    models/ schemas/ repos/ services/ use_cases/ api/ jobs/
+  items/           context: the example CRUD
+    models/ schemas/ repos/ use_cases/ api/ event_handlers/
+  db_registry.py   imports every model and handler module (see below)
 ```
 
-## Key patterns
+```mermaid
+flowchart TB
+    API[app.api.v1<br/>composes routers] --> AUTH[app.auth]
+    API --> ITEMS[app.items]
+    AUTH --> DEPS[app.deps<br/>shared dependencies]
+    ITEMS --> DEPS
+    DEPS --> AUTH
+    AUTH --> CORE[app.core<br/>infrastructure]
+    ITEMS --> CORE
+    DEPS --> CORE
+    REG[app.db_registry] --> AUTH
+    REG --> ITEMS
+    REG --> CORE
+```
 
-- **DI factory**: `get_repo(ItemRepo)` — one function for all repos
-- **Exception hierarchy**: DomainException → UseCaseException/AuthException → specific errors. 4 global handlers.
-- **Pagination**: offset (`list`) and cursor (`list_cursor`) in BaseRepo[T]
-- **Filtering**: `map_field` dict on repos maps query params to columns + operators
-- **Auth**: JWT access (30min) + refresh (7d) tokens. `CurrentUser` annotated dependency.
-- **Event bus**: Transactional Outbox with PostgreSQL `LISTEN/NOTIFY`. Use cases publish events via `EventBus`; a background worker dispatches them to handlers with isolation, timeout, and per-handler retry tracking. See `docs/event-bus.md`.
-- **Scheduled jobs**: Recurring tasks using `FOR UPDATE SKIP LOCKED` for multi-worker safety. Self-rescheduling with fixed intervals. See `docs/jobs.md`.
-- **Request tracing**: `RequestIdMiddleware` generates a unique `request_id` per request (via `ContextVar`), injected into every log line. Accepts `X-Request-ID` from client for end-to-end correlation. See `docs/logging.md`.
-- **Connection pool**: `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `DB_POOL_TIMEOUT` configurable via env vars. Max connections per worker = `pool_size + max_overflow`. Total = that × number of workers.
-- **Rate limiting**: Two-tier system via `slowapi`. Strict tier (`5/min`) for auth endpoints, default tier (`60/min`) for general public endpoints. In-memory storage, configurable via `RATE_LIMIT_ENABLED`, `RATE_LIMIT_STRICT`, `RATE_LIMIT_DEFAULT`.
-- **Prometheus metrics**: ASGI middleware records request count, latency, and in-progress gauges. DB pool stats exposed on `/v1/metrics`. See `docs/metrics.md`.
+`app.deps` is the only shared seam: items gets the current user from `app.deps.auth`, never by
+importing `app.auth`. Items and users are linked by `owner_id` only, without an ORM relationship
+across contexts.
 
-## Adding a new module
+## How a request flows
 
-1. `app/models/{domain}/` — ORM model(s) inheriting Base + mixins
-2. `app/schemas/{domain}/` — Pydantic schemas (Create, Read, Update)
-3. `app/repos/{domain}/` — Repo inheriting BaseRepo[T], configure map_field
-4. `app/services/{domain}.py` — Service with business logic
-5. `app/use_cases/{domain}/` — Use case(s) orchestrating the service
-6. `app/api/v1/{domain}.py` — Router with endpoints
-7. Register router in `app/api/v1/__init__.py`
-8. Add a migration in `migrations/versions/` (see `docs/migrations.md`)
-9. Add tests in `tests/unit/{domain}/` and `tests/integration/{domain}/`
-10. If the module publishes events: inject `EventBus` in use cases, add handlers in `app/core/events/handlers/`, register in `handlers/__init__.py`. See `docs/event-bus.md`.
+The figure follows a request from the middleware to the commit.
 
-## Schema management
+![A request through the layers](img/architecture-request.svg)
 
-- `migrations/versions/` — Alembic revisions, the only source of truth for the schema
-- `uv run alembic upgrade head` — apply them; in compose, the `migrate` service does it
-- `scripts/seed_dev.py` — development data (admin user, sample items)
-- See `docs/migrations.md` and `docs/database.md`
+| Layer | Does | Does not |
+|---|---|---|
+| `api/` | Parse HTTP, resolve dependencies, call **one** use case, return schemas | Business rules, queries |
+| `use_cases/` | Orchestrate: order of steps, which services, own transactions when needed, events | Business rules |
+| `services/` | Business rules, reusable by several use cases | FastAPI imports, `HTTPException` |
+| `repos/` | Queries through `BaseRepo[T]`; `flush`, never `commit` | Business rules |
+| `models/` | ORM tables | Queries, logic |
+| `schemas/` | Request and response shapes | Logic, database access |
 
-## Conventions
+**Use cases orchestrate services; services hold the business rules.** A plain CRUD use case may
+call the repository directly (see `app/items/use_cases/`); as soon as a rule appears, it goes
+into a service. Errors are domain exceptions (`app/core/exceptions`), turned into HTTP responses
+by global handlers.
 
-- Python 3.14, strict typing (mypy), Pydantic v2
-- SQLAlchemy async with asyncpg
-- Absolute imports from `app.`
-- English
-- Composition over inheritance
-- Alembic for schema changes; migrations never run in the app lifespan
+## Rules and how they are enforced
+
+| Rule | Enforced by |
+|---|---|
+| Inside a context, a layer imports only the layers below it | `.importlinter`, contract `layers` |
+| `app.core` imports no context, `app.deps`, `app.api` or the registry | `.importlinter`, contract `core` |
+| Contexts do not import each other | `.importlinter`, contracts `items-auth`, `auth-items` |
+| An endpoint runs at most one use case | `tests/unit/test_api_endpoint_single_use_case.py` |
+| The models match the migrations | `tests/integration/test_migrations.py` |
+
+`uv run lint-imports` runs the contracts; CI runs it on every PR. A justified exception goes in
+`ignore_imports` with a comment; several of the same kind mean the rule needs revisiting.
+
+## The registry
+
+Models must be imported for `Base.metadata` to know their tables, and event and job handlers
+must be imported for their decorators to register them. `app/db_registry.py` imports all of
+them, and `main.py`, `migrations/env.py` and the integration tests import the registry. It sits
+outside `app/core` because it imports the contexts. A handler module that is not listed there
+never runs: the event bus then retries its events until they fail (see `docs/event-bus.md`).
+
+## Adding a context
+
+1. `app/<context>/` with the layers it needs (`models/ schemas/ repos/ services/ use_cases/
+   api/`, plus `event_handlers/` or `jobs/`), each with an `__init__.py`.
+2. Models on `app.core.db.Base` with `IntPkMixin`/`AuditMixin`; repositories on `BaseRepo[T]`.
+3. Router in `app/<context>/api/router.py`, included in `app/api/v1/__init__.py`.
+4. Imports of its models and handlers in `app/db_registry.py`.
+5. The context in the `containers` of the `layers` contract, and `forbidden` contracts against
+   the other contexts, in `.importlinter`.
+6. A migration (`docs/migrations.md`) and tests in `tests/{unit,functional,integration}/<context>/`.
+7. A doc in `docs/` if it brings a new piece of infrastructure or a non-obvious flow.
+
+To add a feature to an existing context, add files to its layers; nothing outside the context
+changes except the registry, the router composition or the migrations.
+
+## Cross-cutting pieces
+
+- **Event bus**: transactional outbox with LISTEN/NOTIFY. See `docs/event-bus.md`.
+- **Scheduled jobs**: rows claimed with a lease. See `docs/jobs.md`.
+- **Auth**: rotated refresh tokens, revocation, roles and permissions. See `docs/auth.md`.
+- **Database and migrations**: `docs/database.md`, `docs/migrations.md`.
+- **Logging, metrics**: `docs/logging.md`, `docs/metrics.md`. Log lines carry the layer and
+  module taken from the logger name (`app.items.api.router` logs as `[Router] [Items]`).
+- **Configuration, tooling, Docker**: `docs/configuration.md`, `docs/tooling.md`, `docs/docker.md`.
+
+Decisions behind this layout: [ADR-003](adr/003-bounded-contexts.md).

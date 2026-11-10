@@ -16,6 +16,10 @@ Three-layer strategy: unit, functional, and integration. Each layer covers a dis
 - **Functional**: testing that endpoints return the right status codes, shapes, and headers. Mock the DB session.
 - **Integration**: testing that generated SQL is correct against real PostgreSQL. No mocks -- repos receive a real `AsyncSession`.
 
+Each level is split by context like `app/`: `auth/`, `items/` and `core/` for infrastructure.
+Meta-tests that check the whole code base (one use case per endpoint, the Dockerfile allow-list)
+sit at the root of `tests/unit/`.
+
 ## Running tests
 
 ```bash
@@ -93,20 +97,20 @@ Integration tests use `loop_scope="session"` on async fixtures and `pytest.mark.
 
 ### New unit test
 
-1. Create file in `tests/unit/<module>/test_<name>.py`
+1. Create file in `tests/unit/<context>/test_<name>.py` (`core/` for infrastructure)
 2. Use `mock_session`, `fake_user`, or local `AsyncMock` fixtures
 3. Test one behavior per function
 
 ### New functional test
 
-1. Create file in `tests/functional/<module>/test_<name>_endpoint.py`
+1. Create file in `tests/functional/<context>/test_<name>_endpoint.py`
 2. Use the `client` fixture to make HTTP requests
 3. Patch repo methods with `unittest.mock.patch`
 4. Assert status codes and response JSON
 
 ### New integration test
 
-1. Create file in `tests/integration/repos/test_<name>_repo.py`
+1. Create file in `tests/integration/<context>/test_<name>.py` (`core/` for infrastructure)
 2. Add the `pytestmark` line at the top:
    ```python
    pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]

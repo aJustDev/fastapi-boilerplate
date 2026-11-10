@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-3 -3 766 456" width="766" height="456" font-family="Liberation Sans, DejaVu Sans, Arial, sans-serif">
+<g class="arch-f1">
+<rect x="40" y="0" width="320" height="46" rx="8" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.4"/>
+<text x="200.0" y="19" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="12.5">1 - Middleware</tspan></text>
+<text x="200.0" y="36" text-anchor="middle"><tspan fill="#6b7785" font-size="11">metrics, request id, rate limit, CORS, gzip</tspan></text>
+<polyline points="200.0,46.0 200.0,60.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
+<polygon points="200.0,66 196.2,58.9 203.8,58.9" fill="#6b7785"/>
+<rect x="40" y="66" width="320" height="46" rx="8" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.4"/>
+<text x="200.0" y="85" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="12.5">2 - Router: app/&lt;context&gt;/api</tspan></text>
+<text x="200.0" y="102" text-anchor="middle"><tspan fill="#6b7785" font-size="11">parses HTTP, resolves auth and repos via app.deps</tspan></text>
+<polyline points="200.0,112.0 200.0,126.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
+<polygon points="200.0,132 196.2,124.9 203.8,124.9" fill="#6b7785"/>
+<rect x="40" y="132" width="320" height="46" rx="8" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.4"/>
+<text x="200.0" y="151" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="12.5">3 - One use case per endpoint</tspan></text>
+<text x="200.0" y="168" text-anchor="middle"><tspan fill="#6b7785" font-size="11">orders the steps, publishes events</tspan></text>
+<polyline points="200.0,178.0 200.0,192.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
+<polygon points="200.0,198 196.2,190.9 203.8,190.9" fill="#6b7785"/>
+<rect x="40" y="198" width="320" height="46" rx="8" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.4"/>
+<text x="200.0" y="217" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="12.5">4 - Service: the business rules</tspan></text>
+<text x="200.0" y="234" text-anchor="middle"><tspan fill="#6b7785" font-size="11">reusable by several use cases</tspan></text>
+<polyline points="360.0,221.0 434.0,221.0" fill="none" stroke="#6b7785" stroke-width="1.6" stroke-dasharray="4 3"/>
+<polygon points="440,221.0 432.9,224.8 432.9,217.2" fill="#6b7785"/>
+<rect x="440" y="198" width="320" height="46" rx="6" fill="#f2f5f9" stroke="#6b7785" stroke-width="1.2"/>
+<text x="452" y="217" text-anchor="start"><tspan fill="#222" font-size="11.5">Plain CRUD has no service: the use case calls the</tspan></text>
+<text x="452" y="231" text-anchor="start"><tspan fill="#222" font-size="11.5">repository.</tspan></text>
+<polyline points="200.0,244.0 200.0,258.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
+<polygon points="200.0,264 196.2,256.9 203.8,256.9" fill="#6b7785"/>
+<rect x="40" y="264" width="320" height="46" rx="8" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.4"/>
+<text x="200.0" y="283" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="12.5">5 - Repository</tspan></text>
+<text x="200.0" y="300" text-anchor="middle"><tspan fill="#6b7785" font-size="11">queries through BaseRepo; flush, never commit</tspan></text>
+<polyline points="200.0,310.0 200.0,324.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
+<polygon points="200.0,330 196.2,322.9 203.8,322.9" fill="#6b7785"/>
+<rect x="40" y="330" width="320" height="46" rx="8" fill="#e8f3e9" stroke="#2e7d32" stroke-width="1.4"/>
+<text x="200.0" y="349" text-anchor="middle"><tspan font-weight="bold" fill="#2e7d32" font-size="12.5">6 - get_session commits or rolls back</tspan></text>
+<text x="200.0" y="366" text-anchor="middle"><tspan fill="#6b7785" font-size="11">the response is built from the schemas</tspan></text>
+<rect x="0" y="398" width="760" height="52" rx="6" fill="#f2f5f9" stroke="#c9d3df" stroke-width="1"/>
+<text x="14" y="421" text-anchor="start"><tspan fill="#222" font-size="12">Contexts never import each other: they share data by id and react to each other through events. app.core is infrastructure and</tspan></text>
+<text x="14" y="437" text-anchor="start"><tspan fill="#222" font-size="12">imports no context.</tspan></text>
+</g>
+</svg>

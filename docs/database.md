@@ -55,14 +55,14 @@ classDiagram
 - **`Base`** gives every table the naming convention (`ix_`, `uq_`, `ck_`, `fk_`, `pk_`) that the
   migrations rely on, and maps `datetime` to `TIMESTAMPTZ` and `str` to `TEXT` unless a column
   says otherwise.
-- **Mixins** (`app/models/mixins/`): `IntPkMixin` for the primary key, `AuditMixin` for
+- **Mixins** (`app/core/db.py`): `IntPkMixin` for the primary key, `AuditMixin` for
   timestamps and authorship.
 - Defaults that exist in the database are declared with `server_default`, so rows inserted
   outside the ORM get them too and the migrations test can compare them.
 
 ## Repositories
 
-`BaseRepo[T]` (`app/repos/base.py`) provides `create`, `get_by_id`, `update`, `delete`, offset
+`BaseRepo[T]` (`app/core/repo.py`) provides `create`, `get_by_id`, `update`, `delete`, offset
 pagination (`list_paginated`, with the total from a window function in the same query) and cursor
 pagination (`list_cursor`). A repository declares which query parameters it accepts as filters:
 

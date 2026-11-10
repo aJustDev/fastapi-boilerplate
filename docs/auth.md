@@ -109,8 +109,8 @@ process.
 | `app/core/security/jwt.py` | Token creation and decoding |
 | `app/core/security/password.py` | Argon2 hashing and verification |
 | `app/deps/auth.py` | `get_current_user`, `require_permissions` |
-| `app/services/auth.py` | Login, register, refresh with rotation, logout, session invalidation |
-| `app/use_cases/auth/refresh_token.py` | Refresh, and the own transaction on reuse |
-| `app/repos/auth/revoked_token.py` | Atomic revocation and cleanup |
-| `app/core/jobs/handlers/revoked_tokens_cleanup.py` | Hourly purge of expired revocations |
-| `app/api/v1/auth.py` | Auth endpoints |
+| `app/auth/services/auth.py` | Login, register, refresh with rotation, logout, session invalidation |
+| `app/auth/use_cases/refresh_token.py` | Refresh, and the own transaction on reuse |
+| `app/auth/repos/revoked_token.py` | Atomic revocation and cleanup |
+| `app/auth/jobs/revoked_tokens_cleanup.py` | Hourly purge of expired revocations |
+| `app/auth/api/router.py` | Auth endpoints |
