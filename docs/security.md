@@ -67,7 +67,7 @@ and hosts, security headers, CORS, authentication and rate limits.
 |---|---|---|
 | `FORWARDED_ALLOW_IPS` | `127.0.0.1` | Must be set: the proxy address or subnet, or empty when clients connect directly. Unset or `*` aborts startup |
 | `ALLOWED_HOSTS` | `["*"]` | Explicit host names; `*` or empty aborts startup |
-| `ALLOWED_ORIGINS` | localhost frontends | Explicit origins; `*` or empty aborts startup |
+| `ALLOWED_ORIGINS` | localhost frontends | Must be set: the exact origins, or `[]` when no browser calls the API. Unset or `*` aborts startup |
 | `SECURITY_HEADERS_ENABLED` | `true` | |
 | `HSTS_ENABLED`, `HSTS_MAX_AGE` | `false`, `31536000` | Enable behind HTTPS |
 | `RATE_LIMIT_ENABLED` | `true` | |
