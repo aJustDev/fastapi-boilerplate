@@ -60,5 +60,6 @@ FROM generate_series(1, 50) AS i;
 
 -- Scheduled jobs
 INSERT INTO scheduled_jobs (job_name, description, interval_seconds, next_run_at)
-VALUES ('heartbeat_check', 'Example job: logs worker identity every 5 minutes', 300, now())
+VALUES ('heartbeat_check', 'Example job: logs worker identity every 5 minutes', 300, now()),
+       ('revoked_tokens_cleanup', 'Deletes revocations of expired tokens', 3600, now())
 ON CONFLICT (job_name) DO NOTHING;
