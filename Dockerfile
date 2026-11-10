@@ -37,8 +37,10 @@ COPY --from=builder /build/.venv /build/.venv
 # Allow-list, not `COPY . .`: with a deny-list every new file lands in the image unless
 # someone remembers .dockerignore. Adding a path here means it is needed at runtime.
 # tests/unit/test_dockerfile_runtime_copy.py keeps this list honest.
-COPY main.py ./
+COPY main.py alembic.ini ./
 COPY app ./app
+# The image also applies its own migrations (`alembic upgrade head`, see docker-compose.yml).
+COPY migrations ./migrations
 
 RUN groupadd -g 1000 appgroup \
  && useradd -u 1000 -g appgroup -s /usr/sbin/nologin appuser \
