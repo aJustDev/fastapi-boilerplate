@@ -20,7 +20,7 @@ a `docker compose up`.
 
 ```bash
 uv run alembic upgrade head                                  # bring a database up to date
-uv run alembic revision --autogenerate -m "add items color"  # draft a migration from the models
+uv run alembic revision --autogenerate --rev-id 0010 -m "add workshops location"  # draft from the models
 uv run alembic downgrade -1                                  # undo the last one (local only)
 uv run alembic current                                       # where this database is
 ```
@@ -33,14 +33,14 @@ uv run alembic current                                       # where this databa
 4. Run the tests: `tests/integration/test_migrations.py` fails if the models and the migrated
    schema differ, and replays every migration down to base and up again.
 
-Revisions are numbered (`0003_add_items_color.py`): pass `--rev-id 0003` to keep the sequence.
+Revisions are numbered (`0010_add_workshops_location.py`): `--rev-id` keeps the sequence.
 CI fails if two branches leave two heads; merge them with `alembic merge`.
 
 ## Rules
 
 - **An applied migration is never edited.** Fix it with a new one.
 - **Reference data goes in migrations** (roles, permissions, scheduled job rows), so every
-  environment gets it. Development data (admin user, sample items) is in `scripts/seed_dev.py`.
+  environment gets it. Development data (admin user, sample workshops) is in `scripts/seed_dev.py`.
 - **Compatible with the running code.** During a deploy the previous version still runs against
   the new schema. Destructive changes are split across deploys (expand, migrate, contract).
 - **Constraints and indexes follow the naming convention** of `Base.metadata`
@@ -58,16 +58,22 @@ take locks that stop them. The figure lists the common ones and the safe alterna
 # CREATE INDEX without blocking writes: it cannot run inside a transaction.
 def upgrade() -> None:
     with op.get_context().autocommit_block():
-        op.create_index("ix_items_color", "items", ["color"], postgresql_concurrently=True)
+        op.create_index(
+            "ix_workshops_location", "workshops", ["location"], postgresql_concurrently=True
+        )
 
 
 # Foreign key in two steps: create without checking existing rows, validate later.
 def upgrade() -> None:
     op.create_foreign_key(
-        "fk_items_category_id_categories", "items", "categories",
-        ["category_id"], ["id"], postgresql_not_valid=True,
+        "fk_workshops_venue_id_venues",
+        "workshops",
+        "venues",
+        ["venue_id"],
+        ["id"],
+        postgresql_not_valid=True,
     )
-    op.execute("ALTER TABLE items VALIDATE CONSTRAINT fk_items_category_id_categories")
+    op.execute("ALTER TABLE workshops VALIDATE CONSTRAINT fk_workshops_venue_id_venues")
 ```
 
 - `NOT NULL` on an existing column: add a `CHECK (col IS NOT NULL) NOT VALID`, validate it, then

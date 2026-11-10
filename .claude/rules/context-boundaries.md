@@ -3,7 +3,7 @@ name: context-boundaries
 description: Bounded contexts and layers. What may import what, cross-context references by id, the registry, adding a context.
 paths:
     - app/auth/**
-    - app/items/**
+    - app/workshops/**
     - app/core/**
     - app/db_registry.py
     - .importlinter

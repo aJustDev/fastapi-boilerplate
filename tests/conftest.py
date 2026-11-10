@@ -38,8 +38,8 @@ def fake_user() -> UserORM:
     user.session_version = 0
     user.accepts_session = MagicMock(return_value=True)
     user.has_role = MagicMock(return_value=False)
-    # What the `user` role grants: the route permissions, not items:manage.
-    user.has_permission = MagicMock(side_effect=lambda name: name != "items:manage")
+    # What the `user` role grants: the route permissions, not workshops:moderate.
+    user.has_permission = MagicMock(side_effect=lambda name: name != "workshops:moderate")
     return user
 
 
@@ -59,6 +59,7 @@ def mock_session() -> AsyncMock:
     session.execute = AsyncMock()
     session.delete = AsyncMock()
     session.add = MagicMock()
+    session.add_all = MagicMock()
     return session
 
 

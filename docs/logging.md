@@ -16,7 +16,7 @@ module of the logger.
 - `LayerModuleFilter` derives `layer` and `module` from the logger name: the first of `api`,
   `use_cases`, `services`, `repos`, `core`, `deps` in it gives the layer (`Router`, `UseCase`,
   `Service`, `Repo`, `Core`, `Deps`, else `App`) and the last part the module, title-cased. A
-  context router is named after its context: `app.items.api.router` logs as `[Router] [Items]`.
+  context router is named after its context: `app.workshops.api.router` logs as `[Router] [Workshops]`.
 - The formatter is chosen from `ENVIRONMENT` and `LOG_FORMAT`:
 
 | `LOG_FORMAT` | `local`/`dev` | other environments |
@@ -37,7 +37,7 @@ module of the logger.
 import logging
 
 logger = logging.getLogger(__name__)  # app.<context>.<layer>.<module>
-logger.info("Item %s created", item.id)  # lazy %-formatting (ruff rule G)
+logger.info("Workshop %s created", workshop.id)  # lazy %-formatting (ruff rule G)
 ```
 
 `get_request_id()` (`app/core/logging/context.py`) returns the current id, for example to pass it

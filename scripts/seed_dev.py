@@ -1,4 +1,4 @@
-"""Development data: an admin user and 50 sample items.
+"""Development data: an admin user and a few workshops to click around with.
 
 Usage: uv run python scripts/seed_dev.py   (after `uv run alembic upgrade head`)
 
@@ -22,11 +22,19 @@ from app.auth.models.user import UserORM  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.core.db import async_session_factory, engine  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
-from app.items.models.item import ItemORM  # noqa: E402
+from app.workshops.models import WorkshopORM  # noqa: E402
 
 ADMIN_EMAIL = "admin@example.com"
 ADMIN_PASSWORD = "admin123"  # noqa: S105 -- local development only
-CATEGORIES = ["electronics", "furniture", "books", "clothing", "sports"]
+# (title, starts in days, capacity, status): open ones to enrol in, one of each other state.
+WORKSHOPS = [
+    ("Intro to pottery", 3, 8, "published"),
+    ("Wheel throwing", 7, 2, "published"),
+    ("Glazing basics", 14, 12, "published"),
+    ("Kiln firing", 0.5, 6, "published"),  # starts within a day: the reminders job picks it
+    ("Raku weekend", 30, 10, "draft"),
+    ("Hand building", -10, 8, "finished"),
+]
 
 
 async def seed() -> None:
@@ -53,19 +61,19 @@ async def seed() -> None:
 
         now = datetime.now(UTC)
         session.add_all(
-            ItemORM(
-                name=f"Item {i:03d}",
-                description=f"Description for item {i}",
-                category=CATEGORIES[i % len(CATEGORIES)],
-                priority=(i * 7) % 5,
-                is_active=i % 7 != 0,
-                owner_id=admin.id,
-                created_at=now - timedelta(hours=50 - i),
+            WorkshopORM(
+                organizer_id=admin.id,
+                title=title,
+                description=f"Sample workshop: {title.lower()}",
+                starts_at=now + timedelta(days=days),
+                ends_at=now + timedelta(days=days, hours=2),
+                capacity=capacity,
+                status=status,
             )
-            for i in range(1, 51)
+            for title, days, capacity, status in WORKSHOPS
         )
         await session.commit()
-        print(f"created {ADMIN_EMAIL} (password: {ADMIN_PASSWORD}) and 50 items")
+        print(f"created {ADMIN_EMAIL} (password: {ADMIN_PASSWORD}) and {len(WORKSHOPS)} workshops")
     await engine.dispose()
 
 

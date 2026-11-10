@@ -71,7 +71,7 @@ def require_permissions(
 
     It answers 403 (`forbidden`) and returns the user. This is the function-level check:
     whether the user may do this kind of thing at all. Whether it may do it to this
-    particular resource is decided by the use case (see app/items/services/access.py).
+    particular resource is decided by the use case (see app/workshops/services/access.py).
     """
 
     async def _check(user: CurrentUser) -> UserORM:

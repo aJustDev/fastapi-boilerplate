@@ -18,6 +18,7 @@ configuration, guarantees and limits, and its files. Diagrams are generated from
 - [jobs.md](jobs.md): scheduled jobs, claims and leases
 - [errors.md](errors.md): the error contract and its codes
 - [security.md](security.md): proxies, hosts, security headers, rate limits
+- [workshops.md](workshops.md): the example context: seats, a waiting list, events and jobs
 
 ## Operations
 

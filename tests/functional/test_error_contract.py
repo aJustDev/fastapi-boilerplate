@@ -34,6 +34,7 @@ from app.core.exceptions.handlers import (
 )
 from app.core.exceptions.schemas import ErrorResponse, ValidationErrorResponse
 from main import app
+from tests._workshops import workshop_body
 
 
 def _request() -> Request:
@@ -70,7 +71,7 @@ def _limit() -> Limit:
 
 class TestEveryHandler:
     async def test_domain_error(self):
-        response = await domain_exception_handler(_request(), NotFoundError("Item", 1))
+        response = await domain_exception_handler(_request(), NotFoundError("Workshop", 1))
         assert ErrorResponse.model_validate(_body(response)).code == "not_found"
 
     async def test_http_exception(self):
@@ -112,6 +113,16 @@ class TestEveryHandler:
         response = await database_error_handler(_request(), exc)
         assert response.status_code == 422
         assert ValidationErrorResponse.model_validate(_body(response)).code == "invalid_input"
+
+    @pytest.mark.parametrize("sqlstate", ["55P03", "40P01", "40001"])
+    async def test_a_transaction_that_lost_to_another_is_a_503(self, sqlstate: str):
+        # Lock timeout, deadlock, serialization failure: nothing was stored and the same
+        # request is expected to work if sent again.
+        exc = DBAPIError("SELECT ... FOR UPDATE", {}, _DriverError(sqlstate))
+        response = await database_error_handler(_request(), exc)
+        assert response.status_code == 503
+        assert response.headers["Retry-After"] == "1"
+        assert ErrorResponse.model_validate(_body(response)).code == "busy"
 
     async def test_any_other_database_error_is_not_the_clients_fault(self):
         # The handler declines it: raised again, it ends as a 500 in the middleware.
@@ -174,7 +185,7 @@ class TestRealRequests:
             patch("app.auth.repos.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
             patch("app.auth.repos.user.UserRepo.get_by_id", return_value=fake_user),
         ):
-            response = await client.post("/v1/items", json={}, headers=auth_headers)
+            response = await client.post("/v1/workshops", json={}, headers=auth_headers)
         assert response.status_code == 422
         assert ValidationErrorResponse.model_validate(response.json()).errors
 
@@ -186,11 +197,13 @@ class TestRealRequests:
             patch("app.auth.repos.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
             patch("app.auth.repos.user.UserRepo.get_by_id", return_value=fake_user),
             patch(
-                "app.items.repos.item.ItemRepo.create",
+                "app.workshops.repos.workshop.WorkshopRepo.create",
                 side_effect=IntegrityError("INSERT", {}, Exception("duplicate")),
             ),
         ):
-            response = await client.post("/v1/items", json={"name": "x"}, headers=auth_headers)
+            response = await client.post(
+                "/v1/workshops", json=workshop_body(), headers=auth_headers
+            )
         assert response.status_code == 409
         assert ErrorResponse.model_validate(response.json()).code == "integrity_conflict"
 
@@ -203,11 +216,14 @@ class TestRealRequests:
         with (
             patch("app.auth.repos.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
             patch("app.auth.repos.user.UserRepo.get_by_id", return_value=fake_user),
-            patch("app.items.repos.item.ItemRepo.get_by_id", side_effect=RuntimeError("boom")),
+            patch(
+                "app.workshops.repos.workshop.WorkshopRepo.get_by_id",
+                side_effect=RuntimeError("boom"),
+            ),
             caplog.at_level("ERROR"),
         ):
             response = await client.get(
-                "/v1/items/1",
+                "/v1/workshops/1",
                 headers={
                     **auth_headers,
                     "Origin": "http://localhost:3000",
@@ -230,7 +246,7 @@ class TestRealRequests:
 @pytest.mark.parametrize("status", ["422", "500"])
 def test_openapi_declares_the_error_schemas(status: str):
     schema = app.openapi()
-    operation = schema["paths"]["/v1/items"]["post"]
+    operation = schema["paths"]["/v1/workshops"]["post"]
     ref = operation["responses"][status]["content"]["application/json"]["schema"]["$ref"]
     expected = "ValidationErrorResponse" if status == "422" else "ErrorResponse"
     assert ref.endswith(f"/{expected}")

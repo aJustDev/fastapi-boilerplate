@@ -75,7 +75,7 @@ def test_scanner_sees_the_api():
     # Canary: if the router layout changes and nothing is found, the test below passes
     # vacuously.
     endpoints = {fn.name for _, fn in FUNCTIONS if is_endpoint(fn)}
-    assert {"login", "create_item"} <= endpoints
+    assert {"login", "create_workshop", "enroll"} <= endpoints
     assert len(endpoints) >= 12
 
 
@@ -84,7 +84,7 @@ def test_scanner_sees_the_api():
     [
         "@router.get('/x')\nasync def f(): ...",
         "@router.post('/x')\ndef f(): ...",  # a sync endpoint is an endpoint
-        "@items.delete('/x')\nasync def f(): ...",  # whatever the router is called
+        "@things.delete('/x')\nasync def f(): ...",  # whatever the router is called
         "@v2_router.api_route('/x', methods=['GET'])\nasync def f(): ...",
     ],
 )

@@ -33,14 +33,15 @@ with `Depends(get_event_bus)`):
 
 ```python
 @dataclass(slots=True)
-class CreateItemUseCase:
-    item_repo: ItemRepo
+class SeatingService:
+    enrollment_repo: EnrollmentRepo
     event_bus: EventBus
 
-    async def execute(self, ...) -> ItemORM:
-        item = await self.item_repo.create(ItemORM(...))
-        await self.event_bus.publish(event_type="item.created", payload={"item_id": item.id})
-        return item
+    async def enroll(self, workshop: LockedWorkshop, attendee_id: int) -> ...:
+        enrollment = await self.enrollment_repo.create(EnrollmentORM(...))
+        await self.event_bus.publish(
+            "enrollment.confirmed", {"enrollment_id": enrollment.id}, aggregate_id=enrollment.id
+        )
 ```
 
 `publish(event_type, payload, *, aggregate_id=None, correlation_id=None)`: the payload must be
@@ -49,12 +50,16 @@ defaults to the id of the current request, and the worker restores it while the 
 their log lines carry the `request_id` of the request that published the event. Both are text
 columns, indexed for tracing.
 
+`publish_many(event_type, [(aggregate_id, payload), ...])` stores one event per pair in one
+batch, with a single NOTIFY. It is for a change that concerns many recipients (cancelling a
+workshop tells every attendee): each one gets its own event, retried on its own.
+
 Handle it in the context that reacts, and import the module in `app/db_registry.py`:
 
 ```python
 # app/<context>/event_handlers/<name>.py
-@dispatcher.register("item.created")
-async def notify_owner(payload: dict, event_id: uuid.UUID) -> None:
+@dispatcher.register("enrollment.confirmed")
+async def notify_confirmed(payload: dict, event_id: uuid.UUID) -> None:
     response = await client.post(url, json=payload, headers={"Idempotency-Key": str(event_id)})
     response.raise_for_status()
 ```
@@ -94,8 +99,9 @@ A handler receives the payload and the id of the event, and has two duties:
 - A pending event is handled by one worker at a time, with any number of processes or replicas.
 - At least once, not exactly once: a crash after a handler's side effect and before the commit
   runs it again. Handlers must be idempotent.
-- No ordering between events: with several workers, `item.updated` can run before
-  `item.created`. A handler that depends on another event raises, and the retry gives it time.
+- No ordering between events: with several workers, `enrollment.cancelled` can run before the
+  `enrollment.confirmed` of the same enrollment. A handler that depends on another event raises,
+  and the retry gives it time.
 - A handler that outlives its timeout is cancelled; protect external calls that must not be
   repeated with `asyncio.shield()` and record their result.
 - `handler_state` is keyed by the module and qualified name of each handler, so two contexts may

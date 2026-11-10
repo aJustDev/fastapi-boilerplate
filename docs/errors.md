@@ -5,7 +5,7 @@ global exception handlers, and the shape is published in OpenAPI. Clients branch
 `detail` is human text and may change.
 
 ```json
-{"detail": "Item not found (ID: 42)", "code": "not_found"}
+{"detail": "Workshop not found (ID: 42)", "code": "not_found"}
 {"detail": "Validation error", "code": "validation_error", "errors": ["body.name: Field required"]}
 ```
 
@@ -26,21 +26,25 @@ global exception handlers, and the shape is published in OpenAPI. Clients branch
 | `IntegrityError`: duplicate key, broken reference | 409 | `integrity_conflict` |
 | `IntegrityError`: NOT NULL or CHECK violation | 422 | `invalid_input`; same shape as `validation_error` |
 | Other `DBAPIError` for a value the column cannot take (SQLSTATE class 22, or refused by asyncpg) | 422 | `invalid_input` |
+| Other `DBAPIError` for a transaction that lost to another one (lock timeout, deadlock, serialization failure) | 503 | `busy`; nothing was stored, `Retry-After: 1` |
 | Rate limit exceeded | 429 | `rate_limited`; `Retry-After` in seconds |
 | `HTTPException` (unknown route, wrong method...) | its status | `not_found`, `method_not_allowed`, ... |
 | `Host` header not in `ALLOWED_HOSTS` (answered by the middleware) | 400 | `invalid_host` |
 | Any other exception | 500 | `internal_error`; the message is logged, never returned |
 
-Domain exceptions declare `status_code` and `code` as class attributes.
+Domain exceptions declare `status_code` and `code` as class attributes. A context adds its own
+by subclassing, in its `exceptions.py`: `app/workshops/exceptions.py` has the 409 codes of its
+rules (`invalid_state`, `enrollment_closed`, `version_conflict`, `capacity_below_enrolled`), one
+per situation a client may want to react to differently.
 
 In OpenAPI, `main.py` declares the 422 and the 500 for every operation, and each router declares
 the errors its routes can answer with the constants of `app/core/exceptions/schemas.py`
 (`extra="forbid"` on both models):
 
 ```python
-router = APIRouter(prefix="/items", responses={**UNAUTHENTICATED, **FORBIDDEN, **RATE_LIMITED})
+router = APIRouter(prefix="/workshops", responses={**UNAUTHENTICATED, **FORBIDDEN, **RATE_LIMITED})
 
-@router.get("/{item_id}", response_model=ItemRead, responses={**NOT_FOUND})
+@router.get("/{workshop_id}", response_model=WorkshopRead, responses={**NOT_FOUND})
 ```
 
 `BAD_REQUEST`, `UNAUTHENTICATED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT` and `RATE_LIMITED` (with its

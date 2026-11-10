@@ -47,13 +47,13 @@ Types:
 - `ci` — workflows
 - `chore` — configuration and housekeeping
 
-Common scopes: a context (`auth`, `items`) or a piece of infrastructure (`core`, `db`, `events`, `jobs`, `metrics`, `logging`, `migrations`, `deps`, `docker`)
+Common scopes: a context (`auth`, `workshops`) or a piece of infrastructure (`core`, `db`, `events`, `jobs`, `metrics`, `logging`, `migrations`, `deps`, `docker`)
 
 Each commit must be atomic: a single responsibility change that compiles and passes tests on its own.
 
 ## Layer rules
 
-Code lives in a context (`app/auth`, `app/items`), and inside it in layers. The full table and
+Code lives in a context (`app/auth`, `app/workshops`), and inside it in layers. The full table and
 the rules are in `docs/architecture.md`; the short version:
 
 - Routers parse HTTP and call **one** use case.

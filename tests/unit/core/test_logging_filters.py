@@ -24,7 +24,7 @@ class TestLayerModuleFilter:
 
     def test_api_layer(self):
         f = LayerModuleFilter()
-        record = self._make_record("app.items.api.router")
+        record = self._make_record("app.orders.api.router")
 
         result = f.filter(record)
 
@@ -41,7 +41,7 @@ class TestLayerModuleFilter:
 
     def test_repos_layer(self):
         f = LayerModuleFilter()
-        record = self._make_record("app.items.repos.item")
+        record = self._make_record("app.orders.repos.order")
 
         f.filter(record)
 
@@ -87,7 +87,7 @@ class TestLayerModuleFilter:
 
     def test_colored_layer_set(self):
         f = LayerModuleFilter()
-        record = self._make_record("app.items.api.router")
+        record = self._make_record("app.orders.api.router")
 
         f.filter(record)
 
@@ -105,11 +105,11 @@ class TestLayerModuleFilter:
 
     def test_module_name_is_last_segment(self):
         f = LayerModuleFilter()
-        record = self._make_record("app.items.repos.item")
+        record = self._make_record("app.orders.repos.order")
 
         f.filter(record)
 
-        assert record.module_name == "Item"
+        assert record.module_name == "Order"
 
     def test_module_name_title_cased(self):
         f = LayerModuleFilter()
@@ -158,7 +158,7 @@ def _access(method: str, full_path: str, status: int = 200) -> logging.LogRecord
     )
 
 
-def _plain(msg: str, name: str = "app.items.api.router") -> logging.LogRecord:
+def _plain(msg: str, name: str = "app.orders.api.router") -> logging.LogRecord:
     return logging.LogRecord(
         name=name, level=logging.INFO, pathname="", lineno=0, msg=msg, args=(), exc_info=None
     )
@@ -166,16 +166,16 @@ def _plain(msg: str, name: str = "app.items.api.router") -> logging.LogRecord:
 
 class TestIgnoreOptionsFilter:
     def test_options_request_is_dropped(self):
-        assert IgnoreOptionsFilter().filter(_access("OPTIONS", "/v1/items")) is False
+        assert IgnoreOptionsFilter().filter(_access("OPTIONS", "/v1/orders")) is False
 
     def test_other_methods_are_kept(self):
-        assert IgnoreOptionsFilter().filter(_access("GET", "/v1/items")) is True
-        assert IgnoreOptionsFilter().filter(_access("POST", "/v1/items", 201)) is True
+        assert IgnoreOptionsFilter().filter(_access("GET", "/v1/orders")) is True
+        assert IgnoreOptionsFilter().filter(_access("POST", "/v1/orders", 201)) is True
 
     def test_only_access_records_are_judged(self):
         # The filter sits on the console handler of every logger: an application line that
         # happens to quote a request must never be dropped.
-        assert IgnoreOptionsFilter().filter(_plain('client sent "OPTIONS /v1/items"')) is True
+        assert IgnoreOptionsFilter().filter(_plain('client sent "OPTIONS /v1/orders"')) is True
 
 
 class TestNoiseFiltersLookAtThePathOnly:
@@ -189,7 +189,7 @@ class TestNoiseFiltersLookAtThePathOnly:
         # The access line of a request is its audit trail (source address, status). Anything
         # a client controls must not be able to remove it.
         login = _access("POST", "/v1/auth/login?/v1/metrics", 401)
-        delete = _access("DELETE", "/v1/items/3?x=/v1/health/liveness", 204)
+        delete = _access("DELETE", "/v1/orders/3?x=/v1/health/liveness", 204)
 
         for f in (IgnoreHealthcheckFilter(), IgnoreMetricsFilter()):
             assert f.filter(login) is True
@@ -203,7 +203,7 @@ class TestNoiseFiltersLookAtThePathOnly:
 class TestRequestIdFilter:
     def _make_record(self, msg: str = "test") -> logging.LogRecord:
         return logging.LogRecord(
-            name="app.items.api.router",
+            name="app.orders.api.router",
             level=logging.INFO,
             pathname="",
             lineno=0,
@@ -235,9 +235,9 @@ class TestRequestIdFilter:
 
     def test_router_module_is_named_after_its_context(self):
         f = LayerModuleFilter()
-        record = self._make_record("app.items.api.router")
+        record = self._make_record("app.orders.api.router")
 
         f.filter(record)
 
         assert record.layer_name == "Router"
-        assert record.module_name == "Items"
+        assert record.module_name == "Orders"

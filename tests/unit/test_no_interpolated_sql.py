@@ -50,7 +50,11 @@ def _is_interpolated(node: ast.expr) -> bool:
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mod | ast.Add):
         return True
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-        if node.func.attr in {"format", "join"}:
+        if node.func.attr == "format":
+            return True
+        # ", ".join(parts) and sep.join(parts) build a string. A `.join()` on the result
+        # of a call is the JOIN of a statement: select(A).join(B).
+        if node.func.attr == "join" and not isinstance(node.func.value, ast.Call):
             return True
         # A method called on a built string: f"...".strip()
         return _is_interpolated(node.func.value)
@@ -143,6 +147,9 @@ def _app_findings() -> tuple[int, list[str]]:
         'text("SELECT " + x)',
         'text("SELECT %s" % x)',
         'text("SELECT {}".format(x))',
+        'text(", ".join(parts))',
+        "text(sep.join(parts))",
+        'q = " AND ".join(parts)\ntext(q)',
         'text(f"SELECT {x}".strip())',
         'text(text=f"SELECT {x}")',
         'literal_column(f"{x}")',
@@ -166,6 +173,8 @@ def test_detector_catches(source: str):
         'text(f"SELECT 1")',  # no placeholder: a constant
         'q = "SELECT 1"\ntext(q)',
         "session.execute(select(Model).where(Model.id == value))",
+        "session.execute(select(A).join(B, B.a_id == A.id).where(A.at <= now() + delta))",
+        "stmt = select(A).join(B, B.a_id == A.id).limit(5)\nsession.execute(stmt)",
     ],
 )
 def test_detector_accepts(source: str):

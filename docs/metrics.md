@@ -37,9 +37,9 @@ A standalone Prometheus scrapes `metrics_path: /v1/metrics`. A custom metric is 
 `app/core/metrics/instruments.py` and used where the event happens:
 
 ```python
-items_created_total = Counter("items_created_total", "Items created", ["category"])
+enrollments_total = Counter("enrollments_total", "Enrollments created", ["status"])
 
-items_created_total.labels(category=item.category).inc()
+enrollments_total.labels(status=enrollment.status).inc()
 ```
 
 Keep label values bounded (categories, statuses), never ids or free text.

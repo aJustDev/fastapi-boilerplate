@@ -18,8 +18,8 @@ app/core/         infrastructure (config, db, repo, schema, security, events, jo
                   metrics, middleware, exceptions); imports no context
 app/deps/         dependencies shared by every context
 app/api/v1/       composes the context routers, plus health and metrics
-app/<context>/    auth, items: models/ schemas/ repos/ services/ use_cases/ api/
-                  (+ event_handlers/, jobs/)
+app/<context>/    auth, workshops (the example): models/ schemas/ repos/ services/ use_cases/
+                  api/ (+ event_handlers/, jobs/, exceptions.py)
 app/db_registry.py  imports every model and handler module
 app/cli.py        python -m app.cli: create-admin, outbox replay/cleanup, worker
 migrations/       Alembic revisions
@@ -41,7 +41,7 @@ case; the session commits before the response is sent.
 - `uv run ruff check app tests migrations scripts main.py docs/img` / `uv run ruff format ...`
 - `uv run mypy app main.py`, `uv run lint-imports`
 - `uv run alembic upgrade head`, `uv run alembic revision --autogenerate --rev-id NNNN -m "..."`
-- `uv run python scripts/seed_dev.py` - local admin (admin@example.com / admin123) and sample items
+- `uv run python scripts/seed_dev.py` - local admin (admin@example.com / admin123) and sample workshops
 - `uv run python -m app.cli --help` - create-admin, outbox replay/cleanup, worker
 - `docker compose up --build` - db, migrate, api (needs `.env.local`: `cp .env.example .env.local`)
 
@@ -71,11 +71,15 @@ case; the session commits before the response is sent.
 - Event handlers take `(payload, event_id)` and must raise unless the work was done.
 - Fix a bug with a test that fails first; what a mocked session cannot show (what is stored, who
   may touch it, malformed input) is tested in `tests/integration/api/`.
+- Tests of `app/core` must not import a context: the repository tests use
+  `tests/integration/core/sample.py`.
+- Rows that must not change under each other are read with `SELECT ... FOR UPDATE` first
+  (`WorkshopRepo.get_for_update` returns a `LockedWorkshop`, the type the seat rules require).
 - The pre-commit hook stashes unstaged changes and runs `uv run`, which syncs the venv to the
   stashed `pyproject.toml`: commit dependency changes first, in their own commit.
 
 ## Rules (`.claude/rules/`)
 
 `api-endpoints`, `context-boundaries`, `migrations`, `tests`, `env-vars`, `docs`. Each ends with
-how it is enforced. Guides worth reading first: `docs/security.md` (authorization),
-`docs/operations.md`, `docs/deployment.md`.
+how it is enforced. Guides worth reading first: `docs/workshops.md` (the example, pattern by
+pattern), `docs/security.md` (authorization), `docs/operations.md`, `docs/deployment.md`.

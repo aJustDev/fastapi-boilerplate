@@ -5,7 +5,7 @@ from typing import Any, Literal, TypedDict
 
 from pydantic import TypeAdapter, ValidationError
 from pydantic_core import to_jsonable_python
-from sqlalchemy import Select, asc, desc, func, select
+from sqlalchemy import ColumnElement, Select, asc, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import Base
@@ -121,9 +121,10 @@ class BaseRepo[T: Base]:
         order_by: str | None = None,
         order_dir: str = "asc",
         filters: dict[str, Any] | None = None,
+        scope: ColumnElement[bool] | None = None,
     ) -> tuple[list[T], int]:
-        stmt = self._base_select()
-        stmt = self._apply_filters(stmt, filters)
+        """Returns (items, total). `filters` and `scope` are described in `_matching`."""
+        stmt = self._matching(filters, scope)
         stmt = self._apply_ordering(stmt, order_by, order_dir)
 
         offset = (page - 1) * page_size
@@ -135,17 +136,32 @@ class BaseRepo[T: Base]:
         if not rows:
             # The total travels on the rows, and this page has none. On the first page
             # that means zero matches; past the last one the client still wants the count.
-            return [], 0 if page == 1 else await self._count(filters)
+            return [], 0 if page == 1 else await self._count(filters, scope)
 
         items = [row[0] for row in rows]
         total = rows[0]._total_count
 
         return items, total
 
-    async def _count(self, filters: dict[str, Any] | None) -> int:
-        matching = self._apply_filters(self._base_select(), filters).subquery()
+    async def _count(
+        self, filters: dict[str, Any] | None, scope: ColumnElement[bool] | None = None
+    ) -> int:
+        matching = self._matching(filters, scope).subquery()
         result = await self.session.execute(select(func.count()).select_from(matching))
         return int(result.scalar_one())
+
+    def _matching(
+        self, filters: dict[str, Any] | None, scope: ColumnElement[bool] | None
+    ) -> Select:
+        """The rows a listing is about.
+
+        `filters` is what the client asked for: keys declared in `map_field`, anything
+        else ignored. `scope` is what the caller may see at all (its own rows, the
+        published ones, a tenant): a condition written by the repository, which no query
+        parameter can widen.
+        """
+        stmt = self._apply_filters(self._base_select(), filters)
+        return stmt if scope is None else stmt.where(scope)
 
     # ── Cursor pagination ─────────────────────────────────
 
@@ -157,6 +173,7 @@ class BaseRepo[T: Base]:
         order_by: str | None = None,
         order_dir: str = "asc",
         filters: dict[str, Any] | None = None,
+        scope: ColumnElement[bool] | None = None,
     ) -> tuple[list[T], str | None, bool]:
         """Returns (items, next_cursor, has_more).
 
@@ -165,8 +182,7 @@ class BaseRepo[T: Base]:
         """
         sort_column, sort_field, direction = self._resolve_sort(order_by, order_dir)
 
-        stmt = self._base_select()
-        stmt = self._apply_filters(stmt, filters)
+        stmt = self._matching(filters, scope)
 
         if cursor is not None:
             cursor_data = decode_cursor(cursor)

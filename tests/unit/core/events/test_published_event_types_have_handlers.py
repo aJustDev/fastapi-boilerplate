@@ -14,14 +14,15 @@ APP = Path(__file__).resolve().parents[4] / "app"
 
 
 def _published_event_types() -> set[str]:
-    """Literal event types passed to `.publish(...)`, positionally or as event_type=."""
+    """Literal event types passed to `.publish(...)` or `.publish_many(...)`,
+    positionally or as event_type=."""
     found = set()
     for path in APP.rglob("*.py"):
         for node in ast.walk(ast.parse(path.read_text(), filename=str(path))):
             if not (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "publish"
+                and node.func.attr in {"publish", "publish_many"}
             ):
                 continue
             candidates = [kw.value for kw in node.keywords if kw.arg == "event_type"]
@@ -35,7 +36,8 @@ def _published_event_types() -> set[str]:
 
 
 def test_scanner_sees_the_published_events():
-    assert {"item.created", "item.updated", "item.deleted"} <= _published_event_types()
+    # One published with `publish`, one with `publish_many`.
+    assert {"enrollment.confirmed", "enrollment.reminder"} <= _published_event_types()
 
 
 def test_every_published_event_type_has_a_handler():

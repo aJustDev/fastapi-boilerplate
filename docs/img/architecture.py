@@ -68,7 +68,7 @@ def layers():
     y += BAND_H + GAP
     _band_label(c, y, BAND_H, "Contexts")
     _box(c, X0, y, 250, BAND_H, "app.auth", "users, roles, tokens")
-    _box(c, X0 + W - 250, y, 250, BAND_H, "app.items", "example CRUD with events")
+    _box(c, X0 + W - 250, y, 250, BAND_H, "app.workshops", "example: seats, waiting list")
     mid = X0 + W / 2
     c.linea(X0 + 250, y + BAND_H / 2, X0 + W - 250, y + BAND_H / 2, color=ROJO, dash="4 3")
     c.no(mid, y + BAND_H / 2 - 12)

@@ -75,9 +75,10 @@ def test_every_success_response_with_a_body_has_a_schema(method: str, path: str,
 
 def test_guards_and_conflicts_are_declared_where_they_happen():
     paths = SCHEMA["paths"]
-    assert _ref(paths["/v1/items"]["post"], "403") == ERROR
+    assert _ref(paths["/v1/workshops"]["post"], "403") == ERROR
     assert _ref(paths["/v1/auth/register"]["post"], "409") == ERROR
-    assert _ref(paths["/v1/items/cursor"]["get"], "400") == ERROR
+    assert _ref(paths["/v1/workshops/{workshop_id}"]["patch"], "409") == ERROR
+    assert _ref(paths["/v1/workshops"]["get"], "400") == ERROR
     assert "503" in paths["/v1/health/readiness"]["get"]["responses"]
 
 
