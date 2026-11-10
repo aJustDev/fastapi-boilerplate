@@ -1,9 +1,10 @@
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.core.exceptions import AuthenticationError, ConflictError
-from app.core.security import hash_password
+from app.core.exceptions import AuthenticationError, ConflictError, RefreshTokenReuseError
+from app.core.security import create_access_token, create_refresh_token, decode_token, hash_password
 from app.models.auth.user import UserORM
 from app.services.auth import AuthService
 
@@ -17,6 +18,7 @@ def user_repo() -> AsyncMock:
 def revoked_token_repo() -> AsyncMock:
     repo = AsyncMock()
     repo.is_revoked.return_value = False
+    repo.revoke.return_value = True
     return repo
 
 
@@ -34,6 +36,7 @@ def active_user() -> MagicMock:
     user.is_active = True
     user.password_hash = hash_password("correct_password")
     user.roles = []
+    user.accepts_token_issued_at.return_value = True
     return user
 
 
@@ -60,6 +63,19 @@ class TestLogin:
 
         with pytest.raises(AuthenticationError, match="Invalid credentials"):
             await auth_service.login("nobody@example.com", "wrong")
+
+    async def test_unknown_user_still_pays_a_password_check(self, auth_service, user_repo):
+        # Without it, "no such account" answers faster than "wrong password".
+        user_repo.get_by_email.return_value = None
+        user_repo.get_by_username.return_value = None
+
+        with (
+            patch("app.services.auth._verify_against_dummy") as dummy,
+            pytest.raises(AuthenticationError),
+        ):
+            await auth_service.login("nobody@example.com", "secret")
+
+        dummy.assert_called_once_with("secret")
 
     async def test_login_wrong_password(self, auth_service, user_repo, active_user):
         user_repo.get_by_email.return_value = active_user
@@ -104,3 +120,65 @@ class TestRefresh:
     async def test_refresh_invalid_token(self, auth_service):
         with pytest.raises(AuthenticationError, match="Invalid refresh token"):
             await auth_service.refresh("bad.token.here")
+
+    async def test_refresh_rotates_the_token(
+        self, auth_service, user_repo, revoked_token_repo, active_user
+    ):
+        user_repo.get_by_id.return_value = active_user
+        old = create_refresh_token(subject="1")
+
+        result = await auth_service.refresh(old)
+
+        revoked_jti = revoked_token_repo.revoke.call_args.args[0]
+        assert str(revoked_jti) == decode_token(old)["jti"]
+        assert decode_token(result.refresh_token)["jti"] != decode_token(old)["jti"]
+
+    async def test_replayed_refresh_token_raises_reuse(
+        self, auth_service, user_repo, revoked_token_repo, active_user
+    ):
+        user_repo.get_by_id.return_value = active_user
+        revoked_token_repo.revoke.return_value = False  # already rotated
+
+        with pytest.raises(RefreshTokenReuseError) as exc:
+            await auth_service.refresh(create_refresh_token(subject="1"))
+
+        assert exc.value.user_id == 1
+
+    async def test_refresh_rejects_tokens_issued_before_invalidation(
+        self, auth_service, user_repo, active_user
+    ):
+        active_user.accepts_token_issued_at.return_value = False
+        user_repo.get_by_id.return_value = active_user
+
+        with pytest.raises(AuthenticationError, match="invalidated"):
+            await auth_service.refresh(create_refresh_token(subject="1"))
+
+    async def test_access_token_is_not_a_refresh_token(self, auth_service):
+        with pytest.raises(AuthenticationError, match="not a refresh token"):
+            await auth_service.refresh(create_access_token(subject="1"))
+
+
+class TestLogout:
+    async def test_revokes_access_and_refresh(self, auth_service, revoked_token_repo):
+        access = create_access_token(subject="1")
+        refresh = create_refresh_token(subject="1")
+
+        await auth_service.logout(access, refresh)
+
+        revoked = {str(call.args[0]) for call in revoked_token_repo.revoke.call_args_list}
+        assert revoked == {decode_token(access)["jti"], decode_token(refresh)["jti"]}
+
+    async def test_refresh_of_another_user_is_rejected(self, auth_service):
+        with pytest.raises(AuthenticationError, match="another user"):
+            await auth_service.logout(
+                create_access_token(subject="1"), create_refresh_token(subject="2")
+            )
+
+
+class TestInvalidateSessions:
+    async def test_cut_off_is_truncated_to_the_second(self, auth_service, user_repo):
+        at = await auth_service.invalidate_sessions(1)
+
+        user_repo.invalidate_tokens.assert_called_once_with(1, at)
+        assert at.microsecond == 0
+        assert at <= datetime.now(UTC)

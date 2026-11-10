@@ -1,9 +1,12 @@
+import functools
 import logging
 import uuid
 from datetime import UTC, datetime
 
-from app.core.exceptions import AuthenticationError, ConflictError
+from app.core.concurrency import run_blocking
+from app.core.exceptions import AuthenticationError, ConflictError, RefreshTokenReuseError
 from app.core.security import (
+    TokenPayload,
     create_access_token,
     create_refresh_token,
     decode_token,
@@ -18,6 +21,15 @@ from app.schemas.auth.token import TokenResponse
 logger = logging.getLogger(__name__)
 
 
+@functools.cache
+def _dummy_hash() -> str:
+    return hash_password("dummy-password-for-timing")
+
+
+def _verify_against_dummy(password: str) -> None:
+    verify_password(password, _dummy_hash())
+
+
 class AuthService:
     def __init__(self, user_repo: UserRepo, revoked_token_repo: RevokedTokenRepo):
         self.user_repo = user_repo
@@ -30,7 +42,12 @@ class AuthService:
             user = await self.user_repo.get_by_username(username)
 
         logger.debug("User lookup result: %s", "found" if user else "not found")
-        if not user or not verify_password(password, user.password_hash):
+        if not user:
+            # Same argon2 cost as a real check: otherwise the response time tells
+            # whether the account exists.
+            await run_blocking(_verify_against_dummy, password)
+            raise AuthenticationError("Invalid credentials")
+        if not await run_blocking(verify_password, password, user.password_hash):
             raise AuthenticationError("Invalid credentials")
 
         if not user.is_active:
@@ -54,47 +71,72 @@ class AuthService:
         user = UserORM(
             email=email,
             username=username,
-            password_hash=hash_password(password),
+            password_hash=await run_blocking(hash_password, password),
             full_name=full_name,
             is_active=True,
         )
         return await self.user_repo.create(user)
 
     async def refresh(self, refresh_token: str) -> TokenResponse:
-        try:
-            payload = decode_token(refresh_token)
-        except Exception as e:
-            raise AuthenticationError("Invalid refresh token") from e
+        """Rotate a refresh token: the one presented is revoked and a new pair is issued.
 
-        if payload.get("type") != "refresh":
-            raise AuthenticationError("Token is not a refresh token")
+        A refresh token that was already rotated raises RefreshTokenReuseError: only the
+        legitimate client or a thief can hold it, and the use case ends every session.
+        """
+        payload = self._decode(refresh_token, "refresh")
+        user = await self._active_user(payload)
 
-        jti = payload.get("jti")
-        if jti and await self.revoked_token_repo.is_revoked(uuid.UUID(jti)):
-            raise AuthenticationError("Refresh token has been revoked")
-
-        user_id = payload["sub"]
-        user = await self.user_repo.get_by_id(int(user_id))
-        if not user:
-            raise AuthenticationError("User not found")
-
-        if not user.is_active:
-            raise AuthenticationError("Account is inactive")
+        expires_at = datetime.fromtimestamp(payload["exp"], tz=UTC)
+        if not await self.revoked_token_repo.revoke(uuid.UUID(payload["jti"]), expires_at):
+            logger.warning("Revoked refresh token replayed for user %s", user.id)
+            raise RefreshTokenReuseError(user.id)
 
         return self._generate_tokens(user)
 
-    async def logout(self, token: str) -> None:
+    async def logout(self, access_token: str, refresh_token: str | None = None) -> None:
+        """Revoke the access token and, if given, the refresh token of the same user."""
+        access = self._decode(access_token, "access")
+        await self._revoke(access)
+
+        if refresh_token is not None:
+            refresh = self._decode(refresh_token, "refresh")
+            if refresh["sub"] != access["sub"]:
+                raise AuthenticationError("Refresh token belongs to another user")
+            await self._revoke(refresh)
+
+    async def invalidate_sessions(self, user_id: int) -> datetime:
+        """Reject every token of the user issued until now.
+
+        Truncated to the second because `iat` is an integer: a token issued later in the
+        same second must stay valid.
+        """
+        at = datetime.now(UTC).replace(microsecond=0)
+        await self.user_repo.invalidate_tokens(user_id, at)
+        return at
+
+    @staticmethod
+    def _decode(token: str, expected_type: str) -> TokenPayload:
         try:
             payload = decode_token(token)
         except Exception as e:
-            raise AuthenticationError("Invalid token") from e
+            raise AuthenticationError(f"Invalid {expected_type} token") from e
+        if payload.get("type") != expected_type:
+            raise AuthenticationError(f"Token is not a {expected_type} token")
+        return payload
 
-        jti = payload.get("jti")
-        if not jti:
-            raise AuthenticationError("Token missing jti claim")
+    async def _active_user(self, payload: TokenPayload) -> UserORM:
+        user = await self.user_repo.get_by_id(int(payload["sub"]))
+        if not user:
+            raise AuthenticationError("User not found")
+        if not user.is_active:
+            raise AuthenticationError("Account is inactive")
+        if not user.accepts_token_issued_at(payload["iat"]):
+            raise AuthenticationError("Session has been invalidated")
+        return user
 
+    async def _revoke(self, payload: TokenPayload) -> None:
         expires_at = datetime.fromtimestamp(payload["exp"], tz=UTC)
-        await self.revoked_token_repo.revoke(uuid.UUID(jti), expires_at)
+        await self.revoked_token_repo.revoke(uuid.UUID(payload["jti"]), expires_at)
 
     def _generate_tokens(self, user: UserORM) -> TokenResponse:
         role_names = [r.name for r in user.roles]

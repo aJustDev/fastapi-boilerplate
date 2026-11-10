@@ -5,6 +5,7 @@ from app.core.exceptions.exceptions import (
     ConflictError,
     DomainException,
     NotFoundError,
+    RefreshTokenReuseError,
     RepoException,
     UseCaseException,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "ConflictError",
     "DomainException",
     "NotFoundError",
+    "RefreshTokenReuseError",
     "RepoException",
     "UseCaseException",
 ]

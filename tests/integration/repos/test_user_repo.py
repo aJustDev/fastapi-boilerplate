@@ -192,3 +192,20 @@ class TestDeleteUser:
 
         found = await repo.get_by_id(created.id)
         assert found is None
+
+
+class TestCaseInsensitiveLookup:
+    # Same rule as the unique indexes on LOWER(email) / LOWER(username).
+
+    async def test_get_by_email_ignores_case(self, repo: UserRepo):
+        await repo.create(_make_user(email="Mixed.Case@Test.com", username="mixed"))
+
+        found = await repo.get_by_email("mixed.case@TEST.COM")
+
+        assert found is not None
+        assert found.username == "mixed"
+
+    async def test_get_by_username_ignores_case(self, repo: UserRepo):
+        await repo.create(_make_user(email="camel@test.com", username="CamelUser"))
+
+        assert await repo.get_by_username("cameluser") is not None

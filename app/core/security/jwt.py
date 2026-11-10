@@ -50,9 +50,7 @@ def decode_token(token: str) -> TokenPayload:
         token,
         settings.SECRET_KEY,
         algorithms=[settings.ALGORITHM],
-        options={
-            "require": ["exp", "iat", "sub", "jti"],
-            "verify_iat": True,
-            "leeway": 30,
-        },
+        options={"require": ["exp", "iat", "sub", "jti"], "verify_iat": True},
+        # An argument, not an option: PyJWT ignores a "leeway" key inside `options`.
+        leeway=30,
     )

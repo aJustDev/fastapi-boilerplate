@@ -12,6 +12,12 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class LogoutRequest(BaseModel):
+    """Optional body of /logout: the refresh token to revoke along with the access token."""
+
+    refresh_token: str | None = None
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
