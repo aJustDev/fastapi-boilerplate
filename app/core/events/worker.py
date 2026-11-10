@@ -50,7 +50,9 @@ class OutboxWorker:
         while not self._shutdown_event.is_set():
             conn: asyncpg.Connection | None = None
             try:
-                conn = await asyncpg.connect(build_asyncpg_dsn())
+                conn = await asyncpg.connect(
+                    build_asyncpg_dsn(), timeout=settings.DB_CONNECT_TIMEOUT
+                )
                 await conn.add_listener(CHANNEL, self._on_notify)
                 reconnect_attempt = 0
 

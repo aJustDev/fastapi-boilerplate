@@ -43,6 +43,8 @@ not count.
 
 ### Fixed
 
+- Startup without a reachable database hung for 60 s (and ignored Ctrl+C) while the banner retried the connection; connections now time out after `DB_CONNECT_TIMEOUT`.
+- `OUTBOX_MAX_RETRIES` is applied to published events (#22).
 - `RATE_LIMIT_DEFAULT` was documented but applied to no endpoint; `Retry-After` held the word `minute` instead of seconds.
 - ORM models now declare the database defaults, partial and case-insensitive indexes and CHECK constraints that only the SQL schema had.
 - Outbox events were dispatched more than once with several workers; NOTIFY now wakes the worker (#13).

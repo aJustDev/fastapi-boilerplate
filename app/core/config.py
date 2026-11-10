@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     DB_POOL_TIMEOUT: int = 30
     # Recycle connections older than this, before a proxy or the server drops them.
     DB_POOL_RECYCLE: int = 1800
+    # Seconds to open a connection. asyncpg waits 60 s by default, and an unreachable
+    # host often does not refuse but drops the packets, so every attempt waits that long.
+    DB_CONNECT_TIMEOUT: int = 10
     # Client-side limit for one statement, and server-side limits for a query and for
     # waiting on a lock: a stuck query or a long lock must not hold a request forever.
     DB_COMMAND_TIMEOUT: int = 30
