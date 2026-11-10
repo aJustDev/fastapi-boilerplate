@@ -12,6 +12,11 @@ not count.
 
 ### Added
 
+- Error contract: every error body is `{detail, code}` with a stable code, the schemas are published in OpenAPI, and `IntegrityError` answers 409 instead of 500.
+- Security headers middleware, `TrustedHostMiddleware`, `ProxyHeadersMiddleware`, and startup validators for hosts, origins and trusted proxies outside local.
+- Statement, lock and command timeouts plus pool recycling on every database connection; startup fails outside local if the process is not in UTC.
+- Meta-tests: auth required on every route, a rate limit on every endpoint, error contract, no interpolated SQL, every published event has a handler, middleware order.
+- Docs: errors and HTTP security guides.
 - Alembic migrations: async `env.py`, baseline equal to the previous SQL schema, reference data as a migration, `migrate` compose service, drift and round-trip tests; `scripts/seed_dev.py` for development data.
 - Hourly `revoked_tokens_cleanup` job (#14).
 - `scripts/install-hooks.sh` (pre-commit and a pre-push hook that blocks pushes to `main`) and `scripts/ci-local.sh`.
@@ -36,6 +41,7 @@ not count.
 
 ### Fixed
 
+- `RATE_LIMIT_DEFAULT` was documented but applied to no endpoint; `Retry-After` held the word `minute` instead of seconds.
 - ORM models now declare the database defaults, partial and case-insensitive indexes and CHECK constraints that only the SQL schema had.
 - Outbox events were dispatched more than once with several workers; NOTIFY now wakes the worker (#13).
 - Events with no registered handler were marked processed and lost (#13).

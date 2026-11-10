@@ -89,8 +89,8 @@ each one would stall every other request of the worker for tens of milliseconds.
 
 ## Rate limiting
 
-`/login`, `/register` and `/refresh` use `RATE_LIMIT_STRICT` (default `5/minute`), in memory per
-process.
+`/login`, `/register` and `/refresh` use `RATE_LIMIT_STRICT` (default `5/minute`); `/me` and
+`/logout` use `RATE_LIMIT_DEFAULT`. In memory per process; see `docs/security.md`.
 
 ## Configuration
 
