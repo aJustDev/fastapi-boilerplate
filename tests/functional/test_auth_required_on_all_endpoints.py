@@ -64,3 +64,17 @@ async def test_endpoint_requires_credentials(client: AsyncClient, method: str, p
         f"{method} {path} answers {response.status_code} without credentials: it lacks the "
         "auth dependency, or it is public on purpose and belongs in PUBLIC."
     )
+
+
+@pytest.mark.parametrize(("method", "path"), _protected())
+async def test_endpoint_validates_the_token(client: AsyncClient, method: str, path: str):
+    # Asking for a bearer token is not checking it: a route that depends only on the
+    # OAuth2 scheme accepts any string. The token has to be decoded before anything runs.
+    response = await client.request(
+        method, _url(path), headers={"Authorization": "Bearer not-a-token"}, json={}
+    )
+    assert response.status_code == 401, (
+        f"{method} {path} answers {response.status_code} to a token that is not one: it "
+        "reads the Authorization header without validating it (use CurrentUser or "
+        "require_permissions from app/deps/auth.py)."
+    )

@@ -37,19 +37,35 @@ a password longer than registration allows, or with a NUL character, is a 401 be
 
 ## Usage
 
+A route about the caller itself takes `CurrentUser`. Any other route takes a permission guard,
+which returns the user too:
+
 ```python
-from app.deps.auth import CurrentUser, require_permissions
+from app.deps.auth import CurrentUser, User, require_permissions
 
-@router.get("/items")
-async def list_items(request: Request, user: CurrentUser): ...
+@router.get("/me")
+async def me(request: Request, user: CurrentUser): ...
 
-@router.delete("/items/{item_id}", dependencies=[Depends(require_permissions(permission="items:delete"))])
-async def delete_item(...): ...
+Deleter = Annotated[User, Depends(require_permissions(permission="items:delete"))]
+
+@router.delete("/items/{item_id}")
+async def delete_item(request: Request, item_id: IdPath, user: Deleter): ...
 ```
 
-Users have roles (`user_roles`) and roles have permissions (`role_permissions`); the reference
-roles `admin` and `user` and their permissions come from the migrations.
-`require_permissions(role=...)` or `(permission=...)` answers 403 (`forbidden`) when missing.
+`require_permissions(role=...)` or `(permission=...)` answers 403 (`forbidden`) when missing. It
+is the first of two checks: the permission says the user may delete items, and the use case then
+checks that this item is the user's (`docs/security.md`).
+
+Users have roles (`user_roles`) and roles have permissions (`role_permissions`). Both are read
+from the database on every request. The reference data comes from the migrations:
+
+| Role | Permissions |
+|---|---|
+| `user` | `users:read`, `items:read`, `items:write`, `items:delete`: its own items |
+| `admin` | every permission, including `items:manage`: the items of any owner |
+
+An account that registers gets the `user` role. Any other role is assigned by a migration or by
+an administrator; `scripts/seed_dev.py` creates the local admin.
 
 ## Configuration
 

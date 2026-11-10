@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="-3 -3 766 456" width="766" height="456" font-family="Liberation Sans, DejaVu Sans, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-3 -3 766 588" width="766" height="588" font-family="Liberation Sans, DejaVu Sans, Arial, sans-serif">
 <g class="sec-f1">
 <rect x="40" y="0" width="320" height="46" rx="8" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.4"/>
 <text x="200.0" y="19" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="12.5">1 - ProxyHeaders</tspan></text>
@@ -31,20 +31,40 @@
 <polygon points="200.0,264 196.2,256.9 203.8,256.9" fill="#6b7785"/>
 <text x="208.0" y="258" text-anchor="start"><tspan font-weight="bold" fill="#6b7785" font-size="11">yes</tspan></text>
 <rect x="40" y="264" width="320" height="46" rx="22" fill="#fff3dc" stroke="#a35f00" stroke-width="1.4"/>
-<text x="200.0" y="292" text-anchor="middle"><tspan font-weight="bold" fill="#a35f00" font-size="12.5">5 - Endpoint limit: under it?</tspan></text>
+<text x="200.0" y="292" text-anchor="middle"><tspan font-weight="bold" fill="#a35f00" font-size="12.5">5 - Dependencies: route permission?</tspan></text>
 <polyline points="360.0,287.0 434.0,287.0" fill="none" stroke="#b03a2e" stroke-width="1.6"/>
 <polygon points="440,287.0 432.9,290.8 432.9,283.2" fill="#b03a2e"/>
 <text x="400.0" y="281.0" text-anchor="middle"><tspan font-weight="bold" fill="#b03a2e" font-size="11">no</tspan></text>
 <rect x="440" y="264" width="320" height="46" rx="6" fill="#fbeaea" stroke="#b03a2e" stroke-width="1.2"/>
-<text x="452" y="291" text-anchor="start"><tspan fill="#222" font-size="11.5">429 with Retry-After in seconds.</tspan></text>
+<text x="452" y="291" text-anchor="start"><tspan fill="#222" font-size="11.5">403: the user may not do this kind of thing.</tspan></text>
 <polyline points="200.0,310.0 200.0,324.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
 <polygon points="200.0,330 196.2,322.9 203.8,322.9" fill="#6b7785"/>
 <text x="208.0" y="324" text-anchor="start"><tspan font-weight="bold" fill="#6b7785" font-size="11">yes</tspan></text>
-<rect x="40" y="330" width="320" height="46" rx="8" fill="#e8f3e9" stroke="#2e7d32" stroke-width="1.4"/>
-<text x="200.0" y="349" text-anchor="middle"><tspan font-weight="bold" fill="#2e7d32" font-size="12.5">6 - The endpoint runs</tspan></text>
-<text x="200.0" y="366" text-anchor="middle"><tspan fill="#6b7785" font-size="11">one use case</tspan></text>
-<rect x="0" y="398" width="760" height="52" rx="6" fill="#f2f5f9" stroke="#c9d3df" stroke-width="1"/>
-<text x="14" y="421" text-anchor="start"><tspan fill="#222" font-size="12">The proxy step comes first so the rate limit and the logs see the real client address. The limit is a decorator of each</tspan></text>
-<text x="14" y="437" text-anchor="start"><tspan fill="#222" font-size="12">endpoint, so it is checked after the dependencies.</tspan></text>
+<rect x="40" y="330" width="320" height="46" rx="22" fill="#fff3dc" stroke="#a35f00" stroke-width="1.4"/>
+<text x="200.0" y="358" text-anchor="middle"><tspan font-weight="bold" fill="#a35f00" font-size="12.5">6 - Endpoint limit: under it?</tspan></text>
+<polyline points="360.0,353.0 434.0,353.0" fill="none" stroke="#b03a2e" stroke-width="1.6"/>
+<polygon points="440,353.0 432.9,356.8 432.9,349.2" fill="#b03a2e"/>
+<text x="400.0" y="347.0" text-anchor="middle"><tspan font-weight="bold" fill="#b03a2e" font-size="11">no</tspan></text>
+<rect x="440" y="330" width="320" height="46" rx="6" fill="#fbeaea" stroke="#b03a2e" stroke-width="1.2"/>
+<text x="452" y="357" text-anchor="start"><tspan fill="#222" font-size="11.5">429 with Retry-After in seconds.</tspan></text>
+<polyline points="200.0,376.0 200.0,390.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
+<polygon points="200.0,396 196.2,388.9 203.8,388.9" fill="#6b7785"/>
+<text x="208.0" y="390" text-anchor="start"><tspan font-weight="bold" fill="#6b7785" font-size="11">yes</tspan></text>
+<rect x="40" y="396" width="320" height="46" rx="22" fill="#fff3dc" stroke="#a35f00" stroke-width="1.4"/>
+<text x="200.0" y="424" text-anchor="middle"><tspan font-weight="bold" fill="#a35f00" font-size="12.5">7 - The use case: is the resource the user's?</tspan></text>
+<polyline points="360.0,419.0 434.0,419.0" fill="none" stroke="#b03a2e" stroke-width="1.6"/>
+<polygon points="440,419.0 432.9,422.8 432.9,415.2" fill="#b03a2e"/>
+<text x="400.0" y="413.0" text-anchor="middle"><tspan font-weight="bold" fill="#b03a2e" font-size="11">no</tspan></text>
+<rect x="440" y="396" width="320" height="46" rx="6" fill="#fbeaea" stroke="#b03a2e" stroke-width="1.2"/>
+<text x="452" y="423" text-anchor="start"><tspan fill="#222" font-size="11.5">404, the same answer as an id that does not exist.</tspan></text>
+<polyline points="200.0,442.0 200.0,456.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
+<polygon points="200.0,462 196.2,454.9 203.8,454.9" fill="#6b7785"/>
+<text x="208.0" y="456" text-anchor="start"><tspan font-weight="bold" fill="#6b7785" font-size="11">yes</tspan></text>
+<rect x="40" y="462" width="320" height="46" rx="8" fill="#e8f3e9" stroke="#2e7d32" stroke-width="1.4"/>
+<text x="200.0" y="481" text-anchor="middle"><tspan font-weight="bold" fill="#2e7d32" font-size="12.5">8 - The use case does its work</tspan></text>
+<text x="200.0" y="498" text-anchor="middle"><tspan fill="#6b7785" font-size="11">and commits</tspan></text>
+<rect x="0" y="530" width="760" height="52" rx="6" fill="#f2f5f9" stroke="#c9d3df" stroke-width="1"/>
+<text x="14" y="553" text-anchor="start"><tspan fill="#222" font-size="12">The proxy step comes first so the rate limit and the logs see the real client address. The limit is a decorator of each</tspan></text>
+<text x="14" y="569" text-anchor="start"><tspan fill="#222" font-size="12">endpoint, so it is checked after the dependencies. A holder of the manage permission of a context skips step 7.</tspan></text>
 </g>
 </svg>

@@ -59,3 +59,11 @@ class ItemRead(BaseSchema):
     owner_id: int
     created_at: datetime
     updated_at: datetime | None
+
+
+class ItemFilterOptions(BaseSchema):
+    """Values present in the items the caller can see, to build filter controls."""
+
+    category: list[str]
+    priority: list[int]
+    is_active: list[bool]

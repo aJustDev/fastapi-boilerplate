@@ -30,16 +30,28 @@ def stack():
                 "branch": ("no", "401, unless the route is public.", "bad"),
             },
             {
-                "title": "5 - Endpoint limit: under it?",
+                "title": "5 - Dependencies: route permission?",
+                "tone": "decision",
+                "down": "yes",
+                "branch": ("no", "403: the user may not do this kind of thing.", "bad"),
+            },
+            {
+                "title": "6 - Endpoint limit: under it?",
                 "tone": "decision",
                 "down": "yes",
                 "branch": ("no", "429 with Retry-After in seconds.", "bad"),
             },
-            {"title": "6 - The endpoint runs", "sub": "one use case", "tone": "done"},
+            {
+                "title": "7 - The use case: is the resource the user's?",
+                "tone": "decision",
+                "down": "yes",
+                "branch": ("no", "404, the same answer as an id that does not exist.", "bad"),
+            },
+            {"title": "8 - The use case does its work", "sub": "and commits", "tone": "done"},
         ],
         note="The proxy step comes first so the rate limit and the logs see the real client "
         "address. The limit is a decorator of each endpoint, so it is checked after the "
-        "dependencies.",
+        "dependencies. A holder of the manage permission of a context skips step 7.",
     )
 
 

@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from argon2 import PasswordHasher
 
+from app.auth.models.role import RoleORM
 from app.auth.models.user import UserORM
 from app.auth.services.auth import AuthService
 from app.core.exceptions import AuthenticationError, ConflictError, RefreshTokenReuseError
@@ -124,12 +125,37 @@ class TestRegister:
     async def test_register_success(self, auth_service, user_repo):
         user_repo.get_by_email.return_value = None
         user_repo.get_by_username.return_value = None
+        user_repo.get_role.return_value = RoleORM(name="user")
         user_repo.create.return_value = MagicMock(spec=UserORM, id=1)
 
         result = await auth_service.register("new@example.com", "newuser", "pass123", "New User")
 
-        user_repo.create.assert_called_once()
         assert result.id == 1
+        stored = user_repo.create.call_args.args[0]
+        assert stored.email == "new@example.com"
+        assert verify_password("pass123", stored.password_hash)
+
+    async def test_a_new_account_gets_the_user_role(self, auth_service, user_repo):
+        # Without a role the account would hold no permission and every route would be a 403.
+        user_repo.get_by_email.return_value = None
+        user_repo.get_by_username.return_value = None
+        user_repo.get_role.return_value = RoleORM(name="user")
+
+        await auth_service.register("new@example.com", "newuser", "pass123")
+
+        user_repo.get_role.assert_awaited_once_with("user")
+        stored = user_repo.create.call_args.args[0]
+        assert [role.name for role in stored.roles] == ["user"]
+
+    async def test_register_fails_if_the_reference_role_is_missing(self, auth_service, user_repo):
+        user_repo.get_by_email.return_value = None
+        user_repo.get_by_username.return_value = None
+        user_repo.get_role.return_value = None
+
+        with pytest.raises(RuntimeError, match="run the migrations"):
+            await auth_service.register("new@example.com", "newuser", "pass123")
+
+        user_repo.create.assert_not_called()
 
     async def test_register_duplicate_email(self, auth_service, user_repo, active_user):
         user_repo.get_by_email.return_value = active_user

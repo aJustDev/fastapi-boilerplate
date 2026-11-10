@@ -21,6 +21,10 @@ from app.core.security import (
 
 logger = logging.getLogger(__name__)
 
+# Role given to every account that registers itself. Its permissions come from the
+# migrations; anything beyond them is granted by assigning another role.
+DEFAULT_ROLE = "user"
+
 
 @functools.cache
 def _dummy_hash() -> str:
@@ -84,12 +88,19 @@ class AuthService:
         if await self.user_repo.get_by_username(username):
             raise ConflictError("User", "username already taken")
 
+        role = await self.user_repo.get_role(DEFAULT_ROLE)
+        if role is None:
+            # Reference data from the migrations. Without it the new account would hold
+            # no permission at all: better to fail the registration than to create it.
+            raise RuntimeError(f"role {DEFAULT_ROLE!r} is missing: run the migrations")
+
         user = UserORM(
             email=email,
             username=username,
             password_hash=await run_blocking(hash_password, password),
             full_name=full_name,
             is_active=True,
+            roles=[role],
         )
         return await self.user_repo.create(user)
 

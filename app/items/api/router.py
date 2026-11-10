@@ -1,3 +1,4 @@
+from collections.abc import Awaitable, Callable
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
@@ -15,13 +16,22 @@ from app.core.schema import (
     SearchQuery,
     SortDir,
 )
-from app.deps.auth import CurrentUser
+from app.deps.auth import User, require_permissions
 from app.deps.events import get_event_bus
 from app.deps.repository import get_repo
 from app.items.repos.item import ItemRepo
-from app.items.schemas.item import ItemCategory, ItemCreate, ItemRead, ItemSortField, ItemUpdate
+from app.items.schemas.item import (
+    ItemCategory,
+    ItemCreate,
+    ItemFilterOptions,
+    ItemRead,
+    ItemSortField,
+    ItemUpdate,
+)
+from app.items.services.access import MANAGE_PERMISSION, Actor
 from app.items.use_cases.create_item import CreateItemUseCase
 from app.items.use_cases.delete_item import DeleteItemUseCase
+from app.items.use_cases.get_filter_options import GetFilterOptionsUseCase
 from app.items.use_cases.get_item import GetItemUseCase
 from app.items.use_cases.list_items import ListItemsCursorUseCase, ListItemsUseCase
 from app.items.use_cases.update_item import UpdateItemUseCase
@@ -32,16 +42,43 @@ ItemRepoDep = Annotated[ItemRepo, Depends(get_repo(ItemRepo))]
 EventBusDep = Annotated[EventBus, Depends(get_event_bus)]
 
 
-@router.get("/filters")
+def _actor_with(permission: str) -> Callable[..., Awaitable[Actor]]:
+    """Dependency: the caller, who must hold `permission` (403 otherwise), as an Actor.
+
+    The permission answers "may this user do this kind of thing"; which items it applies
+    to is decided by the use case with the Actor (app/items/services/access.py).
+    """
+
+    async def _actor(
+        user: Annotated[User, Depends(require_permissions(permission=permission))],
+    ) -> Actor:
+        return Actor(user_id=user.id, manages_all=user.has_permission(MANAGE_PERMISSION))
+
+    return _actor
+
+
+Reader = Annotated[Actor, Depends(_actor_with("items:read"))]
+Writer = Annotated[Actor, Depends(_actor_with("items:write"))]
+Deleter = Annotated[Actor, Depends(_actor_with("items:delete"))]
+
+
+def _filters(
+    name: str | None, category: ItemCategory | None, is_active: bool | None
+) -> dict[str, object]:
+    filters: dict[str, object] = {}
+    if name is not None:
+        filters["name"] = name
+    if category is not None:
+        filters["category"] = category.value
+    if is_active is not None:
+        filters["is_active"] = is_active
+    return filters
+
+
+@router.get("/filters", response_model=ItemFilterOptions)
 @limiter.limit(settings.RATE_LIMIT_DEFAULT)
-async def get_filter_options(request: Request, repo: ItemRepoDep, user: CurrentUser):
-    categories = await repo.get_distinct_categories()
-    priorities = await repo.get_distinct_priorities()
-    return {
-        "category": categories,
-        "priority": priorities,
-        "is_active": [True, False],
-    }
+async def get_filter_options(request: Request, repo: ItemRepoDep, actor: Reader):
+    return await GetFilterOptionsUseCase(repo).execute(actor)
 
 
 @router.get("", response_model=PaginatedResponse[ItemRead])
@@ -49,7 +86,7 @@ async def get_filter_options(request: Request, repo: ItemRepoDep, user: CurrentU
 async def list_items(
     request: Request,
     repo: ItemRepoDep,
-    user: CurrentUser,
+    actor: Reader,
     page: PageQuery = 1,
     page_size: PageSizeQuery = 20,
     order_by: ItemSortField | None = None,
@@ -58,21 +95,14 @@ async def list_items(
     category: ItemCategory | None = None,
     is_active: bool | None = None,
 ):
-    filters: dict[str, object] = {}
-    if name is not None:
-        filters["name"] = name
-    if category is not None:
-        filters["category"] = category.value
-    if is_active is not None:
-        filters["is_active"] = is_active
-
     uc = ListItemsUseCase(repo)
     items, total = await uc.execute(
+        actor,
         page=page,
         page_size=page_size,
         order_by=order_by.value if order_by else None,
         order_dir=order_dir.value,
-        filters=filters or None,
+        filters=_filters(name, category, is_active),
     )
     return PaginatedResponse(
         items=[ItemRead.model_validate(i) for i in items],
@@ -87,7 +117,7 @@ async def list_items(
 async def list_items_cursor(
     request: Request,
     repo: ItemRepoDep,
-    user: CurrentUser,
+    actor: Reader,
     cursor: CursorQuery = None,
     limit: PageSizeQuery = 20,
     order_by: ItemSortField | None = None,
@@ -96,21 +126,14 @@ async def list_items_cursor(
     category: ItemCategory | None = None,
     is_active: bool | None = None,
 ):
-    filters: dict[str, object] = {}
-    if name is not None:
-        filters["name"] = name
-    if category is not None:
-        filters["category"] = category.value
-    if is_active is not None:
-        filters["is_active"] = is_active
-
     uc = ListItemsCursorUseCase(repo)
     items, next_cursor, has_more = await uc.execute(
+        actor,
         cursor=cursor,
         limit=limit,
         order_by=order_by.value if order_by else None,
         order_dir=order_dir.value,
-        filters=filters or None,
+        filters=_filters(name, category, is_active),
     )
     return CursorPaginatedResponse(
         items=[ItemRead.model_validate(i) for i in items],
@@ -121,9 +144,9 @@ async def list_items_cursor(
 
 @router.get("/{item_id}", response_model=ItemRead)
 @limiter.limit(settings.RATE_LIMIT_DEFAULT)
-async def get_item(request: Request, item_id: IdPath, repo: ItemRepoDep, user: CurrentUser):
+async def get_item(request: Request, item_id: IdPath, repo: ItemRepoDep, actor: Reader):
     uc = GetItemUseCase(repo)
-    item = await uc.execute(item_id)
+    item = await uc.execute(item_id, actor)
     return ItemRead.model_validate(item)
 
 
@@ -133,11 +156,13 @@ async def create_item(
     request: Request,
     body: ItemCreate,
     repo: ItemRepoDep,
-    user: CurrentUser,
+    actor: Writer,
     event_bus: EventBusDep,
 ):
     uc = CreateItemUseCase(repo, event_bus)
-    item = await uc.execute(body.name, user.id, body.description, body.category, body.priority)
+    item = await uc.execute(
+        body.name, actor.user_id, body.description, body.category, body.priority
+    )
     return ItemRead.model_validate(item)
 
 
@@ -148,12 +173,12 @@ async def update_item(
     item_id: IdPath,
     body: ItemUpdate,
     repo: ItemRepoDep,
-    user: CurrentUser,
+    actor: Writer,
     event_bus: EventBusDep,
 ):
     uc = UpdateItemUseCase(repo, event_bus)
     data = body.model_dump(exclude_unset=True)
-    item = await uc.execute(item_id, data)
+    item = await uc.execute(item_id, data, actor)
     return ItemRead.model_validate(item)
 
 
@@ -163,8 +188,8 @@ async def delete_item(
     request: Request,
     item_id: IdPath,
     repo: ItemRepoDep,
-    user: CurrentUser,
+    actor: Deleter,
     event_bus: EventBusDep,
 ):
     uc = DeleteItemUseCase(repo, event_bus)
-    await uc.execute(item_id)
+    await uc.execute(item_id, actor)

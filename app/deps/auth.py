@@ -54,13 +54,22 @@ async def get_current_user(
 
 CurrentUser = Annotated[UserORM, Depends(get_current_user)]
 
+# The user type, for contexts that declare their own guarded dependencies
+# (`Annotated[User, Depends(require_permissions(...))]`) without importing app.auth.
+User = UserORM
+
 
 def require_permissions(
     *,
     role: str | None = None,
     permission: str | None = None,
 ) -> Callable[[UserORM], Awaitable[UserORM]]:
-    """Returns a dependency that validates the user has the required role/permission."""
+    """Returns a dependency that validates the user has the required role/permission.
+
+    It answers 403 (`forbidden`) and returns the user. This is the function-level check:
+    whether the user may do this kind of thing at all. Whether it may do it to this
+    particular resource is decided by the use case (see app/items/services/access.py).
+    """
 
     async def _check(user: CurrentUser) -> UserORM:
         if role and not user.has_role(role):

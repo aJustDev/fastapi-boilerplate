@@ -3,6 +3,7 @@ import logging
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
+from app.auth.models.role import RoleORM
 from app.auth.models.user import UserORM
 from app.core.repo import BaseRepo
 
@@ -33,6 +34,10 @@ class UserRepo(BaseRepo[UserORM]):
             .where(func.lower(UserORM.username) == username.lower())
         )
         result = await self.session.execute(stmt)
+        return result.scalars().first()
+
+    async def get_role(self, name: str) -> RoleORM | None:
+        result = await self.session.execute(select(RoleORM).where(RoleORM.name == name))
         return result.scalars().first()
 
     async def end_sessions(self, user_id: int) -> None:
