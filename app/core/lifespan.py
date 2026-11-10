@@ -9,7 +9,7 @@ from app.core.events.worker import OutboxWorker
 from app.core.jobs.registry import job_registry
 from app.core.jobs.worker import JobWorker
 from app.core.logging.config import setup_logging
-from app.core.startup import check_database, log_system_info
+from app.core.startup import check_database, check_utc_timezone, log_system_info
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     setup_logging()
+    check_utc_timezone()
 
     db_status = await check_database(engine)
     app.state.ready = db_status == "OK"

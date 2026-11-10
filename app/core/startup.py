@@ -3,6 +3,7 @@ import logging
 import os
 import platform
 import socket
+import time
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -15,6 +16,24 @@ DB_CONNECT_TIMEOUT = 3
 _BANNER_LOCK_ID = 2026_03_22  # arbitrary advisory lock ID
 
 
+def check_utc_timezone() -> None:
+    """The process must run in UTC: fail outside local, warn in local.
+
+    A naive datetime sent to a `timestamptz` parameter is interpreted in the time zone
+    of the process. If that differs between environments, the same request writes or
+    compares different instants. The Docker image and CI set TZ=UTC.
+    """
+    local_tz = (time.tzname[0] or "").upper() if time.tzname else ""
+    env_tz = (os.environ.get("TZ") or "").upper()
+    if local_tz in {"UTC", "GMT", "UCT", "UNIVERSAL", ""} or env_tz == "UTC":
+        return
+
+    message = f"Process time zone is not UTC (tzname={time.tzname}, TZ={env_tz}). Set TZ=UTC."
+    if settings.ENVIRONMENT != "local":
+        raise RuntimeError(message)
+    logger.warning(message)
+
+
 async def check_database(engine: AsyncEngine) -> str:
     try:
         async with asyncio.timeout(DB_CONNECT_TIMEOUT):
@@ -24,7 +43,8 @@ async def check_database(engine: AsyncEngine) -> str:
     # The message carries the error; the traceback of a "connection refused" at
     # startup adds nothing.
     except Exception as e:  # noqa: BLE001
-        logger.warning("DB not available: %s", e)
+        # The type too: a timeout has an empty message.
+        logger.warning("DB not available: %s: %s", type(e).__name__, e)
         return "UNAVAILABLE"
 
 

@@ -1,7 +1,9 @@
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.core.startup import check_database, log_system_info
+import pytest
+
+from app.core.startup import check_database, check_utc_timezone, log_system_info
 
 
 class TestCheckDatabase:
@@ -129,3 +131,23 @@ class TestLogSystemInfo:
             await log_system_info(engine, "OK")
 
         assert "unknown" in caplog.text
+
+
+class TestCheckUtcTimezone:
+    def _run(self, monkeypatch, tzname, environment):
+        monkeypatch.setattr("app.core.startup.time.tzname", tzname)
+        monkeypatch.delenv("TZ", raising=False)
+        monkeypatch.setattr("app.core.startup.settings.ENVIRONMENT", environment)
+        check_utc_timezone()
+
+    def test_utc_passes(self, monkeypatch):
+        self._run(monkeypatch, ("UTC", "UTC"), "prod")
+
+    def test_other_zone_fails_outside_local(self, monkeypatch):
+        with pytest.raises(RuntimeError, match="not UTC"):
+            self._run(monkeypatch, ("CET", "CEST"), "prod")
+
+    def test_other_zone_only_warns_in_local(self, monkeypatch, caplog):
+        with caplog.at_level(logging.WARNING, logger="app.core.startup"):
+            self._run(monkeypatch, ("CET", "CEST"), "local")
+        assert "not UTC" in caplog.text

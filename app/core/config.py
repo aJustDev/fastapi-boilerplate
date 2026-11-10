@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     DB_POOL_SIZE: int = 5
     DB_MAX_OVERFLOW: int = 10
     DB_POOL_TIMEOUT: int = 30
+    # Recycle connections older than this, before a proxy or the server drops them.
+    DB_POOL_RECYCLE: int = 1800
+    # Client-side limit for one statement, and server-side limits for a query and for
+    # waiting on a lock: a stuck query or a long lock must not hold a request forever.
+    DB_COMMAND_TIMEOUT: int = 30
+    DB_STATEMENT_TIMEOUT_MS: int = 30_000
+    DB_LOCK_TIMEOUT_MS: int = 5_000
 
     # JWT
     SECRET_KEY: str = _DEFAULT_SECRET_KEY
@@ -49,6 +56,18 @@ class Settings(BaseSettings):
 
     # CORS
     ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:4200"]
+
+    # Hosts the API answers to (Host header); requests for any other host get a 400.
+    ALLOWED_HOSTS: list[str] = ["*"]
+    # Proxies whose X-Forwarded-For/-Proto are trusted. Only them: anyone else could
+    # forge the client IP that rate limits and logs see.
+    FORWARDED_ALLOW_IPS: str = "127.0.0.1"
+
+    # Security headers (CSP, nosniff, frame options...). Disable only when a reverse
+    # proxy already adds them. HSTS only behind HTTPS.
+    SECURITY_HEADERS_ENABLED: bool = True
+    HSTS_ENABLED: bool = False
+    HSTS_MAX_AGE: int = 31536000
 
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
@@ -92,6 +111,23 @@ class Settings(BaseSettings):
             raise ValueError(
                 f"SECRET_KEY must be at least {_MIN_SECRET_KEY_BYTES} bytes. Generate one with: "
                 'python -c "import secrets; print(secrets.token_urlsafe(48))"'
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_network_exposure(self) -> "Settings":
+        if self.ENVIRONMENT == "local":
+            return self
+        if not self.ALLOWED_HOSTS or "*" in self.ALLOWED_HOSTS:
+            raise ValueError(
+                "ALLOWED_HOSTS must be an explicit list outside local; '*' is not allowed."
+            )
+        if not self.ALLOWED_ORIGINS or "*" in self.ALLOWED_ORIGINS:
+            raise ValueError("ALLOWED_ORIGINS must list the exact frontend origins outside local.")
+        if self.FORWARDED_ALLOW_IPS.strip() == "*":
+            raise ValueError(
+                'FORWARDED_ALLOW_IPS must not be "*" outside local: any client could forge '
+                "X-Forwarded-For. Set the address or subnet of the reverse proxy."
             )
         return self
 
