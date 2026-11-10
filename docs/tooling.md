@@ -6,18 +6,6 @@ of them pass.
 
 ## What runs where
 
-```mermaid
-flowchart LR
-    C[git commit] -->|pre-commit| R[ruff check + format]
-    P[git push] -->|pre-push| B{target is main?}
-    B -->|yes| X[blocked: open a PR]
-    B -->|no| PR[pull request]
-    PR --> L[CI lint job]
-    PR --> T[CI test job]
-    S[daily 05:00 UTC] --> A[audit workflow]
-    W[weekly] --> D[Dependabot PRs]
-```
-
 | Where | What |
 |---|---|
 | `pre-commit` hook | `ruff check` and `ruff format --check` on staged Python files |

@@ -10,9 +10,9 @@ failing later in a request.
 
 ```mermaid
 flowchart LR
-    E[Process environment] --> S[Settings]
-    F[".env.{ENVIRONMENT} file<br/>none if SETTINGS_ENV_FILE is empty"] --> S
-    D[Defaults in config.py] --> S
+    E["1. Process environment"] --> S[Settings]
+    F["2. .env.{ENVIRONMENT} file<br/>none if SETTINGS_ENV_FILE is empty"] --> S
+    D["3. Defaults in config.py"] --> S
     P[pyproject.toml version] -->|importlib.metadata| D
     S --> V{Validators}
     V -->|valid| R[settings singleton]
