@@ -1,6 +1,9 @@
+from datetime import UTC, datetime, timedelta
+
 import jwt
 import pytest
 
+from app.core.config import settings
 from app.core.security.jwt import create_access_token, create_refresh_token, decode_token
 
 
@@ -32,3 +35,23 @@ class TestJWT:
         token = create_access_token(subject="1")
         payload = decode_token(token)
         assert payload["scopes"] == []
+
+    @pytest.mark.parametrize(("expired_seconds_ago", "accepted"), [(10, True), (60, False)])
+    def test_expiry_has_30_seconds_of_leeway(self, expired_seconds_ago, accepted):
+        # Clock skew between servers: a token that expired a few seconds ago still passes.
+        now = datetime.now(UTC)
+        token = jwt.encode(
+            {
+                "sub": "1",
+                "jti": "j",
+                "iat": now - timedelta(minutes=5),
+                "exp": now - timedelta(seconds=expired_seconds_ago),
+            },
+            settings.SECRET_KEY,
+            algorithm=settings.ALGORITHM,
+        )
+        if accepted:
+            assert decode_token(token)["sub"] == "1"
+        else:
+            with pytest.raises(jwt.ExpiredSignatureError):
+                decode_token(token)
