@@ -1,64 +1,69 @@
-# Event Bus — Transactional Outbox
+# Event bus (transactional outbox)
 
-## What is it?
+## What it solves
 
-A persistent event bus built on the **Transactional Outbox** pattern using PostgreSQL as the message broker. It decouples side effects (emails, notifications, integrations) from business logic while guaranteeing:
+A use case often needs side effects outside its own data: send an email, call a webhook,
+notify another service. Doing them inline couples the request to slow or flaky systems, and
+doing them after the commit loses them if the process dies in between.
 
-- **Atomicity**: If the use case fails, the event is never sent (same DB transaction).
-- **Resilience**: Events are retried with exponential backoff on handler failure.
-- **No external dependencies**: Uses PostgreSQL `LISTEN/NOTIFY` instead of Redis/RabbitMQ.
+The event bus stores each event as a row in `outbox_events`, **in the same transaction as the
+business change**. A background worker in every API process later reads those rows and runs
+the handlers registered for each event type. PostgreSQL is the only moving part: no Redis, no
+RabbitMQ.
 
----
+- **Atomic**: if the use case fails, the event row is rolled back with everything else.
+- **Durable**: a committed event survives restarts; it is retried until its handlers succeed.
+- **Fast**: a `NOTIFY` wakes the workers right after the commit; polling is only a fallback.
 
-## Architecture
+## How an event travels
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    HTTP Request                          │
-│                         │                                │
-│                    ┌────▼────┐                           │
-│                    │  Router  │                           │
-│                    └────┬────┘                           │
-│                         │  DI: ItemService + EventBus    │
-│                    ┌────▼────┐     (same AsyncSession)   │
-│                    │ UseCase  │                           │
-│                    └────┬────┘                           │
-│               ┌─────────┼──────────┐                     │
-│          ┌────▼────┐          ┌────▼─────┐               │
-│          │ Service  │          │ EventBus  │              │
-│          │ .create()│          │ .publish()│              │
-│          └────┬────┘          └────┬─────┘               │
-│               │ flush              │ flush + NOTIFY       │
-│               └─────────┬──────────┘                     │
-│                         │                                │
-│                    get_session()                          │
-│                    COMMIT (atomic)                        │
-└─────────────────────────────────────────────────────────┘
-                          │
-                    PostgreSQL
-                    NOTIFY fires
-                          │
-                    ┌─────▼──────┐
-                    │   Worker    │  (LISTEN + poll fallback)
-                    └─────┬──────┘
-                          │ FOR UPDATE SKIP LOCKED
-                    ┌─────▼──────┐
-                    │ Dispatcher  │
-                    └─────┬──────┘
-                    ┌─────▼──────┐
-                    │  Handlers   │  (isolated, with timeout)
-                    └────────────┘
-```
+The use case publishes, the request commits, and the commit wakes the workers. One of them
+locks the event, runs its handlers and commits the outcome. The figure follows a single event
+through those steps, including the two ways it can go back to pending.
 
----
+![Dispatch of one event](img/event-bus-dispatch.svg)
 
-## Quick start — Publishing an event
+The worker loop (`app/core/events/worker.py`) keeps a dedicated asyncpg connection that runs
+`LISTEN outbox_event_channel`. `EventBus.publish` calls `pg_notify` inside the request
+transaction, and PostgreSQL delivers the notification when that transaction commits. The
+notification only wakes the worker; what to process is always read from the table, so a lost
+notification costs at most one poll interval (`OUTBOX_POLL_INTERVAL_SECONDS`).
+
+## What it guarantees and what it does not
+
+| Guaranteed | Not guaranteed |
+|---|---|
+| An event exists only if the business change committed | Order between events (see [Known limitations](#known-limitations)) |
+| Each pending event is dispatched by one worker at a time, even with `--workers N` or replicas | Exactly-once side effects: a crash after a handler succeeds but before the commit re-runs it, so handlers must be idempotent |
+| Handlers that already succeeded are skipped on retries | Delivery within a deadline: failures back off up to one hour |
+| An event with no registered handler is never acknowledged | |
+
+## Several workers, lost notifications, missing handlers
+
+Three situations used to break those guarantees. The figure shows what happened before and what
+happens now.
+
+![Concurrency and failure scenarios](img/event-bus-concurrency.svg)
+
+- **One event per transaction.** `_process_batch` locks a single pending event with
+  `FOR UPDATE SKIP LOCKED`, handles it and commits, up to 50 times per wake-up. The lock lasts
+  until that commit, so no other worker can take the event while it is being dispatched.
+  Locking a whole batch and committing inside the loop released the locks of the rows still
+  waiting after the first commit.
+- **Events without handlers.** The dispatcher returns `no_handlers=True` and logs at CRITICAL.
+  The worker treats it as a failure: the event is retried with backoff and ends as `FAILED`
+  after `max_retries`, so it can be replayed once the handler is deployed.
+
+## Publishing an event
+
+Publish from a use case, with the same session as the business change:
 
 ```python
-# In a use case:
 from dataclasses import dataclass
+
 from app.core.events.bus import EventBus
 from app.services.orders import OrderService
+
 
 @dataclass(slots=True)
 class CreateOrderUseCase:
@@ -71,23 +76,25 @@ class CreateOrderUseCase:
         await self.event_bus.publish(
             event_type="order.created",
             payload={"order_id": order.id, "email": order.user_email},
-            aggregate_id=order.uuid,       # optional — groups events by entity
-            correlation_id=request_uuid,   # optional — traces end-to-end flows
+            aggregate_id=order.uuid,       # optional: groups events by entity
+            correlation_id=request_uuid,   # optional: traces end-to-end flows
         )
-
         return order
-        # get_session() will COMMIT both the order and the event atomically
+        # get_session() commits the order and the event together
 ```
 
-In the router, inject `EventBusDep`:
+In the router, inject the bus with `EventBusDep`:
 
 ```python
 from typing import Annotated
+
 from fastapi import Depends
+
 from app.core.events.bus import EventBus
 from app.deps.events import get_event_bus
 
 EventBusDep = Annotated[EventBus, Depends(get_event_bus)]
+
 
 @router.post("")
 async def create_order(service: OrderServiceDep, event_bus: EventBusDep, ...):
@@ -95,88 +102,81 @@ async def create_order(service: OrderServiceDep, event_bus: EventBusDep, ...):
     ...
 ```
 
----
-
-## Creating a handler
+## Writing a handler
 
 ### 1. Write the handler
 
 ```python
 # app/core/events/handlers/orders.py
 import logging
+
 from app.core.events.dispatcher import dispatcher
 
 logger = logging.getLogger(__name__)
 
+
 @dispatcher.register("order.created")
 async def send_order_confirmation(payload: dict) -> None:
-    order_id = payload["order_id"]
-    email = payload["email"]
-    # ... send email (verify idempotency first!)
-    logger.info("Sent confirmation for order %s to %s", order_id, email)
+    # ... send the email (check idempotency first)
+    logger.info("Sent confirmation for order %s", payload["order_id"])
 ```
 
 ### 2. Register the module
 
+The decorator only runs if the module is imported. An event type nobody imports a handler for
+is retried and ends as `FAILED` (see above), so add the import:
+
 ```python
 # app/core/events/handlers/__init__.py
 import app.core.events.handlers.items   # noqa: F401
-import app.core.events.handlers.orders  # noqa: F401  ← add this
+import app.core.events.handlers.orders  # noqa: F401
 ```
 
-### 3. Idempotency
+### 3. Make it idempotent
 
-Handlers that succeeded on a previous attempt are **automatically skipped** on retry thanks to per-handler state tracking (see [Handler state tracking](#handler-state-tracking) below). However, handlers should still be idempotent as a defence-in-depth measure — for example, if the process crashes after a handler succeeds but before the state is committed:
+Handlers that succeeded on a previous attempt are skipped on retry (see
+[Handler state](#handler-state)). Still, a crash between the handler's side effect and the
+commit of its state re-runs it, so check before acting:
 
 ```python
 @dispatcher.register("order.created")
 async def send_order_confirmation(payload: dict) -> None:
     if await email_service.was_sent(ref=f"order-{payload['order_id']}"):
-        return  # already sent
+        return
     await email_service.send(...)
 ```
-
----
 
 ## Configuration
 
 | Setting | Default | Description |
-|---------|---------|-------------|
-| `OUTBOX_POLL_INTERVAL_SECONDS` | `30` | Fallback poll interval if NOTIFY is missed |
-| `OUTBOX_MAX_RETRIES` | `5` | Default max retries before marking FAILED |
-| `OUTBOX_HANDLER_TIMEOUT_SECONDS` | `30` | Per-handler execution timeout |
-| `OUTBOX_CLEANUP_DAYS` | `30` | Retention period for PROCESSED events |
-| `OUTBOX_CLEANUP_BATCH_SIZE` | `1000` | Batch size for cleanup DELETE operations |
-
-All configurable via environment variables.
-
----
+|---|---|---|
+| `OUTBOX_POLL_INTERVAL_SECONDS` | `30` | Fallback poll when no NOTIFY arrives |
+| `OUTBOX_MAX_RETRIES` | `5` | Attempts before an event is marked `FAILED` |
+| `OUTBOX_HANDLER_TIMEOUT_SECONDS` | `30` | Timeout of each handler |
+| `OUTBOX_CLEANUP_DAYS` | `30` | Retention of `PROCESSED` events |
+| `OUTBOX_CLEANUP_BATCH_SIZE` | `1000` | Rows per DELETE during cleanup |
 
 ## Retry and backoff
 
-When a handler fails:
+When a handler fails, or there is no handler at all:
 
 1. `retry_count` is incremented.
-2. `last_error` stores the full traceback of each failed handler.
-3. `handler_state` records per-handler outcomes (see below).
-4. `scheduled_at` is set to: `now() + min(2^retry_count + random(0-5s), 1 hour)`.
-5. The event stays `PENDING` and will be picked up after `scheduled_at`.
+2. `last_error` keeps the error of each failed handler.
+3. `handler_state` records the outcome per handler.
+4. `scheduled_at` moves to `now() + min(2^retry_count + random(0..5 s), 1 hour)`.
+5. The event stays `PENDING` until `scheduled_at`.
 
-The **jitter** (random 0-5s) prevents thundering herd when multiple events fail simultaneously (e.g., external service outage). The **cap** (1 hour) prevents absurd delays at high retry counts.
-
-When `retry_count >= max_retries`, the event is marked `FAILED` with a **CRITICAL** log.
+The jitter avoids a thundering herd when an external service fails for many events at once; the
+one-hour cap keeps late retries reasonable. When `retry_count` reaches `max_retries` the event
+is marked `FAILED` and logged at CRITICAL.
 
 ```
-PENDING → retry (backoff) → retry (backoff) → ... → FAILED
-                                                       │
-                                              replay_failed_events()
-                                                       │
-                                                    PENDING (reset)
+PENDING -> retry (backoff) -> ... -> FAILED -> replay_failed_events() -> PENDING
 ```
 
-### Handler state tracking
+### Handler state
 
-The `handler_state` JSONB column on `outbox_events` records which handlers succeeded or failed on each attempt:
+The `handler_state` JSONB column records which handlers succeeded on each attempt:
 
 ```json
 {
@@ -185,86 +185,38 @@ The `handler_state` JSONB column on `outbox_events` records which handlers succe
 }
 ```
 
-On retry, the worker reads `handler_state` and passes the set of succeeded handler names to the dispatcher.  Handlers marked as `"ok"` are **skipped** — only failed or new handlers execute.  This prevents duplicate side effects (e.g., a webhook being sent multiple times for the same event).
-
-The state is committed per event (not per batch) to minimise the crash window.
-
-To force all handlers to re-execute during a replay (e.g., after deploying a handler fix):
+On retry, handlers marked `"ok"` are skipped and only failed or new handlers run. The state is
+committed together with the event, one event per transaction. To force every handler to run
+again during a replay (for example after fixing one):
 
 ```python
 await replay_failed_events(reset_handler_state=True)
 ```
 
----
-
 ## Operations
 
-### Cleanup
-
-Delete old PROCESSED events (runs in batches to avoid lock contention):
-
 ```python
-from app.core.events.cleanup import cleanup_processed_events
+from app.core.events.cleanup import cleanup_processed_events, replay_failed_events
 
-deleted = await cleanup_processed_events()          # uses OUTBOX_CLEANUP_DAYS
-deleted = await cleanup_processed_events(days=7)    # override retention
+await cleanup_processed_events()             # deletes PROCESSED older than OUTBOX_CLEANUP_DAYS
+await cleanup_processed_events(days=7)       # custom retention
+await replay_failed_events()                 # every FAILED event back to PENDING
+await replay_failed_events(event_ids=[id1])  # only some
 ```
 
-### Replay failed events
-
-Reset FAILED events back to PENDING for reprocessing:
-
-```python
-from app.core.events.cleanup import replay_failed_events
-
-count = await replay_failed_events()                                    # all FAILED
-count = await replay_failed_events(event_ids=[uuid1, uuid2])           # specific events
-```
-
-### Worker health
-
-The worker is available on `app.state.outbox_worker`. It starts automatically in the lifespan if the database is healthy.
-
----
+The worker runs in every API process, starts in the lifespan when the database is reachable and
+is available as `app.state.outbox_worker`.
 
 ## Known limitations
 
-### 1. Causal ordering not guaranteed
-
-`FOR UPDATE SKIP LOCKED` with multiple workers does not guarantee that events for the same aggregate are processed in order. If `order.created` and `order.paid` arrive close together, a second worker may process `order.paid` first.
-
-**Mitigation**: Handlers must be **state-aware** — verify the entity's current state in the database before acting:
-
-```python
-@dispatcher.register("order.paid")
-async def process_payment(payload: dict) -> None:
-    order = await order_repo.get(payload["order_id"])
-    if order is None or order.status != "CREATED":
-        raise EventPreconditionError("Order not ready for payment")
-    # ... process payment
-```
-
-The exception triggers a retry with backoff, giving the prerequisite event time to be processed.
-
-### 2. Timeout cancellation risk
-
-`asyncio.wait_for` cancels handler coroutines on timeout. If a handler produced an external side effect (e.g., uploaded to S3) but didn't record it for idempotency, the retry may duplicate the effect.
-
-**Mitigation**: Use `asyncio.shield()` for critical external operations:
-
-```python
-@dispatcher.register("order.invoice")
-async def upload_invoice(payload: dict) -> None:
-    result = await asyncio.shield(s3_client.upload(file))
-    await mark_as_uploaded(payload["order_id"], result.key)
-```
-
-### 3. Handler state depends on `__name__`
-
-The `handler_state` tracking uses each handler function's `__name__` as the key. If a handler is renamed during a deploy, the old `"ok"` entry won't match and the handler will re-execute on any pending retry.
-
-**Mitigation**: This is generally harmless (the handler runs once more). For critical handlers, keep function names stable across deploys.
-
-### 4. LISTEN connection is outside the pool
-
-The worker maintains a dedicated asyncpg connection for `LISTEN`, separate from SQLAlchemy's connection pool. A heartbeat (`SELECT 1`) runs every poll cycle to detect dead connections. If the heartbeat fails, the worker reconnects with exponential backoff.
+1. **No ordering between events.** With several workers, `order.paid` can be dispatched before
+   `order.created`. Handlers must check the current state of the entity and raise if it is not
+   ready; the retry gives the other event time to be processed.
+2. **Timeouts cancel handlers.** `asyncio.wait_for` cancels a handler that overruns its timeout.
+   If it already produced an external effect without recording it, the retry repeats it. Wrap
+   critical external calls in `asyncio.shield()` and record their result.
+3. **Handler state is keyed by function name.** Renaming a handler makes pending retries run it
+   again. Keep names of critical handlers stable.
+4. **The LISTEN connection lives outside the pool.** Each process keeps one extra connection to
+   PostgreSQL. A `SELECT 1` heartbeat per cycle detects dead connections and the worker
+   reconnects with exponential backoff.
