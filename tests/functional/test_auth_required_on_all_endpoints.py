@@ -16,14 +16,15 @@ from httpx import AsyncClient
 
 from tests._routes import iter_api_routes
 
-# Routes that answer without credentials, one by one (no prefixes), with the reason.
-PUBLIC: dict[str, str] = {
-    "/v1/health/liveness": "orchestrator probe, no data",
-    "/v1/health/readiness": "orchestrator probe, no data",
-    "/v1/metrics": "Prometheus scrape; keep it off the public network",
-    "/v1/auth/login": "issues the tokens",
-    "/v1/auth/register": "creates the account",
-    "/v1/auth/refresh": "the refresh token in the body is the credential",
+# Routes that answer without credentials, one by one (method and path, no prefixes), with
+# the reason. By method: a new verb on a public path is a new decision, not a free ride.
+PUBLIC: dict[tuple[str, str], str] = {
+    ("GET", "/v1/health/liveness"): "orchestrator probe, no data",
+    ("GET", "/v1/health/readiness"): "orchestrator probe, no data",
+    ("GET", "/v1/metrics"): "Prometheus scrape; METRICS_TOKEN closes it",
+    ("POST", "/v1/auth/login"): "issues the tokens",
+    ("POST", "/v1/auth/register"): "creates the account",
+    ("POST", "/v1/auth/refresh"): "the refresh token in the body is the credential",
 }
 
 _PARAM = re.compile(r"\{([^}:]+)(?::[^}]+)?\}")
@@ -37,10 +38,9 @@ def _url(path: str) -> str:
 def _protected() -> list[tuple[str, str]]:
     found = set()
     for ctx in iter_api_routes():
-        if ctx.path in PUBLIC:
-            continue
         for method in ctx.route.methods - {"HEAD", "OPTIONS"}:
-            found.add((method, ctx.path))
+            if (method, ctx.path) not in PUBLIC:
+                found.add((method, ctx.path))
     return sorted(found)
 
 
@@ -53,7 +53,7 @@ def test_scanner_sees_the_api():
 def test_public_has_no_stale_entries():
     # A dead entry is a pre-granted exemption: the day a route appears there, it is born
     # anonymous without anyone deciding it.
-    live = {ctx.path for ctx in iter_api_routes()}
+    live = {(method, ctx.path) for ctx in iter_api_routes() for method in ctx.route.methods}
     assert not set(PUBLIC) - live, f"PUBLIC lists routes that do not exist: {set(PUBLIC) - live}"
 
 
