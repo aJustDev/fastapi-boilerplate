@@ -131,6 +131,7 @@ CREATE TABLE scheduled_jobs (
     last_error       TEXT,
     run_count        INT             NOT NULL DEFAULT 0,
     claimed_by       TEXT,
+    lease_until      TIMESTAMPTZ,
     created_at       TIMESTAMPTZ     NOT NULL DEFAULT now(),
     updated_at       TIMESTAMPTZ
 );
