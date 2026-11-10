@@ -1,9 +1,12 @@
 import logging
+import math
+import time
 import traceback
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from slowapi.errors import RateLimitExceeded
+from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
@@ -91,15 +94,30 @@ async def domain_exception_handler(request: Request, exc: DomainException) -> JS
     headers = getattr(exc, "headers", None) or {}
     return JSONResponse(
         status_code=ctx["status_code"],
-        content={"detail": ctx["message"]},
+        content={"detail": ctx["message"], "code": exc.code},
         headers=headers,
     )
+
+
+# `code` for errors that are not a DomainException: 404 of an unknown route, 405 of a
+# wrong method, and HTTPExceptions raised by hand. Same vocabulary as exceptions.py on
+# purpose, so a missing route and a missing resource read the same to a client.
+_HTTP_CODES = {
+    400: "bad_request",
+    401: "unauthenticated",
+    403: "forbidden",
+    404: "not_found",
+    405: "method_not_allowed",
+    409: "conflict",
+    422: "validation_error",
+    429: "rate_limited",
+}
 
 
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,
-        content={"detail": exc.detail},
+        content={"detail": exc.detail, "code": _HTTP_CODES.get(exc.status_code, "http_error")},
         headers=getattr(exc, "headers", None),
     )
 
@@ -111,17 +129,50 @@ async def validation_exception_handler(
     logger.warning("Validation error on %s %s: %s", request.method, request.url.path, errors)
     return JSONResponse(
         status_code=422,
-        content={"detail": "Validation error", "errors": errors},
+        content={"detail": "Validation error", "code": "validation_error", "errors": errors},
     )
 
 
+def _retry_after_seconds(request: Request, exc: RateLimitExceeded) -> int:
+    """Seconds until the window of the limit that was hit opens again.
+
+    slowapi leaves the limit and its key in `request.state.view_rate_limit` before
+    raising; with them the storage tells how long is left. Without that state, the
+    whole window, which is a valid upper bound for Retry-After.
+    """
+    view = getattr(request.state, "view_rate_limit", None)
+    app = request.scope.get("app")
+    limiter = getattr(app.state, "limiter", None) if app is not None else None
+    if view is not None and limiter is not None:
+        item, identifiers = view
+        reset_at, _ = limiter.limiter.get_window_stats(item, *identifiers)
+        remaining: int = math.ceil(reset_at - time.time())
+        if remaining > 0:
+            return remaining
+    expiry: int = exc.limit.limit.get_expiry() if exc.limit is not None else 60
+    return expiry
+
+
 async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
-    retry_after = exc.detail.split()[-1] if exc.detail else ""
+    retry_after = str(_retry_after_seconds(request, exc))
     logger.warning("Rate limit exceeded: %s %s (%s)", request.method, request.url.path, retry_after)
     return JSONResponse(
         status_code=429,
-        content={"detail": "Too many requests"},
+        content={"detail": "Too many requests", "code": "rate_limited"},
         headers={"Retry-After": retry_after},
+    )
+
+
+async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+    # Safety net for constraint violations that slip past the checks in the services
+    # (two requests racing between the SELECT and the INSERT). Without it they would
+    # end as a 500 and an alert, while the client simply sent a duplicate.
+    ctx = _extract_context(request, exc)
+    ctx["status_code"] = 409
+    logger.warning(_format_log(ctx), exc_info=True)
+    return JSONResponse(
+        status_code=409,
+        content={"detail": "Conflict with existing resource", "code": "integrity_conflict"},
     )
 
 
@@ -130,7 +181,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     logger.error(_format_log(ctx), exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error"},
+        content={"detail": "Internal server error", "code": "internal_error"},
     )
 
 
@@ -140,4 +191,5 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RateLimitExceeded, rate_limit_exception_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(IntegrityError, integrity_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, unhandled_exception_handler)
