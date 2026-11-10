@@ -2,7 +2,7 @@
 
 Each docs/img/<topic>.py describes its figures as data and calls these builders:
 - steps: vertical flow of steps and decisions, with side branches;
-- scenarios: rows of "situation | before | now".
+- scenarios: rows of "situation | left column | right column" (e.g. unsafe vs safe).
 """
 
 import sys
@@ -116,11 +116,12 @@ def steps(cls, items, note=None):
     return c
 
 
-def scenarios(cls, rows, before="Before", now="Now"):
-    """rows: (title, sub, before_text, now_text)."""
+def scenarios(cls, rows, left, right):
+    """rows: (title, sub, left_text, right_text); `left`/`right` are the column titles,
+    drawn in red and green."""
     c = Lienzo(760, 0, cls)
-    c.texto(XA + WA / 2, 20, before, size=12, bold=True, color=ROJO, anchor="middle")
-    c.texto(XN + WN / 2, 20, now, size=12, bold=True, color=VERDE, anchor="middle")
+    c.texto(XA + WA / 2, 20, left, size=12, bold=True, color=ROJO, anchor="middle")
+    c.texto(XN + WN / 2, 20, right, size=12, bold=True, color=VERDE, anchor="middle")
     y = 34
     for title, sub, antes, ahora in rows:
         lines = max(_lines(antes, WA - 56, 12), _lines(ahora, WN - 56, 12))

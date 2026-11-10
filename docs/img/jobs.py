@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from _figures import guardar, scenarios, steps
+from _figures import guardar, steps
 
 
 def cycle():
@@ -44,27 +44,5 @@ def cycle():
     )
 
 
-def failures():
-    return scenarios(
-        "jobs-f2",
-        [
-            (
-                "Several workers",
-                "--workers N or replicas",
-                "Claiming the first job released the locks on the rest of the batch: two workers "
-                "ran the same job.",
-                "Each job is claimed with a conditional update: one worker wins, the others skip it.",
-            ),
-            (
-                "A worker dies mid-job",
-                "OOM, SIGKILL, a deploy",
-                "Any worker starting up reset every running job, also the ones other workers "
-                "were still running.",
-                "The job keeps its lease; once it expires, the next poll of any worker frees it.",
-            ),
-        ],
-    )
-
-
 if __name__ == "__main__":
-    guardar(Path(__file__).parent, (("jobs-cycle", cycle), ("jobs-failures", failures)))
+    guardar(Path(__file__).parent, (("jobs-cycle", cycle),))

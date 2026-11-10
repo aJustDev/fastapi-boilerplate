@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from _figures import guardar, scenarios, steps
+from _figures import guardar, steps
 
 
 def tokens():
@@ -52,38 +52,5 @@ def tokens():
     )
 
 
-def risks():
-    return scenarios(
-        "auth-f2",
-        [
-            (
-                "A refresh token is stolen",
-                "a leaked log, a compromised device",
-                "Thief and user could both refresh for 7 days; nothing noticed the second copy.",
-                "Its first use rotates it; when the other copy comes back, every session of the "
-                "user ends.",
-            ),
-            (
-                "The user logs out",
-                "explicit logout",
-                "Only the access token was revoked: the refresh token kept opening new sessions.",
-                "The refresh token sent with the logout is revoked too.",
-            ),
-            (
-                "Login with an unknown account",
-                "probing which emails exist",
-                "It answered faster than a wrong password, so timing revealed which accounts exist.",
-                "It runs the same password check against a dummy hash: both answers take as long.",
-            ),
-            (
-                "Email in another case",
-                "Foo@x.com and foo@x.com",
-                "Login failed, and registering it again crashed with a 500.",
-                "Lookups ignore case like the unique index; a duplicate registration is a 409.",
-            ),
-        ],
-    )
-
-
 if __name__ == "__main__":
-    guardar(Path(__file__).parent, (("auth-tokens", tokens), ("auth-risks", risks)))
+    guardar(Path(__file__).parent, (("auth-tokens", tokens),))

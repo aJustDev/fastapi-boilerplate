@@ -1,167 +1,72 @@
 # Testing
 
-Three-layer strategy: unit, functional, and integration. Each layer covers a distinct concern.
+pytest with three levels, each split by context like `app/` (`auth/`, `items/`, `core/` for
+infrastructure), plus meta-tests that check rules over the whole code base.
 
-## Test layers
+| Level | Directory | Tests | Database |
+|---|---|---|---|
+| Unit | `tests/unit/` | Services, use cases, repos and core modules in isolation | Mocked |
+| Functional | `tests/functional/` | HTTP behavior through the real app and middleware: status, body, headers, auth | Mocked session |
+| Integration | `tests/integration/` | SQL, workers, migrations | PostgreSQL 18 in a testcontainer |
 
-| Layer | Directory | What it tests | DB | Speed |
-|-------|-----------|---------------|----|-------|
-| Unit | `tests/unit/` | Services, use cases, repos, core modules in isolation | Mocked (`AsyncMock`) | ~3s |
-| Functional | `tests/functional/` | HTTP contract: status codes, response shapes, auth, validation | Mocked (`AsyncMock`) | ~1s |
-| Integration | `tests/integration/` | SQL correctness: CRUD, pagination, filtering, constraints | Real PostgreSQL via testcontainers | ~12s |
+## How it works
 
-### When to use each layer
+- `tests/conftest.py` sets `SETTINGS_ENV_FILE=""` before importing `app` (no `.env` file is read)
+  and disables the rate limiter. It provides `mock_session`, `fake_user`, `auth_headers` and
+  `client`, an `httpx.AsyncClient` over `ASGITransport` with `get_session` overridden.
+- `tests/integration/conftest.py` starts one PostgreSQL container per session and builds the
+  schema with `alembic upgrade head`. `db_session` is rolled back after each test (repositories
+  only flush). `committing_factory` gives real commits on a `NullPool` engine for code that
+  commits by itself (workers, separate transactions) and empties the tables listed by the
+  module's `committing_tables` fixture before and after the test. `seed_user` inserts a user for
+  foreign keys.
+- Async fixtures and integration modules use `loop_scope="session"`, so the session-scoped engine
+  and the tests share one event loop.
 
-- **Unit**: testing business logic, branching, error paths. Mock all dependencies.
-- **Functional**: testing that endpoints return the right status codes, shapes, and headers. Mock the DB session.
-- **Integration**: testing that generated SQL is correct against real PostgreSQL. No mocks -- repos receive a real `AsyncSession`.
+## Usage
 
-Each level is split by context like `app/`: `auth/`, `items/` and `core/` for infrastructure.
-Meta-tests that check the whole code base (one use case per endpoint, the Dockerfile allow-list)
-sit at the root of `tests/unit/`.
+```bash
+uv run pytest                          # everything (Docker needed)
+uv run pytest --ignore=tests/integration
+uv run pytest tests/integration -m integration
+uv run pytest --cov=app                # with coverage
+```
+
+- Unit: `tests/unit/<context>/test_<name>.py`; mock the collaborators with `AsyncMock`.
+- Functional: `tests/functional/<context>/`; use `client`, patch repository methods where they are
+  used (`app.auth.repos.user.UserRepo.get_by_id`), assert status, `code` and body.
+- Integration: `tests/integration/<context>/` with
+  `pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]`, a real
+  repository on `db_session`.
+- A test for a bug must fail against the code before the fix: run it once without the fix.
 
 ## Meta-tests
 
-Some tests check a rule over the whole code base instead of one behavior. Each has a canary
-(`test_scanner_sees_...`) that fails if the scanner finds nothing, so a refactor cannot turn it
-into a test that passes on zero cases.
-
-```mermaid
-flowchart LR
-    U[unit: no I/O] --> F[functional: HTTP, DB mocked] --> I[integration: real PostgreSQL]
-    M[meta-tests: rules over the code] -.-> U
-    M -.-> F
-    M -.-> I
-```
+Each one has a `test_scanner_sees_...` canary that fails if it finds nothing to check. Exemptions
+go in the list at the top of the file, each with its reason.
 
 | Test | Rule |
 |---|---|
-| `tests/functional/test_auth_required_on_all_endpoints.py` | Every route answers 401 without a token, except the ones in `PUBLIC` |
-| `tests/unit/test_every_endpoint_has_a_rate_limit.py` | Every endpoint declares a rate limit, except the ones in `EXEMPT` |
+| `tests/functional/test_auth_required_on_all_endpoints.py` | Every route answers 401 without a token, except `PUBLIC` |
+| `tests/unit/test_every_endpoint_has_a_rate_limit.py` | Every endpoint declares a rate limit, except `EXEMPT` |
 | `tests/unit/test_api_endpoint_single_use_case.py` | An endpoint runs at most one use case |
-| `tests/functional/test_error_contract.py` | Every error body matches the published schemas |
+| `tests/functional/test_error_contract.py` | Error bodies match the published schemas |
 | `tests/unit/test_no_interpolated_sql.py` | No SQL in `app/` is built from strings |
 | `tests/unit/core/events/test_published_event_types_have_handlers.py` | Every published event type has a handler |
-| `tests/unit/core/test_register_middleware.py` | The middleware stack and its order |
+| `tests/unit/core/test_register_middleware.py` | Middleware stack and order |
 | `tests/unit/core/test_env_example_sync.py` | `.env.example` lists every setting |
-| `tests/unit/test_dockerfile_runtime_copy.py` | The Docker image copies an allow-list |
+| `tests/unit/test_dockerfile_runtime_copy.py` | The image copies an allow-list |
 | `tests/integration/test_migrations.py` | Models match the migrations; downgrades work |
 
-When one fails, its docstring says what to do; exemptions go in the list at the top of the file,
-each with its reason.
+Meta-tests that walk the API use `tests/_routes.py` (`iter_api_routes`), not `app.routes`.
 
-## Running tests
+## Configuration
 
-```bash
-# All tests
-uv run python -m pytest
+`pyproject.toml`: `asyncio_mode = "auto"`, `--strict-markers`, marker `integration`, deprecation
+warnings raised from `app` or `tests` are errors, coverage `fail_under = 80` over `app/`.
 
-# By layer
-uv run python -m pytest tests/unit/
-uv run python -m pytest tests/functional/
-uv run python -m pytest tests/integration/
+## Guarantees and limits
 
-# Skip integration (no Docker required)
-uv run python -m pytest -m "not integration"
-
-# Only integration
-uv run python -m pytest -m integration
-
-# With coverage
-uv run python -m pytest --cov=app --cov-report=term-missing
-```
-
-## Coverage
-
-Minimum threshold: **80%** (configured in `pyproject.toml` under `[tool.coverage.report]`).
-
-CI enforces this automatically via `--cov=app` -- the build fails if coverage drops below 80%.
-
-## Markers
-
-| Marker | Description |
-|--------|-------------|
-| `integration` | Requires Docker. Starts a PostgreSQL container via testcontainers. |
-
-Registered in `pyproject.toml` under `[tool.pytest.ini_options]`.
-
-## Fixtures
-
-### Shared (`tests/conftest.py`)
-
-| Fixture | Scope | Description |
-|---------|-------|-------------|
-| `fake_user` | function | `MagicMock(spec=UserORM)` with realistic test data |
-| `auth_headers` | function | JWT bearer token headers for authenticated requests |
-| `mock_session` | function | `AsyncMock` with commit, rollback, flush, execute, etc. |
-| `client` | function | `httpx.AsyncClient` with ASGI transport and mocked DB session |
-
-### Integration (`tests/integration/conftest.py`)
-
-| Fixture | Scope | Description |
-|---------|-------|-------------|
-| `pg_container` | session | Starts `postgres:18-alpine` via testcontainers. One container per test session. |
-| `pg_url` | session | Async connection URL from the container. |
-| `async_engine` | session | SQLAlchemy async engine on a database built by `alembic upgrade head` (never `create_all`). |
-| `session_factory` | session | `async_sessionmaker` bound to the test engine. |
-| `db_session` | function | `AsyncSession` that is rolled back after each test. |
-| `seed_user` | function | Inserts a `UserORM` record for tests that need a valid `owner_id` FK. |
-| `committing_factory` | function | Session factory whose commits are real (NullPool engine), for workers and anything that must survive a request rollback. Override `committing_tables` in the module to list the tables it empties. |
-
-### Isolation pattern
-
-Each integration test gets a fresh `AsyncSession`. After the test, `session.rollback()` discards all changes. This works because repos call `flush()` -- never `commit()` -- so all writes stay in the uncommitted transaction.
-
-```
-Session scope:  pg_container --> async_engine --> alembic upgrade head (DDL once)
-Function scope: db_session --> yield session --> rollback
-```
-
-No truncation, no manual cleanup. Rollback is faster and guarantees isolation.
-
-### Event loop
-
-Integration tests use `loop_scope="session"` on async fixtures and `pytest.mark.asyncio(loop_scope="session")` on test modules. This ensures the session-scoped engine and the function-scoped tests share the same event loop, avoiding `asyncpg` "different loop" errors.
-
-## Adding new tests
-
-### New unit test
-
-1. Create file in `tests/unit/<context>/test_<name>.py` (`core/` for infrastructure)
-2. Use `mock_session`, `fake_user`, or local `AsyncMock` fixtures
-3. Test one behavior per function
-
-### New functional test
-
-1. Create file in `tests/functional/<context>/test_<name>_endpoint.py`
-2. Use the `client` fixture to make HTTP requests
-3. Patch repo methods with `unittest.mock.patch`
-4. Assert status codes and response JSON
-
-### New integration test
-
-1. Create file in `tests/integration/<context>/test_<name>.py` (`core/` for infrastructure)
-2. Add the `pytestmark` line at the top:
-   ```python
-   pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
-   ```
-3. Use `db_session` fixture to get a real `AsyncSession`
-4. Use `seed_user` if your model has a FK to `users`
-5. Instantiate the repo directly: `repo = MyRepo(db_session)`
-
-### Dependencies
-
-Integration tests require Docker running on the host. GitHub Actions `ubuntu-latest` runners have Docker pre-installed.
-
-Test dependencies in `pyproject.toml`:
-
-```toml
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0",
-    "pytest-asyncio>=0.25",
-    "pytest-cov>=6.0",
-    "ruff>=0.11",
-    "testcontainers[postgres]>=4.0",
-]
-```
+- `TestClient` is banned by ruff (`TID251`): it runs the app in another thread and event loop.
+- Functional tests do not run the lifespan: no workers, no database check.
+- Integration tests need Docker; CI runners have it.

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from _figures import guardar, scenarios, steps
+from _figures import guardar, steps
 
 
 def dispatch():
@@ -57,38 +57,5 @@ def dispatch():
     )
 
 
-def concurrency():
-    return scenarios(
-        "eb-f2",
-        [
-            (
-                "Several workers",
-                "--workers N, replicas or a rolling deploy",
-                "The whole batch was locked, but the first commit released it: another worker "
-                "dispatched the same events again.",
-                "Each event is locked and committed on its own: a second worker always takes a "
-                "different one.",
-            ),
-            (
-                "A NOTIFY arrives",
-                "right after a commit",
-                "It was ignored: the event waited for the next poll, up to 30 s.",
-                "It wakes the worker at once; the poll only covers notifications lost during a "
-                "reconnect.",
-            ),
-            (
-                "No handler registered",
-                "typo in the event type, module never imported",
-                "The event was marked as processed and its side effects were lost silently.",
-                "It stays pending and is retried with a critical log, then ends as failed, ready "
-                "to replay.",
-            ),
-        ],
-    )
-
-
 if __name__ == "__main__":
-    guardar(
-        Path(__file__).parent,
-        (("event-bus-dispatch", dispatch), ("event-bus-concurrency", concurrency)),
-    )
+    guardar(Path(__file__).parent, (("event-bus-dispatch", dispatch),))

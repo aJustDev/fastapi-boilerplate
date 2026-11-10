@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.events.models import OutboxEventORM
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ class EventBus:
             payload=payload,
             aggregate_id=aggregate_id,
             correlation_id=correlation_id,
+            max_retries=settings.OUTBOX_MAX_RETRIES,
         )
         self.session.add(event)
         await self.session.flush()

@@ -1,7 +1,5 @@
 # Architecture
 
-## What it solves
-
 Code is grouped by what it is about (a bounded context: `auth`, `items`), and inside each
 context by layer. A new feature touches one folder; the rules for what may import what are
 written down and checked, so the structure does not erode as the project grows.
@@ -22,24 +20,12 @@ app/
   db_registry.py   imports every model and handler module (see below)
 ```
 
-```mermaid
-flowchart TB
-    API[app.api.v1<br/>composes routers] --> AUTH[app.auth]
-    API --> ITEMS[app.items]
-    AUTH --> DEPS[app.deps<br/>shared dependencies]
-    ITEMS --> DEPS
-    DEPS --> AUTH
-    AUTH --> CORE[app.core<br/>infrastructure]
-    ITEMS --> CORE
-    DEPS --> CORE
-    REG[app.db_registry] --> AUTH
-    REG --> ITEMS
-    REG --> CORE
-```
+The packages form bands, and imports only go down them.
 
-`app.deps` is the only shared seam: items gets the current user from `app.deps.auth`, never by
-importing `app.auth`. Items and users are linked by `owner_id` only, without an ORM relationship
-across contexts.
+![Package layers](img/architecture-layers.svg)
+
+Items gets the current user from `app.deps.auth`, never by importing `app.auth`; items and users
+are linked by `owner_id` only, without an ORM relationship across contexts.
 
 ## How a request flows
 

@@ -1,7 +1,5 @@
 # Configuration
 
-## What it solves
-
 Every tunable value lives in one typed object, `settings` (`app/core/config.py`), built once at
 import time from the environment. Invalid combinations stop the process at startup instead of
 failing later in a request.
@@ -12,9 +10,9 @@ failing later in a request.
 
 ```mermaid
 flowchart LR
-    E[Process environment] --> S[Settings]
-    F[".env.{ENVIRONMENT} file<br/>none if SETTINGS_ENV_FILE is empty"] --> S
-    D[Defaults in config.py] --> S
+    E["1. Process environment"] --> S[Settings]
+    F["2. .env.{ENVIRONMENT} file<br/>none if SETTINGS_ENV_FILE is empty"] --> S
+    D["3. Defaults in config.py"] --> S
     P[pyproject.toml version] -->|importlib.metadata| D
     S --> V{Validators}
     V -->|valid| R[settings singleton]

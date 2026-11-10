@@ -58,8 +58,8 @@ def safe_changes():
                 "Add it NOT VALID, then VALIDATE in a later step with a weaker lock.",
             ),
         ],
-        before="Unsafe",
-        now="Safe",
+        left="Unsafe",
+        right="Safe",
     )
 
 

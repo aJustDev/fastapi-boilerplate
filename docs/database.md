@@ -1,7 +1,5 @@
 # Database access
 
-## What it solves
-
 Every request reads and writes through one async SQLAlchemy session, and everything it changes
 is committed together or not at all, events included. Models share their primary key, audit
 columns and naming rules, and repositories share pagination and filtering.

@@ -1,153 +1,74 @@
 # Logging
 
-## Overview
+Standard library logging configured once at startup (`setup_logging()`), with two output modes:
+colored text for local work and one-line JSON for log aggregators. Every line logged while
+serving a request carries its `request_id`, and every line carries the architectural layer and
+module of the logger.
 
-The logging system provides two output modes selected automatically by environment:
+## How it works
 
-- **Colored** (local/dev) — human-readable format with ANSI colors, layer and module labels
-- **JSON** (production) — structured one-line JSON objects, ready for log aggregators (ELK, Datadog, CloudWatch, Loki)
+- `RequestIdMiddleware` takes `X-Request-ID` from the request or generates a UUID4 hex, stores it
+  in a `ContextVar` for the duration of the request and returns it in the response header.
+- `RequestIdFilter` adds `request_id` to every record (empty outside a request: workers, jobs,
+  startup).
+- `LayerModuleFilter` derives `layer` and `module` from the logger name: the first of `api`,
+  `use_cases`, `services`, `repos`, `core`, `deps` in it gives the layer (`Router`, `UseCase`,
+  `Service`, `Repo`, `Core`, `Deps`, else `App`) and the last part the module, title-cased. A
+  context router is named after its context: `app.items.api.router` logs as `[Router] [Items]`.
+- The formatter is chosen from `ENVIRONMENT` and `LOG_FORMAT`:
 
-Every HTTP request is assigned a unique `request_id` that is injected into every log line emitted during that request, enabling full end-to-end tracing across all layers.
+| `LOG_FORMAT` | `local`/`dev` | other environments |
+|---|---|---|
+| `auto` | colored text | JSON |
+| `json` | JSON | JSON |
+| `text` | plain text | plain text |
+
+- The `uvicorn.access` logger drops OPTIONS requests, `/health/liveness` and `/v1/metrics`.
+- Exception handlers build a multi-line message (exception, location, request, status) and add
+  color only when `ansi_enabled()`, so JSON lines never contain escape codes.
+
+## Usage
+
+```python
+import logging
+
+logger = logging.getLogger(__name__)  # app.<context>.<layer>.<module>
+logger.info("Item %s created", item.id)  # lazy %-formatting (ruff rule G)
+```
+
+`get_request_id()` (`app/core/logging/context.py`) returns the current id, for example to pass it
+to an external call. Clients and gateways can send their own `X-Request-ID` to correlate logs
+across services.
+
+A JSON line:
+
+```json
+{"timestamp": "2026-03-22T10:15:23.458000+00:00", "level": "DEBUG", "layer": "Service", "module": "Auth", "logger": "app.auth.services.auth", "request_id": "a1b2c3d4e5f67890abcdef1234567890", "message": "Looking up user credentials"}
+```
+
+Fields: `timestamp` (ISO 8601, UTC), `level`, `layer`, `module`, `logger`, `request_id`,
+`message`, and `exception` (the traceback) when one was logged.
 
 ## Configuration
 
-| Variable | Default | Values | Description |
-|----------|---------|--------|-------------|
-| `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | Minimum log level for the `app` logger |
-| `LOG_FORMAT` | `auto` | `auto`, `json`, `text` | Output format selection |
+| Setting | Default | Meaning |
+|---|---|---|
+| `LOG_LEVEL` | `INFO` | Level of the `app` loggers; uvicorn stays at WARNING and its access log at INFO |
+| `LOG_FORMAT` | `auto` | `auto`, `json` or `text` |
 
-**`LOG_FORMAT` behavior:**
+## Guarantees and limits
 
-| Value | local/dev | Other environments |
-|-------|-----------|-------------------|
-| `auto` | Colored output | JSON output |
-| `json` | JSON output | JSON output |
-| `text` | Plain text (no color) | Plain text (no color) |
+- Output is newline-delimited on stdout; shipping it (Loki, ELK, CloudWatch...) is the platform's
+  job.
+- Third-party loggers propagate to the root logger, at WARNING.
+- A new noise filter goes in `app/core/logging/filters.py` (return `False` to drop the record) and
+  is registered in the `dictConfig` of `setup_logging()`.
 
-Color is only emitted when the output is the colored console. The exception handlers build
-their multi-line message before any formatter runs, so they ask `ansi_enabled()`
-(`app/core/logging/config.py`) and drop the escape codes otherwise: JSON logs never carry ANSI
-sequences inside the `message` field.
+## Files
 
-## Request tracing
-
-### How it works
-
-1. `RequestIdMiddleware` intercepts every HTTP request
-2. If the client sends an `X-Request-ID` header, that value is used; otherwise a UUID4 hex string is generated
-3. The ID is stored in a `ContextVar`, which is async-safe and automatically scoped to the current task
-4. `RequestIdFilter` reads the `ContextVar` and injects `request_id` into every `LogRecord`
-5. The `X-Request-ID` header is returned in the response
-
-### Using the request ID
-
-The `request_id` appears automatically in all log lines — no code changes needed. If you need to access it programmatically:
-
-```python
-from app.core.logging.context import get_request_id
-
-rid = get_request_id()  # returns "" outside of a request context
-```
-
-### Client-side correlation
-
-API gateways and frontend clients can pass their own `X-Request-ID` header to correlate logs across services:
-
-```bash
-curl -H "X-Request-ID: my-trace-123" http://localhost:8000/v1/items
-```
-
-The response will echo the same ID:
-
-```
-X-Request-ID: my-trace-123
-```
-
-## Log format examples
-
-### Colored (development)
-
-```
-INFO: [Router] [Login] [a1b2c3d4e5f6...] ❯ Attempting login for user: john
-INFO: [Service] [Auth] [a1b2c3d4e5f6...] ❯ Looking up user by email: john
-INFO: [Repo] [User] [a1b2c3d4e5f6...] ❯ Executing get_by_email
-```
-
-### JSON (production)
-
-```json
-{"timestamp": "2024-03-22T10:15:23.456000+00:00", "level": "INFO", "layer": "Router", "module": "Login", "logger": "app.api.v1.auth", "request_id": "a1b2c3d4e5f67890abcdef1234567890", "message": "Attempting login for user: john"}
-{"timestamp": "2024-03-22T10:15:23.458000+00:00", "level": "INFO", "layer": "Service", "module": "Auth", "logger": "app.auth.services.auth", "request_id": "a1b2c3d4e5f67890abcdef1234567890", "message": "Looking up user by email: john"}
-```
-
-### JSON fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `timestamp` | string | ISO 8601 UTC timestamp |
-| `level` | string | Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
-| `layer` | string | Architectural layer (Router, UseCase, Service, Repo, Core, Deps, App) |
-| `module` | string | Module name, title-cased (e.g., "Refresh Token") |
-| `logger` | string | Full Python logger name (e.g., `app.auth.services.auth`) |
-| `request_id` | string | UUID4 hex or client-provided ID; empty for non-request contexts |
-| `message` | string | Log message |
-| `exception` | string | Full traceback (only present when logging an exception) |
-
-## Architecture
-
-### Component pipeline
-
-```
-LogRecord
-  │
-  ├─→ LayerModuleFilter    — extracts layer + module from logger path
-  ├─→ RequestIdFilter      — injects request_id from ContextVar
-  │
-  └─→ Formatter
-       ├─ ColoredFormatter  — ANSI colored output (local/dev)
-       ├─ Formatter         — plain text with timestamp (text mode)
-       └─ JSONFormatter     — single-line JSON (production)
-```
-
-### Key files
-
-| File | Responsibility |
-|------|---------------|
-| `app/core/logging/config.py` | `setup_logging()`, `JSONFormatter`, dictConfig setup |
-| `app/core/logging/filters.py` | `LayerModuleFilter`, `RequestIdFilter`, noise filters |
-| `app/core/logging/context.py` | `ContextVar` for `request_id` |
-| `app/core/logging/middleware.py` | `RequestIdMiddleware` (ASGI) |
-| `app/core/middleware.py` | Middleware registration order |
-
-## Filtering
-
-Two built-in noise filters reduce log volume:
-
-- **`IgnoreOptionsFilter`** — suppresses CORS preflight `OPTIONS` request logs
-- **`IgnoreHealthcheckFilter`** — suppresses `/health/liveness` endpoint logs
-
-To add a new filter:
-
-1. Create a class in `app/core/logging/filters.py` extending `logging.Filter`
-2. Return `False` to suppress the record, `True` to allow it
-3. Register it in `setup_logging()` dictConfig under `"filters"` and add it to the relevant handler or logger
-
-## Background workers
-
-The `OutboxWorker` and `JobWorker` run outside of HTTP request context, so `request_id` is empty (`""`) in their logs. They are identified by:
-
-- **Layer**: `Core`
-- **Module**: `Worker` (outbox) or `Worker` (jobs)
-
-Their logs are still structured as JSON in production and can be filtered by `layer` and `logger` fields.
-
-## Integration with log aggregators
-
-The JSON output is newline-delimited JSON (ndjson), which is natively supported by most log aggregators:
-
-- **ELK Stack**: Filebeat can ingest ndjson directly; no Logstash parsing needed
-- **Grafana Loki**: Use `json` stage in Promtail pipeline
-- **Datadog**: Auto-parsed when log source is set to `python`
-- **AWS CloudWatch**: JSON logs are automatically parsed into structured fields
-
-Use the `request_id` field to correlate all log entries for a single request across your aggregator's search interface.
+| File | Role |
+|---|---|
+| `app/core/logging/config.py` | `setup_logging()`, `JSONFormatter`, `ansi_enabled()` |
+| `app/core/logging/filters.py` | Layer/module, request id and noise filters |
+| `app/core/logging/context.py` | `request_id` `ContextVar` |
+| `app/core/logging/middleware.py` | `RequestIdMiddleware` |
