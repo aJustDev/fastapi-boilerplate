@@ -1,6 +1,7 @@
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 from testcontainers.postgres import PostgresContainer
 
 import app.models  # noqa: F401 -- register all ORM models in Base.metadata
@@ -46,6 +47,35 @@ async def db_session(session_factory):
     async with session_factory() as session:
         yield session
         await session.rollback()
+
+
+@pytest.fixture
+def committing_tables() -> list[str]:
+    """Tables a test using `committing_factory` writes to. Override it in the test module."""
+    return []
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def committing_factory(pg_url, async_engine, committing_tables):
+    """Session factory whose commits are real, for code that opens its own transactions.
+
+    Workers, and anything that must survive the rollback of a request, cannot run inside
+    `db_session`. This factory uses its own NullPool engine (no connection is shared
+    between concurrent tasks) and empties `committing_tables` before and after the test.
+    Only those tables: never the ones other tests rely on.
+    """
+    engine = create_async_engine(pg_url, poolclass=NullPool)
+    tables = [Base.metadata.tables[name] for name in committing_tables]
+
+    async def _clean() -> None:
+        async with engine.begin() as conn:
+            for table in tables:
+                await conn.execute(table.delete())
+
+    await _clean()
+    yield async_sessionmaker(engine, expire_on_commit=False)
+    await _clean()
+    await engine.dispose()
 
 
 @pytest_asyncio.fixture(loop_scope="session")
