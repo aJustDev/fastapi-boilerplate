@@ -33,6 +33,7 @@ step "Lockfile up to date" uv lock --check
 step "Ruff check" uv run ruff check app/ tests/ migrations/ scripts/ main.py docs/img/
 step "Ruff format check" uv run ruff format --check app/ tests/ migrations/ scripts/ main.py docs/img/
 step "Mypy" uv run mypy app/ main.py
+step "Import contracts" uv run lint-imports
 
 single_alembic_head() {
   [ "$(uv run alembic heads | grep -c '(head)')" = "1" ]

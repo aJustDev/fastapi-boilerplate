@@ -11,7 +11,7 @@ A solid foundation for building production-grade backends that scale from small 
 - **Rate limiting** — Two-tier throttling (`strict` for auth, `default` for general) via slowapi with in-memory storage
 - **Prometheus metrics** — Request count, latency histograms, DB pool health at `/v1/metrics`. See `docs/metrics.md`
 - **Repository pattern** — Generic `BaseRepo[T]` with offset and cursor pagination, filtering, and field mapping
-- **Use-case orchestration** — Thin use cases coordinate services and publish events, keeping business logic reusable
+- **Bounded contexts** — `app/<context>/` with its own layers; use cases orchestrate services; import-linter enforces the boundaries
 - **Alembic migrations** — Async `env.py`, reference data as migrations, applied by a separate `migrate` step; tests fail if the models and the migrated schema drift apart
 
 ## Stack
@@ -55,17 +55,20 @@ docker compose exec api python scripts/seed_dev.py
 
 ```
 app/
-├── core/           # Config, DB, security, logging, exceptions, lifespan
-│   ├── events/     # Event bus: dispatcher, worker, handlers, cleanup
-│   └── jobs/       # Scheduled jobs: registry, worker, handlers
-├── models/         # SQLAlchemy ORM (by domain: auth/, items/, events/)
-├── schemas/        # Pydantic v2 request/response
-├── repos/          # Async repositories with BaseRepo[T]
-├── services/       # Business logic
-├── use_cases/      # Orchestrators (coordinate services + publish events)
-├── deps/           # FastAPI dependencies (auth, repos, event bus)
-└── api/v1/         # HTTP routers
+  core/          Infrastructure: config, db, security, logging, metrics, exceptions,
+                 event bus (events/), scheduled jobs (jobs/), middleware, lifespan
+  deps/          FastAPI dependencies shared by every context (session, repos, current user)
+  api/v1/        Composes the context routers, plus health and metrics
+  auth/          Context: users, roles, permissions, tokens
+  items/         Context: example CRUD with events
+  db_registry.py Imports every model and handler module
+migrations/      Alembic revisions
+tests/           unit/, functional/, integration/, each split by context
 ```
+
+Each context has its own `models/ schemas/ repos/ services/ use_cases/ api/` layers. Use cases
+orchestrate services, services hold the business rules, and import-linter keeps contexts and
+layers apart. See `docs/architecture.md`.
 
 ## Event bus
 

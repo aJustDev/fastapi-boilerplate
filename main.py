@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-import app.models as _models  # noqa: F401 -- register all ORM models before the app
+import app.db_registry as _db_registry  # noqa: F401 -- models and handlers, before the app
 from app.api.v1 import v1_router
 from app.core.config import settings
 from app.core.exceptions.handlers import register_exception_handlers

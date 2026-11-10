@@ -62,7 +62,7 @@ Publish from a use case, with the same session as the business change:
 from dataclasses import dataclass
 
 from app.core.events.bus import EventBus
-from app.services.orders import OrderService
+from app.orders.services.orders import OrderService
 
 
 @dataclass(slots=True)
@@ -107,7 +107,7 @@ async def create_order(service: OrderServiceDep, event_bus: EventBusDep, ...):
 ### 1. Write the handler
 
 ```python
-# app/core/events/handlers/orders.py
+# app/orders/event_handlers/confirmation.py
 import logging
 
 from app.core.events.dispatcher import dispatcher
@@ -124,13 +124,15 @@ async def send_order_confirmation(payload: dict) -> None:
 ### 2. Register the module
 
 The decorator only runs if the module is imported. An event type nobody imports a handler for
-is retried and ends as `FAILED` (see above), so add the import:
+is retried and ends as `FAILED` (see above), so add the import to the registry:
 
 ```python
-# app/core/events/handlers/__init__.py
-import app.core.events.handlers.items   # noqa: F401
-import app.core.events.handlers.orders  # noqa: F401
+# app/db_registry.py
+import app.orders.event_handlers.confirmation  # noqa: F401
 ```
+
+Handlers live in the context that reacts to the event (`app/<context>/event_handlers/`), not in
+`app/core`, which imports no context.
 
 ### 3. Make it idempotent
 

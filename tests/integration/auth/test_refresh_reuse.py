@@ -3,6 +3,12 @@
 import pytest
 from sqlalchemy import select
 
+from app.auth.models.user import UserORM
+from app.auth.repos.revoked_token import RevokedTokenRepo
+from app.auth.repos.user import UserRepo
+from app.auth.services.auth import AuthService
+from app.auth.use_cases import refresh_token as refresh_module
+from app.auth.use_cases.refresh_token import RefreshTokenUseCase
 from app.core.exceptions import RefreshTokenReuseError
 from app.core.security import (
     create_access_token,
@@ -10,12 +16,6 @@ from app.core.security import (
     decode_token,
     hash_password,
 )
-from app.models.auth.user import UserORM
-from app.repos.auth.revoked_token import RevokedTokenRepo
-from app.repos.auth.user import UserRepo
-from app.services.auth import AuthService
-from app.use_cases.auth import refresh_token as refresh_module
-from app.use_cases.auth.refresh_token import RefreshTokenUseCase
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 

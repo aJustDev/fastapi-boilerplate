@@ -4,7 +4,7 @@ Current state of the boilerplate and what comes next. Items are grouped by prior
 
 ## Done
 
-- [x] Layered architecture (router → use case → service → repo → model)
+- [x] Bounded contexts with layers inside (router -> use case -> service -> repo -> model), enforced by import-linter
 - [x] Async SQLAlchemy 2.x + asyncpg
 - [x] Domain exception hierarchy with global HTTP handlers
 - [x] CORS configuration

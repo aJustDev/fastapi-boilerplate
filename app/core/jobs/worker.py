@@ -11,8 +11,8 @@ from sqlalchemy import or_, select, update
 
 from app.core.config import settings
 from app.core.db import async_session_factory, rowcount
+from app.core.jobs.models import ScheduledJobORM
 from app.core.jobs.registry import job_registry
-from app.models.jobs.scheduled_job import ScheduledJobORM
 
 logger = logging.getLogger(__name__)
 

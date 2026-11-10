@@ -1,7 +1,7 @@
 from unittest.mock import AsyncMock
 
-from app.schemas.auth.token import TokenResponse
-from app.use_cases.auth.login import LoginUseCase
+from app.auth.schemas.token import TokenResponse
+from app.auth.use_cases.login import LoginUseCase
 
 
 class TestLoginUseCase:

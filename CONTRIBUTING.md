@@ -43,20 +43,21 @@ Types:
 - `docs` — documentation
 - `chore` — configuration, dependencies, CI
 
-Common scopes: `core`, `models`, `schemas`, `repos`, `services`, `use-cases`, `deps`, `api`, `sql`, `docker`
+Common scopes: a context (`auth`, `items`) or a piece of infrastructure (`core`, `db`, `events`, `jobs`, `metrics`, `logging`, `migrations`, `deps`, `docker`)
 
 Each commit must be atomic: a single responsibility change that compiles and passes tests on its own.
 
 ## Layer rules
 
-| Layer | Responsibility | Forbidden |
-|-------|---------------|-----------|
-| `api/` | Parse HTTP, delegate to use cases, return schemas | Business logic, DB access |
-| `use_cases/` | Orchestrate services | Business logic, more than 20 lines |
-| `services/` | Business rules | FastAPI imports, HTTPException |
-| `repos/` | Data access via BaseRepo[T] | Business logic |
-| `models/` | ORM definitions | Logic, queries |
-| `schemas/` | Request/response validation | Logic, DB access |
+Code lives in a context (`app/auth`, `app/items`), and inside it in layers. The full table and
+the rules are in `docs/architecture.md`; the short version:
+
+- Routers parse HTTP and call **one** use case.
+- Use cases orchestrate services; services hold the business rules; plain CRUD may go from use
+  case to repository.
+- Repositories flush, never commit; models and schemas carry no logic.
+- Contexts do not import each other, and `app/core` imports no context. `uv run lint-imports`
+  checks it.
 
 ## Exceptions
 
@@ -84,17 +85,9 @@ Guidelines:
 
 ## Adding a new module
 
-Follow the checklist in `docs/architecture.md` section "Adding a new module":
-
-1. ORM model in `app/models/{domain}/`
-2. Schemas in `app/schemas/{domain}/`
-3. Repo in `app/repos/{domain}/`
-4. Service in `app/services/{domain}.py`
-5. Use cases in `app/use_cases/{domain}/`
-6. Router in `app/api/v1/{domain}.py`
-7. Register router in `app/api/v1/__init__.py`
-8. Migration in `migrations/versions/` (`uv run alembic revision --autogenerate`), reviewed by hand
-9. Tests in `tests/unit/{domain}/` and `tests/integration/{domain}/`
+Follow the checklist in `docs/architecture.md`, section "Adding a context". A feature in an
+existing context only adds files to its layers (`app/<context>/models`, `schemas`, `repos`,
+`services`, `use_cases`, `api`), a migration and tests in `tests/{unit,functional,integration}/<context>/`.
 
 ## Schema changes
 

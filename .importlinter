@@ -1,0 +1,57 @@
+# Import rules between contexts and layers (docs/architecture.md, ADR-003).
+# Run: uv run lint-imports. An exception goes in `ignore_imports` with a comment
+# explaining why; more than a couple of the same kind means the rule needs revisiting.
+
+[importlinter]
+root_packages =
+    app
+
+# Inside a context, a layer may import the layers below it, never the ones above.
+# Parentheses mark layers a context may not have (items has no services or jobs).
+[importlinter:contract:layers]
+name = Layers inside each context
+type = layers
+containers =
+    app.auth
+    app.items
+layers =
+    api | (event_handlers) | (jobs)
+    use_cases
+    (services)
+    repos
+    models | schemas
+exhaustive = true
+
+# Infrastructure does not know the domain: contexts plug into it (handlers register
+# themselves, routers are composed in app.api), never the other way round.
+[importlinter:contract:core]
+name = Core does not import contexts, deps, api or the registry
+type = forbidden
+source_modules =
+    app.core
+forbidden_modules =
+    app.auth
+    app.items
+    app.deps
+    app.api
+    app.db_registry
+
+# Contexts are independent. Items reaches the current user through app.deps (the
+# shared dependency), never by importing auth directly; items and users are linked by
+# owner_id only, without an ORM relationship.
+[importlinter:contract:items-auth]
+name = Items does not import auth directly
+type = forbidden
+allow_indirect_imports = true
+source_modules =
+    app.items
+forbidden_modules =
+    app.auth
+
+[importlinter:contract:auth-items]
+name = Auth does not import items
+type = forbidden
+source_modules =
+    app.auth
+forbidden_modules =
+    app.items

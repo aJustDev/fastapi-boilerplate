@@ -58,7 +58,7 @@ Two situations used to run jobs twice. The figure compares the old behavior with
 ### 1. Write the handler
 
 ```python
-# app/core/jobs/handlers/cleanup.py
+# app/<context>/jobs/cleanup.py  (infrastructure jobs: app/core/jobs/handlers/)
 import logging
 
 from app.core.jobs.registry import job_registry
@@ -75,10 +75,11 @@ async def daily_cleanup() -> None:
 ### 2. Register the module
 
 ```python
-# app/core/jobs/handlers/__init__.py
-import app.core.jobs.handlers.cleanup    # noqa: F401
-import app.core.jobs.handlers.heartbeat  # noqa: F401
+# app/db_registry.py
+import app.items.jobs.cleanup  # noqa: F401
 ```
+
+See `app/auth/jobs/revoked_tokens_cleanup.py` for a real one.
 
 ### 3. Insert the job row
 

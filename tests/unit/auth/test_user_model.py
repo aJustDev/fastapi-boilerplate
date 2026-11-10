@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from app.models.auth.user import UserORM
+from app.auth.models.user import UserORM
 
 
 class TestAcceptsTokenIssuedAt:

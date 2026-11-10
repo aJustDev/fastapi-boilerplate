@@ -5,7 +5,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.events.outbox import OutboxEventORM
+from app.core.events.models import OutboxEventORM
 
 logger = logging.getLogger(__name__)
 

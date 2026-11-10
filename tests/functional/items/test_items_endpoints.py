@@ -4,10 +4,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.auth.models.user import UserORM
 from app.core.db import get_session
 from app.core.security import create_access_token
-from app.models.auth.user import UserORM
-from app.models.items.item import ItemORM
+from app.items.models.item import ItemORM
 from main import app
 
 
@@ -43,7 +43,6 @@ def fake_item() -> MagicMock:
     item.owner_id = 1
     item.created_at = datetime.now(UTC)
     item.updated_at = None
-    item.owner = None
     return item
 
 
@@ -65,9 +64,9 @@ async def client():
 class TestListItems:
     async def test_list_items_success(self, client, fake_user, fake_item, auth_headers):
         with (
-            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
-            patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
-            patch("app.repos.items.item.ItemRepo.list_paginated", return_value=([fake_item], 1)),
+            patch("app.auth.repos.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
+            patch("app.auth.repos.user.UserRepo.get_by_id", return_value=fake_user),
+            patch("app.items.repos.item.ItemRepo.list_paginated", return_value=([fake_item], 1)),
         ):
             response = await client.get("/v1/items", headers=auth_headers)
 
@@ -83,10 +82,10 @@ class TestListItems:
 
     async def test_list_items_cursor_success(self, client, fake_user, fake_item, auth_headers):
         with (
-            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
-            patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
+            patch("app.auth.repos.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
+            patch("app.auth.repos.user.UserRepo.get_by_id", return_value=fake_user),
             patch(
-                "app.repos.items.item.ItemRepo.list_cursor",
+                "app.items.repos.item.ItemRepo.list_cursor",
                 return_value=([fake_item], None, False),
             ),
         ):
@@ -105,9 +104,9 @@ class TestListItems:
 class TestGetItem:
     async def test_get_item_success(self, client, fake_user, fake_item, auth_headers):
         with (
-            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
-            patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
-            patch("app.repos.items.item.ItemRepo.get_by_id", return_value=fake_item),
+            patch("app.auth.repos.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
+            patch("app.auth.repos.user.UserRepo.get_by_id", return_value=fake_user),
+            patch("app.items.repos.item.ItemRepo.get_by_id", return_value=fake_item),
         ):
             response = await client.get("/v1/items/1", headers=auth_headers)
 
@@ -119,9 +118,9 @@ class TestGetItem:
 
     async def test_get_item_not_found(self, client, fake_user, auth_headers):
         with (
-            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
-            patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
-            patch("app.repos.items.item.ItemRepo.get_by_id", return_value=None),
+            patch("app.auth.repos.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
+            patch("app.auth.repos.user.UserRepo.get_by_id", return_value=fake_user),
+            patch("app.items.repos.item.ItemRepo.get_by_id", return_value=None),
         ):
             response = await client.get("/v1/items/999", headers=auth_headers)
 
@@ -131,9 +130,9 @@ class TestGetItem:
 class TestCreateItem:
     async def test_create_item_success(self, client, fake_user, fake_item, auth_headers):
         with (
-            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
-            patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
-            patch("app.repos.items.item.ItemRepo.create", return_value=fake_item),
+            patch("app.auth.repos.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
+            patch("app.auth.repos.user.UserRepo.get_by_id", return_value=fake_user),
+            patch("app.items.repos.item.ItemRepo.create", return_value=fake_item),
         ):
             response = await client.post(
                 "/v1/items",
@@ -164,13 +163,12 @@ class TestUpdateItem:
         updated_item.owner_id = 1
         updated_item.created_at = datetime.now(UTC)
         updated_item.updated_at = datetime.now(UTC)
-        updated_item.owner = None
 
         with (
-            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
-            patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
-            patch("app.repos.items.item.ItemRepo.get_by_id", return_value=fake_item),
-            patch("app.repos.items.item.ItemRepo.update", return_value=updated_item),
+            patch("app.auth.repos.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
+            patch("app.auth.repos.user.UserRepo.get_by_id", return_value=fake_user),
+            patch("app.items.repos.item.ItemRepo.get_by_id", return_value=fake_item),
+            patch("app.items.repos.item.ItemRepo.update", return_value=updated_item),
         ):
             response = await client.patch(
                 "/v1/items/1",
@@ -186,10 +184,10 @@ class TestUpdateItem:
 class TestDeleteItem:
     async def test_delete_item_success(self, client, fake_user, fake_item, auth_headers):
         with (
-            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
-            patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
-            patch("app.repos.items.item.ItemRepo.get_by_id", return_value=fake_item),
-            patch("app.repos.items.item.ItemRepo.delete", return_value=None),
+            patch("app.auth.repos.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
+            patch("app.auth.repos.user.UserRepo.get_by_id", return_value=fake_user),
+            patch("app.items.repos.item.ItemRepo.get_by_id", return_value=fake_item),
+            patch("app.items.repos.item.ItemRepo.delete", return_value=None),
         ):
             response = await client.delete("/v1/items/1", headers=auth_headers)
 
@@ -197,9 +195,9 @@ class TestDeleteItem:
 
     async def test_delete_item_not_found(self, client, fake_user, auth_headers):
         with (
-            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
-            patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
-            patch("app.repos.items.item.ItemRepo.get_by_id", return_value=None),
+            patch("app.auth.repos.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
+            patch("app.auth.repos.user.UserRepo.get_by_id", return_value=fake_user),
+            patch("app.items.repos.item.ItemRepo.get_by_id", return_value=None),
         ):
             response = await client.delete("/v1/items/999", headers=auth_headers)
 
@@ -209,14 +207,14 @@ class TestDeleteItem:
 class TestFilterOptions:
     async def test_get_filter_options(self, client, fake_user, auth_headers):
         with (
-            patch("app.repos.auth.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
-            patch("app.repos.auth.user.UserRepo.get_by_id", return_value=fake_user),
+            patch("app.auth.repos.revoked_token.RevokedTokenRepo.is_revoked", return_value=False),
+            patch("app.auth.repos.user.UserRepo.get_by_id", return_value=fake_user),
             patch(
-                "app.repos.items.item.ItemRepo.get_distinct_categories",
+                "app.items.repos.item.ItemRepo.get_distinct_categories",
                 return_value=["electronics", "books"],
             ),
             patch(
-                "app.repos.items.item.ItemRepo.get_distinct_priorities",
+                "app.items.repos.item.ItemRepo.get_distinct_priorities",
                 return_value=[0, 1, 2],
             ),
         ):

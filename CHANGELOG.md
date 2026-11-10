@@ -20,6 +20,7 @@ not count.
 
 ### Changed
 
+- Code grouped by bounded context (`app/auth`, `app/items`) with layers inside; infrastructure ORM in `app/core`; `app/db_registry.py` registers models and handlers; import-linter contracts and a one-use-case-per-endpoint test enforce the boundaries.
 - PostgreSQL 18 in compose and in the integration tests (volume `pgdata18`).
 - Python 3.14 and every dependency on its latest release (FastAPI 0.162, SQLAlchemy 2.1).
 - Dev dependencies live in the `dev` dependency group (`uv sync`, no `--extra dev`).
@@ -30,6 +31,7 @@ not count.
 
 ### Removed
 
+- `ItemORM.owner`, a relationship across contexts; items expose `owner_id`.
 - `sql/` (schema, deltas, seeds and their shell scripts), replaced by the migrations.
 
 ### Fixed

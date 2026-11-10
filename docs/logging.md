@@ -77,7 +77,7 @@ INFO: [Repo] [User] [a1b2c3d4e5f6...] ❯ Executing get_by_email
 
 ```json
 {"timestamp": "2024-03-22T10:15:23.456000+00:00", "level": "INFO", "layer": "Router", "module": "Login", "logger": "app.api.v1.auth", "request_id": "a1b2c3d4e5f67890abcdef1234567890", "message": "Attempting login for user: john"}
-{"timestamp": "2024-03-22T10:15:23.458000+00:00", "level": "INFO", "layer": "Service", "module": "Auth", "logger": "app.services.auth", "request_id": "a1b2c3d4e5f67890abcdef1234567890", "message": "Looking up user by email: john"}
+{"timestamp": "2024-03-22T10:15:23.458000+00:00", "level": "INFO", "layer": "Service", "module": "Auth", "logger": "app.auth.services.auth", "request_id": "a1b2c3d4e5f67890abcdef1234567890", "message": "Looking up user by email: john"}
 ```
 
 ### JSON fields
@@ -88,7 +88,7 @@ INFO: [Repo] [User] [a1b2c3d4e5f6...] ❯ Executing get_by_email
 | `level` | string | Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
 | `layer` | string | Architectural layer (Router, UseCase, Service, Repo, Core, Deps, App) |
 | `module` | string | Module name, title-cased (e.g., "Refresh Token") |
-| `logger` | string | Full Python logger name (e.g., `app.services.auth`) |
+| `logger` | string | Full Python logger name (e.g., `app.auth.services.auth`) |
 | `request_id` | string | UUID4 hex or client-provided ID; empty for non-request contexts |
 | `message` | string | Log message |
 | `exception` | string | Full traceback (only present when logging an exception) |

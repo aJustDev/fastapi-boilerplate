@@ -8,17 +8,18 @@ description: Development workflow for the FastAPI boilerplate project. Use when 
 ## Before coding
 
 1. Read the architecture reference for layer responsibilities and conventions
-2. Check existing patterns in a similar module (e.g., `auth/` or `items/`)
+2. Check existing patterns in a similar context (`app/auth/` or `app/items/`)
 3. Follow the "Adding a new module" checklist in the architecture reference
 
 ## Layer rules
 
-- **Routers** (`api/v1/`) — Parse HTTP, call use cases, return schemas. No business logic.
-- **Use cases** (`use_cases/`) — Orchestrate services. Thin (<20 lines). Publish events via `EventBus` when producing side effects.
+- **Routers** (`app/<context>/api/`) — Parse HTTP, call one use case, return schemas. No business logic.
+- **Use cases** (`use_cases/`) — Orchestrate services (order of steps, own transactions, events). One per endpoint.
 - **Services** (`services/`) — Own business rules. Receive repos via constructor. Raise domain exceptions.
 - **Repos** (`repos/`) — Extend `BaseRepo[T]`. Override `_base_select()` for eager loading. Configure `map_field` for filtering.
 - **Models** (`models/`) — Use `IntPkMixin` + `AuditMixin`. Use `Mapped[]` annotations, not legacy `Column()`.
-- **Event handlers** (`core/events/handlers/`) — Register via `@dispatcher.register("event.type")`. Must be idempotent.
+- **Event handlers** (`app/<context>/event_handlers/`) — Register via `@dispatcher.register("event.type")`, import the module in `app/db_registry.py`. Must be idempotent.
+- **Imports** — `uv run lint-imports` enforces the layer and context contracts in `.importlinter`.
 
 ## Exception handling
 

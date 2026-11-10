@@ -111,7 +111,7 @@ check_untyped_defs = false
 [[tool.mypy.overrides]]
 # FastAPI derives response types from response_model; annotating every route return
 # adds noise without catching bugs.
-module = ["app.api.*"]
+module = ["app.api.*", "app.*.api.*"]
 disallow_untyped_defs = false
 
 [tool.coverage.run]
@@ -143,4 +143,5 @@ dev = [
     "pre-commit>=4.7",
     "mypy>=2.4",
     "pip-audit>=2.10",
+    "import-linter>=2.15",
 ]
