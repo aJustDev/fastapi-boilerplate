@@ -1,0 +1,31 @@
+# Docs
+
+One doc per feature or structural piece. Each explains what it solves, how it works, what it
+guarantees and how to extend it; diagrams are generated from `img/<topic>.py`.
+
+## Structure
+
+- [architecture.md](architecture.md): bounded contexts, layers, import rules, the registry, adding a context
+- [database.md](database.md): sessions per request, engine and timeouts, models, repositories
+- [migrations.md](migrations.md): Alembic workflow, safe changes on tables with data
+- [configuration.md](configuration.md): where settings come from, validators, adding a setting
+
+## Features
+
+- [auth.md](auth.md): tokens, rotation, reuse detection, logout, roles and permissions
+- [event-bus.md](event-bus.md): transactional outbox, dispatch with several workers
+- [jobs.md](jobs.md): scheduled jobs, claims and leases
+- [errors.md](errors.md): the error contract and its codes
+- [security.md](security.md): proxies, hosts, security headers, rate limits
+
+## Operations
+
+- [logging.md](logging.md): JSON and colored logs, request ids
+- [metrics.md](metrics.md): Prometheus metrics and dashboards
+- [docker.md](docker.md): the image and compose
+- [testing.md](testing.md): test levels, fixtures, meta-tests
+- [tooling.md](tooling.md): hooks, CI, audit, Dependabot, lint and type rules
+
+## Decisions
+
+- [adr/](adr/README.md): architecture decision records

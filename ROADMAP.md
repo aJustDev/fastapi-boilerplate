@@ -16,16 +16,29 @@ Current state of the boilerplate and what comes next. Items are grouped by prior
 - [x] Docker + docker-compose
 - [x] Pre-commit hooks (ruff check + format)
 - [x] Transactional Outbox event bus with PostgreSQL LISTEN/NOTIFY
-- [x] Scheduled jobs with FOR UPDATE SKIP LOCKED (multi-worker safe)
+- [x] Scheduled jobs claimed with a lease (multi-worker safe)
 - [x] Configurable connection pool (`pool_size`, `max_overflow`, `pool_timeout` via env vars)
 - [x] Structured JSON logging with per-request `request_id` tracing
+- [x] Error contract (`{detail, code}`) published in OpenAPI
+- [x] HTTP hardening: security headers, trusted hosts and proxies, database timeouts
+- [x] Strict tooling: mypy, import-linter, pip-audit, hadolint, meta-tests
+- [x] Docs per feature with generated diagrams; Claude Code rules and skills in `.claude/`
 
-## P1 — Hardening
+## P1 - Hardening
 
-- [x] Rate limiting — Two-tier throttling via slowapi (strict for auth, default for general endpoints) with in-memory storage
+- [x] Rate limiting: a limit on every endpoint via slowapi (strict for auth, default for the rest), in memory per process
 - [x] Observability (metrics) — Prometheus-compatible `/v1/metrics` endpoint with HTTP request metrics and DB pool gauges
 
-## P2 — Nice to have
+## P2 - Nice to have
+
+### Observability (traces)
+
+OpenTelemetry tracing, off by default, with `trace_id` in the JSON logs, and Prometheus in
+multiprocess mode for `--workers N`.
+
+### Shared rate limit storage
+
+A Redis or memcached storage for slowapi, so limits hold across processes and restarts.
 
 ### API versioning strategy
 

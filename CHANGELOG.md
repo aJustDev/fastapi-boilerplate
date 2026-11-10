@@ -12,6 +12,7 @@ not count.
 
 ### Added
 
+- Claude Code configuration: `CLAUDE.md`, path-scoped rules in `.claude/rules/`, read-only permissions in `.claude/settings.json`, the `working-on-fastapi-boilerplate` skill; `docs/README.md` index.
 - Error contract: every error body is `{detail, code}` with a stable code, the schemas are published in OpenAPI, and `IntegrityError` answers 409 instead of 500.
 - Security headers middleware, `TrustedHostMiddleware`, `ProxyHeadersMiddleware`, and startup validators for hosts, origins and trusted proxies outside local.
 - Statement, lock and command timeouts plus pool recycling on every database connection; startup fails outside local if the process is not in UTC.
@@ -36,6 +37,7 @@ not count.
 
 ### Removed
 
+- `AUDIT-CHECKLIST.md` (its open items are done or in `ROADMAP.md`) and `docs/skill.md` (now the `working-on-fastapi-boilerplate` skill).
 - `ItemORM.owner`, a relationship across contexts; items expose `owner_id`.
 - `sql/` (schema, deltas, seeds and their shell scripts), replaced by the migrations.
 
