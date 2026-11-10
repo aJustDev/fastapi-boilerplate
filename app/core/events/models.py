@@ -16,14 +16,10 @@ class OutboxEventORM(Base):
         primary_key=True,
         server_default=func.gen_random_uuid(),
     )
-    aggregate_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        default=None,
-    )
-    correlation_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True),
-        default=None,
-    )
+    # Text, not UUID: the id of the entity the event is about (a BIGINT in this code
+    # base, as a string) and the request id that published it.
+    aggregate_id: Mapped[str | None] = mapped_column(Text, default=None)
+    correlation_id: Mapped[str | None] = mapped_column(Text, default=None)
     event_type: Mapped[str] = mapped_column(String(255), nullable=False)
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default="{}")
     status: Mapped[str] = mapped_column(

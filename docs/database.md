@@ -69,7 +69,9 @@ classDiagram
   migrations rely on, and maps `datetime` to `TIMESTAMPTZ` and `str` to `TEXT` unless a column
   says otherwise.
 - **Mixins** (`app/core/db.py`): `IntPkMixin` for the primary key, `AuditMixin` for
-  timestamps and authorship.
+  timestamps and authorship. `created_by` and `updated_by` hold the id of the authenticated user
+  of the request that wrote the row (`actor_var`, set by `get_current_user`); they are `NULL` for
+  rows written by an anonymous request, a worker, a job or a script.
 - Defaults that exist in the database are declared with `server_default`, so rows inserted
   outside the ORM get them too and the migrations test can compare them.
 

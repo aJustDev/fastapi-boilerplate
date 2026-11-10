@@ -17,5 +17,6 @@ class DeleteItemUseCase:
 
         await self.event_bus.publish(
             event_type="item.deleted",
+            aggregate_id=item_id,
             payload={"item_id": item_id},
         )

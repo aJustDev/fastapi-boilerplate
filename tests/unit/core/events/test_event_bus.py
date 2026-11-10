@@ -1,8 +1,8 @@
-import uuid
 from unittest.mock import AsyncMock, patch
 
 from app.core.events.bus import EventBus
 from app.core.events.models import OutboxEventORM
+from app.core.logging.context import request_id_var
 
 
 class TestEventBus:
@@ -41,19 +41,26 @@ class TestEventBus:
 
     async def test_publish_with_aggregate_and_correlation(self, mock_session: AsyncMock):
         bus = EventBus(mock_session)
-        agg_id = uuid.uuid4()
-        corr_id = uuid.uuid4()
 
         await bus.publish(
             "order.created",
             {"order_id": 1},
-            aggregate_id=agg_id,
-            correlation_id=corr_id,
+            aggregate_id=42,
+            correlation_id="trace-1",
         )
 
         event = mock_session.add.call_args[0][0]
-        assert event.aggregate_id == agg_id
-        assert event.correlation_id == corr_id
+        assert event.aggregate_id == "42"  # the id of the entity, as text
+        assert event.correlation_id == "trace-1"
+
+    async def test_correlation_defaults_to_the_current_request(self, mock_session: AsyncMock):
+        token = request_id_var.set("req-7")
+        try:
+            await EventBus(mock_session).publish("order.created", {})
+        finally:
+            request_id_var.reset(token)
+
+        assert mock_session.add.call_args[0][0].correlation_id == "req-7"
 
     async def test_publish_without_optional_ids(self, mock_session: AsyncMock):
         bus = EventBus(mock_session)

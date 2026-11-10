@@ -98,25 +98,36 @@ _API_TABLES = "users, revoked_tokens, outbox_events"
 
 
 @pytest_asyncio.fixture(loop_scope="session")
-async def api_client(pg_url, async_engine) -> AsyncGenerator[AsyncClient]:
-    """HTTP client over the real app, with the app's own session factory on the test database.
+async def app_database(pg_url, async_engine) -> AsyncGenerator[None]:
+    """The app's own session factory, pointed at the test database.
 
-    Nothing is overridden: the request runs the real `get_session`, so commits, rollbacks
-    and constraint errors are the ones production has. `configure(bind=...)` re-points the
-    factory object every module already imported. Rows are removed after the test.
-    `raise_app_exceptions=False` makes the client see the 500 a real client would get.
+    For everything that opens its sessions itself through `async_session_factory`: a
+    request (`get_session`), the CLI, a use case with a transaction of its own.
+    `configure(bind=...)` re-points the factory object every module already imported.
+    The rows a request can write are removed after the test.
     """
     engine = create_async_engine(pg_url, poolclass=NullPool)
     async_session_factory.configure(bind=engine)
-    transport = ASGITransport(app=app, raise_app_exceptions=False)
     try:
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            yield client
+        yield
     finally:
         async_session_factory.configure(bind=app_engine)
         async with engine.begin() as conn:
             await conn.execute(text(f"TRUNCATE {_API_TABLES} RESTART IDENTITY CASCADE"))
         await engine.dispose()
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def api_client(app_database) -> AsyncGenerator[AsyncClient]:
+    """HTTP client over the real app and the test database, with nothing overridden.
+
+    The request runs the real `get_session`, so commits, rollbacks and constraint errors
+    are the ones production has. `raise_app_exceptions=False` makes the client see the
+    500 a real client would get.
+    """
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
 
 
 @pytest_asyncio.fixture(loop_scope="session")

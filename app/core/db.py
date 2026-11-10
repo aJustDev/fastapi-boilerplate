@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.core.config import settings
+from app.core.logging.context import get_actor
 
 # Shared by the app engine and the integration test that checks the server settings.
 ENGINE_OPTIONS: dict[str, Any] = dict(
@@ -98,8 +99,10 @@ class AuditMixin:
         onupdate=func.now(),
         server_onupdate=func.now(),
     )
-    created_by: Mapped[str | None] = mapped_column(default=None)
-    updated_by: Mapped[str | None] = mapped_column(default=None)
+    # The id of the authenticated user who made the change (see `actor_var`); NULL for
+    # rows written outside a request (workers, jobs, scripts, migrations).
+    created_by: Mapped[str | None] = mapped_column(default=get_actor)
+    updated_by: Mapped[str | None] = mapped_column(default=None, onupdate=get_actor)
 
 
 async def get_session() -> AsyncGenerator[AsyncSession]:
