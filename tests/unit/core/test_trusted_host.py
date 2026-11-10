@@ -14,7 +14,7 @@ def _client(allowed: list[str], exempt: tuple[str, ...] = ()) -> AsyncClient:
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
 
-async def _status(client: AsyncClient, host: str, path: str = "/v1/items") -> int:
+async def _status(client: AsyncClient, host: str, path: str = "/v1/things") -> int:
     async with client:
         return (await client.get(path, headers={"Host": host})).status_code
 
@@ -64,7 +64,7 @@ async def test_probes_are_served_whatever_the_host():
 
 async def test_the_rejection_follows_the_error_contract():
     async with _client(["api.example.com"]) as client:
-        response = await client.get("/v1/items", headers={"Host": "evil.example.org"})
+        response = await client.get("/v1/things", headers={"Host": "evil.example.org"})
 
     assert response.status_code == 400
     assert response.json() == {"detail": "Invalid host header", "code": "invalid_host"}

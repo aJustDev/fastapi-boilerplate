@@ -25,15 +25,15 @@ class TestPrometheusMiddleware:
         from app.core.metrics.instruments import http_requests_total
 
         before = http_requests_total.labels(
-            method="GET", path_template="/v1/items", status="200"
+            method="GET", path_template="/v1/things", status="200"
         )._value.get()
 
-        mw = PrometheusMiddleware(_routed_app("/v1/items"))
-        scope = {"type": "http", "method": "GET", "path": "/v1/items"}
+        mw = PrometheusMiddleware(_routed_app("/v1/things"))
+        scope = {"type": "http", "method": "GET", "path": "/v1/things"}
         await mw(scope, AsyncMock(), AsyncMock())
 
         after = http_requests_total.labels(
-            method="GET", path_template="/v1/items", status="200"
+            method="GET", path_template="/v1/things", status="200"
         )._value.get()
         assert after == before + 1.0
 
@@ -41,15 +41,15 @@ class TestPrometheusMiddleware:
         from app.core.metrics.instruments import http_request_duration_seconds
 
         before = http_request_duration_seconds.labels(
-            method="POST", path_template="/v1/items"
+            method="POST", path_template="/v1/things"
         )._sum.get()
 
-        mw = PrometheusMiddleware(_routed_app("/v1/items"))
-        scope = {"type": "http", "method": "POST", "path": "/v1/items"}
+        mw = PrometheusMiddleware(_routed_app("/v1/things"))
+        scope = {"type": "http", "method": "POST", "path": "/v1/things"}
         await mw(scope, AsyncMock(), AsyncMock())
 
         after = http_request_duration_seconds.labels(
-            method="POST", path_template="/v1/items"
+            method="POST", path_template="/v1/things"
         )._sum.get()
         assert after > before
 
@@ -91,16 +91,16 @@ class TestPrometheusMiddleware:
         inner.assert_called_once()
 
     async def test_resolves_path_template_from_route(self):
-        mw = PrometheusMiddleware(_routed_app("/v1/items/{item_id}"))
-        scope = {"type": "http", "method": "GET", "path": "/v1/items/42"}
+        mw = PrometheusMiddleware(_routed_app("/v1/things/{thing_id}"))
+        scope = {"type": "http", "method": "GET", "path": "/v1/things/42"}
         await mw(scope, AsyncMock(), AsyncMock())
 
         from app.core.metrics.instruments import http_requests_total
 
         samples = list(http_requests_total.collect()[0].samples)
         metric_paths = [s.labels.get("path_template") for s in samples]
-        assert "/v1/items/{item_id}" in metric_paths
-        assert "/v1/items/42" not in metric_paths
+        assert "/v1/things/{thing_id}" in metric_paths
+        assert "/v1/things/42" not in metric_paths
 
     async def test_unmatched_request_never_labels_raw_path(self):
         # A scanner probing made-up URLs must not create one series per URL.
@@ -125,13 +125,13 @@ class TestPrometheusMiddleware:
             http_requests_total,
         )
 
-        labels = {"method": "OPTIONS", "path_template": "/v1/items"}
+        labels = {"method": "OPTIONS", "path_template": "/v1/things"}
         count_before = http_requests_total.labels(**labels, status="200")._value.get()
         sum_before = http_request_duration_seconds.labels(**labels)._sum.get()
 
-        mw = PrometheusMiddleware(_routed_app("/v1/items"))
+        mw = PrometheusMiddleware(_routed_app("/v1/things"))
         await mw(
-            {"type": "http", "method": "OPTIONS", "path": "/v1/items"}, AsyncMock(), AsyncMock()
+            {"type": "http", "method": "OPTIONS", "path": "/v1/things"}, AsyncMock(), AsyncMock()
         )
 
         assert http_requests_total.labels(**labels, status="200")._value.get() == count_before + 1

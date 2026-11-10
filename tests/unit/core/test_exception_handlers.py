@@ -24,12 +24,12 @@ def _make_request(method: str = "GET", path: str = "/test") -> MagicMock:
 class TestDomainExceptionHandler:
     async def test_not_found_returns_404(self):
         request = _make_request()
-        exc = NotFoundError("Item", 42)
+        exc = NotFoundError("Order", 42)
 
         response = await domain_exception_handler(request, exc)
 
         assert response.status_code == 404
-        assert b"Item not found" in response.body
+        assert b"Order not found" in response.body
 
     async def test_conflict_returns_409(self):
         request = _make_request()
@@ -53,7 +53,7 @@ class TestDomainExceptionHandler:
 
 class TestValidationExceptionHandler:
     async def test_returns_422(self):
-        request = _make_request("POST", "/items")
+        request = _make_request("POST", "/orders")
         exc = RequestValidationError(
             errors=[
                 {
@@ -86,12 +86,12 @@ class TestLogColors:
     def _ctx(self) -> dict:
         return {
             "exc_name": "NotFoundError",
-            "message": "Item not found",
+            "message": "Order not found",
             "filename": "app/x.py",
             "lineno": 1,
             "func": "f",
             "method": "GET",
-            "path": "/v1/items/1",
+            "path": "/v1/orders/1",
             "status_code": 404,
         }
 

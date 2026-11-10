@@ -133,18 +133,18 @@ class TestRequirePermissions:
 
     async def test_permission_check_passes(self, fake_user: UserORM):
         fake_user.has_permission = MagicMock(return_value=True)
-        checker = require_permissions(permission="items:write")
+        checker = require_permissions(permission="orders:write")
 
         result = await checker(user=fake_user)
 
         assert result is fake_user
-        fake_user.has_permission.assert_called_once_with("items:write")
+        fake_user.has_permission.assert_called_once_with("orders:write")
 
     async def test_permission_check_fails(self, fake_user: UserORM):
         fake_user.has_permission = MagicMock(return_value=False)
-        checker = require_permissions(permission="items:write")
+        checker = require_permissions(permission="orders:write")
 
-        with pytest.raises(AuthorizationError, match="Permission 'items:write' required"):
+        with pytest.raises(AuthorizationError, match="Permission 'orders:write' required"):
             await checker(user=fake_user)
 
     async def test_no_role_or_permission_passes(self, fake_user: UserORM):

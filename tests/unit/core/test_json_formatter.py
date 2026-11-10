@@ -8,7 +8,7 @@ from app.core.logging.config import JSONFormatter
 class TestJSONFormatter:
     def _make_record(self, msg: str = "hello", **kwargs) -> logging.LogRecord:
         record = logging.LogRecord(
-            name="app.items.api.router",
+            name="app.orders.api.router",
             level=logging.INFO,
             pathname="",
             lineno=0,
@@ -22,15 +22,15 @@ class TestJSONFormatter:
 
     def test_output_is_valid_json(self):
         fmt = JSONFormatter()
-        record = self._make_record(layer_name="Router", module_name="Items", request_id="abc")
+        record = self._make_record(layer_name="Router", module_name="Orders", request_id="abc")
         line = fmt.format(record)
         data = json.loads(line)
         assert data["message"] == "hello"
         assert data["level"] == "INFO"
         assert data["layer"] == "Router"
-        assert data["module"] == "Items"
+        assert data["module"] == "Orders"
         assert data["request_id"] == "abc"
-        assert data["logger"] == "app.items.api.router"
+        assert data["logger"] == "app.orders.api.router"
         assert "timestamp" in data
 
     def test_includes_exception(self):
