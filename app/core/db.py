@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -15,6 +16,20 @@ engine = create_async_engine(
 )
 
 async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+
+def build_asyncpg_dsn() -> str:
+    """Plain DSN for the raw asyncpg LISTEN connections, which live outside the engine.
+
+    Derived from DATABASE_URL, not from the DB_* settings: DATABASE_URL is only built
+    from DB_* when empty, so setting it directly (pgbouncer, managed provider) would
+    otherwise point the listener at a different database than the pool.
+    """
+    return (
+        make_url(settings.DATABASE_URL)
+        .set(drivername="postgresql")
+        .render_as_string(hide_password=False)
+    )
 
 
 class Base(DeclarativeBase):
