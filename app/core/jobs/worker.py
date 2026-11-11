@@ -57,7 +57,7 @@ class JobWorker:
     async def start(self) -> None:
         self._shutdown_event.clear()
         self._task = asyncio.create_task(self._run(), name="job-worker")
-        logger.debug("Job worker started (id=%s)", self._worker_id)
+        logger.debug("Job worker started as %s", self._worker_id)
 
     async def stop(self) -> None:
         self._shutdown_event.set()

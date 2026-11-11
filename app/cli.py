@@ -86,7 +86,7 @@ async def run_workers() -> None:
     outbox, jobs = OutboxWorker(), JobWorker()
     await outbox.start()
     await jobs.start()
-    logger.info("Workers running (PID=%d)", os.getpid())
+    logger.info("Workers running (pid %d)", os.getpid())
     await stop.wait()
     await jobs.stop()
     await outbox.stop()

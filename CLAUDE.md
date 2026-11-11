@@ -54,6 +54,8 @@ case; the session commits before the response is sent.
 - Every feature or structural piece has its doc in `docs/`, with diagrams drawn with the
   `esquemas-svg` skill (rule `docs.md`).
 - FastAPI dependencies as `Annotated[T, Depends(fn)]`.
+- A log line says what happened, once, at the level of who has to act; a repeated failure is one
+  line per attempt; never a value the client sent (`docs/logging.md`, "Writing a log line").
 
 ## Non-obvious details
 

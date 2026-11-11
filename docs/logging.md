@@ -62,16 +62,42 @@ logger.info("Workshop %s created", workshop.id)  # lazy %-formatting (ruff rule 
 to an external call. Clients and gateways can send their own `X-Request-ID` to correlate logs
 across services.
 
-A JSON line:
+A JSON line, the access line of a request:
 
 ```json
-{"timestamp": "2026-03-22T10:15:23.458000+00:00", "level": "DEBUG", "layer": "Service", "module": "Auth", "logger": "app.auth.services.auth", "request_id": "a1b2c3d4e5f67890abcdef1234567890", "message": "Looking up user credentials"}
+{"timestamp": "2026-11-11T10:15:23.458000+00:00", "level": "INFO", "layer": "App", "module": "Access", "logger": "app.access", "request_id": "a1b2c3d4e5f67890abcdef1234567890", "message": "GET /v1/workshops/7 404 not_found 3ms", "http": {"method": "GET", "path": "/v1/workshops/7", "status": 404, "error": "not_found", "duration_ms": 3.2, "client": "203.0.113.7"}}
 ```
 
 Fields: `timestamp` (ISO 8601, UTC), `level`, `layer`, `module`, `logger`, `request_id`,
 `message`, and `exception` (the traceback) when one was logged. A record logged with
-`extra={"fields": {...}}` adds those keys to its line, without replacing a standard one: the
-startup log puts its facts in `startup` (`docs/operations.md`).
+`extra={"fields": {...}}` adds those keys to its line, without replacing a standard one: `http`
+on the access line, `job` on the line of a job run (`docs/jobs.md`), `startup` on the startup
+log (`docs/operations.md`).
+
+### Writing a log line
+
+- Say what happened, once: `Processed enrollment.confirmed 2d42...`, not `Executing ...` or
+  `Request received`. The access line already records every request; a line in a router or a
+  use case that only narrates it is noise.
+- The level says who has to act:
+
+| Level | For |
+|---|---|
+| DEBUG | Detail a developer follows locally: a 4xx and where it was raised, a job run with nothing to do, a traceback already told in one line above |
+| INFO | An outcome an operator reads: a request, an event processed, a job run that did something, the startup |
+| WARNING | Something to look at that the app survives: a retry, a rate limit, a value or a race the database stopped, a lost connection |
+| ERROR | A failure that needs someone: a 5xx, a failed job run, with the traceback |
+| CRITICAL | Lost work: an event the worker gave up on |
+
+- A failure that repeats on its own (a retry, a reconnection, a probe) is one line per attempt,
+  with the exception in one line (`one_line(exc)`, `app/core/logging/errors.py`); the traceback
+  is stored, or logged at DEBUG.
+- Name things by their identifier, after what happened: `enrollment.confirmed 2d42...`,
+  `Job workshops_finish`, `GET /v1/workshops/7`. No `id=` or `PID=` prefixes: process ids and
+  hosts go in JSON fields.
+- Never a value the client sent: bodies, emails, tokens, query strings. Ids are fine.
+- %-formatting, not f-strings (ruff rule G): the arguments are formatted only if the line is
+  written.
 
 ## Configuration
 
@@ -103,4 +129,5 @@ startup log puts its facts in `startup` (`docs/operations.md`).
 | `app/core/logging/config.py` | `setup_logging()`, `JSONFormatter`, `ansi_enabled()`, `json_enabled()` |
 | `app/core/logging/filters.py` | Layer/module and request id filters |
 | `app/core/logging/context.py` | `request_id` `ContextVar` |
+| `app/core/logging/errors.py` | `one_line()`: an exception in one line |
 | `app/core/logging/middleware.py` | `RequestIdMiddleware`, `AccessLogMiddleware`, `QUIET_PATHS` |

@@ -25,7 +25,7 @@ async def _deliver(event_type: str, payload: dict, event_id: uuid.UUID) -> None:
     receiver may get the same event twice (a retry after a timeout it did process).
     """
     if not settings.WEBHOOK_URL:
-        logger.debug("[%s] WEBHOOK_URL not configured, skipping", event_type)
+        logger.debug("WEBHOOK_URL is not set: %s %s not sent", event_type, event_id)
         return
 
     async with httpx.AsyncClient(timeout=10) as client:
@@ -35,7 +35,7 @@ async def _deliver(event_type: str, payload: dict, event_id: uuid.UUID) -> None:
             headers={"Idempotency-Key": str(event_id)},
         )
     response.raise_for_status()
-    logger.info("[%s] Webhook delivered (status=%d)", event_type, response.status_code)
+    logger.debug("Webhook took %s %s (%d)", event_type, event_id, response.status_code)
 
 
 @dispatcher.register("enrollment.confirmed")
