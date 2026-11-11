@@ -90,6 +90,7 @@ not count.
 
 ### Fixed
 
+- A webhook that answers with an error or does not answer is one line per attempt, without a traceback and without its URL, which httpx put in every retry line and in the stored error; handlers raise `ExpectedFailure` for failures they can name, and a handler timeout counts as one. The access line shows tenths of a millisecond below 10 ms instead of `0ms` (#30).
 - The first command of the quick start failed on a fresh clone: compose needs `.env.local` and no step created it (#26).
 - A `DB_PASSWORD` changed in `.env.local` reached the API and not the database container (#26).
 - Deprecation warnings raised in integration tests were not turned into errors (missing `tests/integration/__init__.py`) (#26).

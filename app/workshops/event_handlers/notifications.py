@@ -13,6 +13,8 @@ import httpx
 
 from app.core.config import settings
 from app.core.events.dispatcher import dispatcher
+from app.core.logging.errors import one_line
+from app.workshops.exceptions import WebhookRejectedError, WebhookUnreachableError
 
 logger = logging.getLogger(__name__)
 
@@ -23,18 +25,26 @@ async def _deliver(event_type: str, payload: dict, event_id: uuid.UUID) -> None:
     Anything but a 2xx raises: an answer is not a delivery, and returning here would mark
     the handler as done for good. The event id travels as Idempotency-Key because the
     receiver may get the same event twice (a retry after a timeout it did process).
+
+    The errors are this context's, not httpx's: httpx puts the URL in its messages, and a
+    webhook URL is often a secret (a token in the path), which would end up in every log
+    line of every retry and in the stored error.
     """
     if not settings.WEBHOOK_URL:
         logger.debug("WEBHOOK_URL is not set: %s %s not sent", event_type, event_id)
         return
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        response = await client.post(
-            settings.WEBHOOK_URL,
-            json={"event": event_type, "id": str(event_id), "payload": payload},
-            headers={"Idempotency-Key": str(event_id)},
-        )
-    response.raise_for_status()
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.post(
+                settings.WEBHOOK_URL,
+                json={"event": event_type, "id": str(event_id), "payload": payload},
+                headers={"Idempotency-Key": str(event_id)},
+            )
+    except httpx.TransportError as exc:
+        raise WebhookUnreachableError(one_line(exc)) from None
+    if not response.is_success:
+        raise WebhookRejectedError(response.status_code)
     logger.debug("Webhook took %s %s (%d)", event_type, event_id, response.status_code)
 
 

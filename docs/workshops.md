@@ -58,7 +58,9 @@ closes that gap, and it is part of the types: the seat rules take a `LockedWorks
 
 **Events and jobs.** A change that concerns an attendee leaves an event in the outbox, in the
 same transaction as the change; the handlers deliver it to `WEBHOOK_URL` with the event id as
-`Idempotency-Key` and raise unless the receiver accepted it (`docs/event-bus.md`).
+`Idempotency-Key` and raise unless the receiver accepted it: `WebhookRejectedError` or
+`WebhookUnreachableError`, which name the status or the transport error and never the URL
+(`docs/event-bus.md`).
 
 | Event | Published when |
 |---|---|

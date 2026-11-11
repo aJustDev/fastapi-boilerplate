@@ -4,6 +4,7 @@ All of them are 409: the request was well formed and allowed, and the state it m
 not permit it. Each rule a client can react to differently has its own code.
 """
 
+from app.core.events.dispatcher import ExpectedFailure
 from app.core.exceptions import UseCaseException
 
 
@@ -37,3 +38,14 @@ class CapacityBelowEnrolledError(WorkshopRuleError):
 
     def __init__(self, seats_taken: int) -> None:
         super().__init__(f"Capacity cannot go below the {seats_taken} seats already taken")
+
+
+class WebhookRejectedError(ExpectedFailure):
+    """The webhook answered, and not with a 2xx: the event was not delivered."""
+
+    def __init__(self, status_code: int) -> None:
+        super().__init__(f"webhook answered {status_code}")
+
+
+class WebhookUnreachableError(ExpectedFailure):
+    """The webhook did not answer: connection refused, timeout, DNS."""
