@@ -295,3 +295,11 @@ class TestCorrelation:
 
         assert seen == ["trace-42"]
         assert get_request_id() == ""  # and it does not leak into the worker loop
+
+
+class TestStop:
+    async def test_a_worker_that_never_started_reports_nothing(self, caplog):
+        # OUTBOX_WORKER_ENABLED=false: the lifespan still calls stop().
+        with caplog.at_level("INFO", logger="app.core.events.worker"):
+            await OutboxWorker().stop()
+        assert "stopped" not in caplog.text
