@@ -1,10 +1,12 @@
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
 
-from app.core.events.dispatcher import DispatchResult, HandlerResult
+from app.core.events.dispatcher import DispatchResult, ExpectedFailure, HandlerResult
 from app.core.events.models import OutboxEventORM
 from app.core.events.worker import OutboxWorker
+from app.core.logging.config import JSONFormatter
 from app.core.logging.context import request_id_var
 
 
@@ -53,7 +55,7 @@ class TestHandleEvent:
         event = _make_event(retry_count=0, max_retries=5)
 
         failure_result = DispatchResult(
-            results=[HandlerResult("handler_a", success=False, error="boom")]
+            results=[HandlerResult("handler_a", success=False, exception=RuntimeError("boom"))]
         )
 
         with patch(
@@ -75,7 +77,9 @@ class TestHandleEvent:
         event = _make_event(retry_count=4, max_retries=5)
 
         failure_result = DispatchResult(
-            results=[HandlerResult("handler_a", success=False, error="final failure")]
+            results=[
+                HandlerResult("handler_a", success=False, exception=RuntimeError("final failure"))
+            ]
         )
 
         with patch(
@@ -92,7 +96,9 @@ class TestHandleEvent:
         worker = OutboxWorker()
         session = AsyncMock()
 
-        failure_result = DispatchResult(results=[HandlerResult("h", success=False, error="err")])
+        failure_result = DispatchResult(
+            results=[HandlerResult("h", success=False, exception=RuntimeError("err"))]
+        )
 
         # Test retry 1 vs retry 3 — retry 3 should have a larger delay
         event_low = _make_event(retry_count=0, max_retries=10)
@@ -119,8 +125,8 @@ class TestHandleEvent:
         failure_result = DispatchResult(
             results=[
                 HandlerResult("handler_a", success=True),
-                HandlerResult("handler_b", success=False, error="traceback B"),
-                HandlerResult("handler_c", success=False, error="traceback C"),
+                HandlerResult("handler_b", success=False, exception=RuntimeError("traceback B")),
+                HandlerResult("handler_c", success=False, exception=RuntimeError("traceback C")),
             ]
         )
 
@@ -159,7 +165,7 @@ class TestHandlerState:
         event = _make_event()
 
         failure_result = DispatchResult(
-            results=[HandlerResult("handler_a", success=False, error="boom")]
+            results=[HandlerResult("handler_a", success=False, exception=RuntimeError("boom"))]
         )
 
         with patch(
@@ -230,7 +236,9 @@ class TestRetryBudget:
 
         worker, session = OutboxWorker(), AsyncMock()
         event = _make_event(max_retries=Settings(ENVIRONMENT="local").OUTBOX_MAX_RETRIES)
-        failure = DispatchResult(results=[HandlerResult("handler_a", success=False, error="x")])
+        failure = DispatchResult(
+            results=[HandlerResult("handler_a", success=False, exception=RuntimeError("x"))]
+        )
         waited = timedelta()
 
         with patch("app.core.events.worker.dispatcher.dispatch", return_value=failure):
@@ -267,7 +275,9 @@ class TestWorkerMetrics:
         worker, session = OutboxWorker(), AsyncMock()
         event = _make_event(retry_count=4, max_retries=5)
         before = self._count(outbox_events_failed_total, event.event_type)
-        failure = DispatchResult(results=[HandlerResult("handler_a", success=False, error="x")])
+        failure = DispatchResult(
+            results=[HandlerResult("handler_a", success=False, exception=RuntimeError("x"))]
+        )
 
         with patch("app.core.events.worker.dispatcher.dispatch", return_value=failure):
             await worker._handle_event(session, event)
@@ -307,22 +317,23 @@ class TestStop:
 
 
 class TestWhatAnAttemptLogs:
-    """One line per attempt, without a traceback; the traceback stays with the event."""
+    """One line per attempt; a bug brings its traceback on the first and the last."""
 
+    _BUG = KeyError("workshop_id")
     _FAILED = DispatchResult(
         results=[
             HandlerResult(
                 "app.x.notifications.notify",
                 success=False,
-                error="Traceback ...",
-                reason="notifications.notify failed (ConnectTimeout)",
+                reason="notifications.notify failed (KeyError: 'workshop_id')",
+                exception=_BUG,
             )
         ]
     )
 
-    async def _handle(self, event, caplog):
+    async def _handle(self, event, caplog, result=_FAILED):
         with (
-            patch("app.core.events.worker.dispatcher.dispatch", return_value=self._FAILED),
+            patch("app.core.events.worker.dispatcher.dispatch", return_value=result),
             caplog.at_level("INFO", logger="app.core.events.worker"),
         ):
             await OutboxWorker()._handle_event(AsyncMock(), event)
@@ -337,15 +348,15 @@ class TestWhatAnAttemptLogs:
         assert record.exc_info is None
         message = record.getMessage()
         assert message.startswith(f"Retry 4/12 of test.event {event.id} in ")
-        assert message.endswith("s: notifications.notify failed (ConnectTimeout)")
+        assert message.endswith("s: notifications.notify failed (KeyError: 'workshop_id')")
 
     async def test_the_first_failure_brings_its_traceback(self, caplog):
         # To debug a handler without waiting for its last attempt, an hour later.
         [record] = await self._handle(_make_event(retry_count=0, max_retries=12), caplog)
 
-        first_line, traceback = record.getMessage().split("\n", 1)
-        assert first_line.startswith("Retry 1/12 of test.event ")
-        assert traceback == "[app.x.notifications.notify] Traceback ..."
+        assert record.getMessage().startswith("Retry 1/12 of test.event ")
+        assert "\n" not in record.getMessage(), "the traceback travels apart, as exc_info"
+        assert record.exc_info[1] is self._BUG
 
     async def test_the_last_attempt_brings_its_traceback(self, caplog):
         event = _make_event(retry_count=11, max_retries=12)
@@ -353,12 +364,12 @@ class TestWhatAnAttemptLogs:
         [record] = await self._handle(event, caplog)
 
         assert record.levelname == "CRITICAL"
-        first_line, traceback = record.getMessage().split("\n", 1)
-        assert first_line.startswith(
+        assert record.getMessage() == (
             f"Gave up on test.event {event.id} after 12 attempts: "
-            "notifications.notify failed (ConnectTimeout); "
+            "notifications.notify failed (KeyError: 'workshop_id'); "
+            "`python -m app.cli outbox replay` retries it"
         )
-        assert traceback == "[app.x.notifications.notify] Traceback ..."
+        assert record.exc_info[1] is self._BUG
 
     async def test_an_expected_failure_brings_no_traceback_even_the_first_time(self, caplog):
         expected = DispatchResult(
@@ -366,32 +377,27 @@ class TestWhatAnAttemptLogs:
                 HandlerResult(
                     "app.x.notifications.notify",
                     success=False,
-                    expected=True,
-                    error="notifications.notify failed (WebhookRejectedError: webhook answered 404)",
-                    reason="notifications.notify failed (WebhookRejectedError: webhook answered 404)",
+                    reason="notifications.notify failed (ExpectedFailure: webhook answered 404)",
+                    exception=ExpectedFailure("webhook answered 404"),
                 )
             ]
         )
         for retry_count in (0, 11):  # the first attempt and the last
             caplog.clear()
-            with (
-                patch("app.core.events.worker.dispatcher.dispatch", return_value=expected),
-                caplog.at_level("INFO", logger="app.core.events.worker"),
-            ):
-                await OutboxWorker()._handle_event(
-                    AsyncMock(), _make_event(retry_count=retry_count, max_retries=12)
-                )
-            [record] = [r for r in caplog.records if r.name == "app.core.events.worker"]
+            event = _make_event(retry_count=retry_count, max_retries=12)
+
+            [record] = await self._handle(event, caplog, expected)
+
+            assert record.exc_info is None
             assert "\n" not in record.getMessage()
-            assert not hasattr(record, "fields")
 
-    async def test_in_json_the_traceback_is_a_field(self, caplog, monkeypatch):
-        monkeypatch.setattr("app.core.events.worker.json_enabled", lambda: True)
-
+    async def test_in_json_the_traceback_is_the_exception_field(self, caplog):
         [record] = await self._handle(_make_event(retry_count=11, max_retries=12), caplog)
 
-        assert "\n" not in record.getMessage()
-        assert record.fields == {"exception": "[app.x.notifications.notify] Traceback ..."}
+        line = json.loads(JSONFormatter().format(record))
+
+        assert "\n" not in line["message"]
+        assert line["exception"] == "KeyError: 'workshop_id'\n"
 
     async def test_the_lines_of_an_event_carry_the_request_that_published_it(self):
         seen: list[str] = []

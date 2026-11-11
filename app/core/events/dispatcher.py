@@ -26,6 +26,13 @@ class ExpectedFailure(Exception):  # noqa: N818 -- it names what it is, not an e
     """
 
 
+class HandlerTimeoutError(ExpectedFailure):
+    """The handler was still running when its time was up (OUTBOX_HANDLER_TIMEOUT_SECONDS)."""
+
+    def __init__(self, seconds: float) -> None:
+        super().__init__(f"still running after {seconds:g}s")
+
+
 def handler_key(func: HandlerFunc) -> str:
     """Identity of a handler in `handler_state`: its module and qualified name.
 
@@ -40,10 +47,23 @@ def handler_key(func: HandlerFunc) -> str:
 class HandlerResult:
     handler_name: str
     success: bool
-    error: str | None = None  # the traceback, stored with the event
     skipped: bool = False
     reason: str | None = None  # `notifications.notify_confirmed failed (ConnectTimeout)`
-    expected: bool = False  # an ExpectedFailure or a timeout: no traceback worth showing
+    exception: Exception | None = None  # what the handler raised
+
+    @property
+    def expected(self) -> bool:
+        """A failure the handler could name: its line says it all."""
+        return isinstance(self.exception, ExpectedFailure)
+
+    @property
+    def error(self) -> str | None:
+        """What is stored with the event: the line of an expected failure, a bug's traceback."""
+        if self.exception is None:
+            return None
+        if self.expected:
+            return self.reason or one_line(self.exception)
+        return "".join(traceback.format_exception(self.exception))
 
 
 @dataclass
@@ -68,13 +88,13 @@ class DispatchResult:
         return "\n---\n".join(f"[{r.handler_name}] {r.error}" for r in failed)
 
     @property
-    def tracebacks(self) -> str:
-        """The tracebacks of the handlers that failed unexpectedly; empty if none did."""
-        return "\n---\n".join(
-            f"[{r.handler_name}] {(r.error or '').rstrip()}"
-            for r in self.results
-            if not r.success and not r.expected
-        )
+    def bug(self) -> Exception | None:
+        """What a log line brings as `exc_info`: the exception of the handler that failed
+        unexpectedly, a group if several did, None if none did."""
+        bugs = [r.exception for r in self.results if r.exception is not None and not r.expected]
+        if len(bugs) > 1:
+            return ExceptionGroup(f"{len(bugs)} handlers failed", bugs)
+        return bugs[0] if bugs else None
 
     @property
     def failures(self) -> str:
@@ -141,35 +161,26 @@ class EventDispatcher:
                 async with deadline:
                     await handler(payload, event_id)
                 result.results.append(HandlerResult(key, success=True))
-            # The worker logs the attempt; the traceback, when there is one worth having,
-            # is stored with the event (last_error) and logged on the first and last.
+            # The worker logs the attempt, and the exception with it when it is a bug.
             except Exception as exc:  # noqa: BLE001
-                # The module and the function: enough to find it, short enough for a line.
-                label = f"{handler.__module__.rsplit('.', 1)[-1]}.{handler.__name__}"
+                failure: Exception = exc
                 # Only the deadline above: a TimeoutError the handler raised by itself (a
                 # query, a socket) is a failure like any other, with its traceback.
                 if isinstance(exc, TimeoutError) and deadline.expired():
-                    timeout = settings.OUTBOX_HANDLER_TIMEOUT_SECONDS
-                    failure = HandlerResult(
-                        key, success=False, expected=True, reason=f"{label} timed out ({timeout}s)"
-                    )
-                elif isinstance(exc, ExpectedFailure):
-                    failure = HandlerResult(
+                    failure = HandlerTimeoutError(settings.OUTBOX_HANDLER_TIMEOUT_SECONDS)
+                elif not isinstance(exc, ExpectedFailure):
+                    # Where several handlers fail, which traceback is whose.
+                    exc.add_note(f"handler: {key}")
+                # The module and the function: enough to find it, short enough for a line.
+                label = f"{handler.__module__.rsplit('.', 1)[-1]}.{handler.__name__}"
+                result.results.append(
+                    HandlerResult(
                         key,
                         success=False,
-                        expected=True,
-                        reason=f"{label} failed ({one_line(exc)})",
+                        reason=f"{label} failed ({one_line(failure)})",
+                        exception=failure,
                     )
-                else:
-                    failure = HandlerResult(
-                        key,
-                        success=False,
-                        error=traceback.format_exc(),
-                        reason=f"{label} failed ({one_line(exc)})",
-                    )
-                if failure.expected:
-                    failure.error = failure.reason  # what is stored: the line, not a traceback
-                result.results.append(failure)
+                )
 
         return result
 
