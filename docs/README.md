@@ -6,7 +6,7 @@ configuration, guarantees and limits, and its files. Diagrams are generated from
 
 ## Structure
 
-- [architecture.md](architecture.md): bounded contexts, layers, import rules, the registry, adding a context
+- [architecture.md](architecture.md): bounded contexts, layers, import rules, the registry, adding a context, starting a project from this base
 - [database.md](database.md): sessions per request, engine and timeouts, models, repositories
 - [migrations.md](migrations.md): Alembic workflow, safe changes on tables with data
 - [configuration.md](configuration.md): where settings come from, validators, adding a setting
@@ -23,6 +23,7 @@ configuration, guarantees and limits, and its files. Diagrams are generated from
 ## Operations
 
 - [deployment.md](deployment.md): required settings, migrations, first admin, what goes in front, scaling and connections (own PostgreSQL or a pooler)
+- [releases.md](releases.md): the version, cutting a release, what the workflow publishes
 - [operations.md](operations.md): health endpoints, the command line, running the workers
 - [logging.md](logging.md): JSON and colored logs, request ids
 - [metrics.md](metrics.md): Prometheus metrics and dashboards

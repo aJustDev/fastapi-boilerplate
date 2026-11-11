@@ -96,6 +96,39 @@ never runs: the event bus then retries its events until they fail (see `docs/eve
 To add a feature to an existing context, add files to its layers; nothing outside the context
 changes except the registry, the router composition or the migrations.
 
+## Starting a project from this base
+
+A project starts as a copy of the base at one commit of `main` and is its own repository from
+then on: the base is not a dependency to upgrade. On the first day:
+
+1. **Its own history.** `CHANGELOG.md` holds the history of the base. Replace it with the one of
+   the project, whose first line records the commit it started from: a later fix of the base is
+   then found by reading the base's changelog from that commit on.
+
+   ```markdown
+   # Changelog
+
+   All notable changes to this project. Format based on
+   [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
+   [Semantic Versioning](https://semver.org/).
+
+   Each PR that changes behavior adds one line under `[Unreleased]`, in the section that fits
+   (Added, Changed, Fixed, Removed, Security), with the PR number.
+
+   ## [Unreleased]
+
+   ### Added
+
+   - Project started from fastapi-boilerplate at `<commit>`.
+   ```
+
+2. **Its name.** `APP_NAME` and `APP_DESCRIPTION` (their defaults in `app/core/config.py`, and
+   `.env.example`), `description` in `pyproject.toml` and the README. In `pyproject.toml`,
+   `name = "app"` and `version = "0.1.0"` stay: `APP_VERSION` reads the version of the package
+   by that name, and `0.1.0` is the version the first release publishes.
+3. **Its first context.** "Replacing the example context", below.
+4. **Its first release**, when there is something to name: `docs/releases.md`.
+
 ## Replacing the example context
 
 `app/workshops` is there to be read and then removed. `auth` and `core` do not know it, so

@@ -1,8 +1,10 @@
 # Changelog
 
-All notable changes to this boilerplate. Format based on
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
-[Semantic Versioning](https://semver.org/).
+The history of the base, in the format of
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). The base cuts no versions: it stays at
+`0.1.0`, and everything here is under `[Unreleased]`. A project started from it replaces this
+file with its own (`docs/architecture.md`, "Starting a project from this base") and cuts its
+versions from there (`docs/releases.md`).
 
 Each PR that changes behavior adds one line under `[Unreleased]`, in the section that fits
 (Added, Changed, Fixed, Removed, Security), with the PR number. Typos and invisible refactors do
@@ -11,6 +13,8 @@ not count.
 ## [Unreleased]
 
 ### Added
+
+- Releases for the project started from this base: `scripts/release.py cut X.Y.Z` writes the version (`pyproject.toml`, `uv.lock`) and its section of the changelog, and the `release` workflow tags and publishes it when that PR is merged. A test keeps the changelog and `pyproject.toml` together. Guide in `docs/releases.md`, and "Starting a project from this base" in `docs/architecture.md` (#36).
 
 - `DB_TRANSACTION_POOLER` and `DB_DIRECT_URL`: the app works behind a pooler in transaction mode (PgBouncer, a managed provider's pooled URL), with statements neither cached nor named, the timeouts set per transaction, and `LISTEN` and the migrations on the direct URL, which is required with it. Tested against a real PgBouncer (#31, #33).
 - Startup table: a `Capacity` row, what this instance can open against what the server takes, `warn` when it does not fit; or a `Pooler` row behind a transaction pooler (#31).
