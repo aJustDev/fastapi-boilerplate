@@ -12,9 +12,8 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.config import settings
 from app.core.db import async_session_factory, build_asyncpg_dsn
-from app.core.events.dispatcher import DispatchResult, dispatcher
+from app.core.events.dispatcher import dispatcher
 from app.core.events.models import OutboxEventORM
-from app.core.logging.config import json_enabled
 from app.core.logging.context import request_id_var
 from app.core.logging.errors import one_line
 from app.core.metrics.instruments import outbox_events_failed_total, outbox_events_processed_total
@@ -37,18 +36,6 @@ _CONNECTION_ERRORS = (
     sqlalchemy.exc.OperationalError,
     sqlalchemy.exc.InterfaceError,
 )
-
-
-def _with_tracebacks(result: DispatchResult) -> tuple[str, dict]:
-    """The tracebacks of the handlers that failed unexpectedly, for a log line: after the
-    message on a terminal, as the `exception` field in JSON. Nothing for a failure the
-    handler could name (an ExpectedFailure, a timeout)."""
-    tracebacks = result.tracebacks
-    if not tracebacks:
-        return "", {}
-    if json_enabled():
-        return "", {"extra": {"fields": {"exception": tracebacks}}}
-    return f"\n{tracebacks}", {}
 
 
 class OutboxWorker:
@@ -218,16 +205,14 @@ class OutboxWorker:
             if event.retry_count >= event.max_retries:
                 event.status = "FAILED"
                 outbox_events_failed_total.labels(event_type=event.event_type).inc()
-                suffix, extra = _with_tracebacks(dispatch_result)
                 logger.critical(
                     "Gave up on %s %s after %d attempts: %s; `python -m app.cli outbox replay` "
-                    "retries it%s",
+                    "retries it",
                     event.event_type,
                     event.id,
                     event.retry_count,
                     dispatch_result.failures,
-                    suffix,
-                    **extra,
+                    exc_info=dispatch_result.bug,
                 )
             else:
                 # Exponential backoff with jitter and cap
@@ -238,20 +223,19 @@ class OutboxWorker:
                 event.scheduled_at = datetime.now(UTC) + timedelta(
                     seconds=backoff_seconds,
                 )
-                # The traceback goes with the first failure, to debug it without waiting for
-                # the last attempt, and with the last; the ones between are one line each.
+                # The traceback of a bug goes with the first failure, to debug it without
+                # waiting for the last attempt, and with the last; the ones between are one
+                # line each, like every attempt of a failure the handler could name.
                 first = event.retry_count == 1
-                suffix, extra = _with_tracebacks(dispatch_result) if first else ("", {})
                 logger.warning(
-                    "Retry %d/%d of %s %s in %.0fs: %s%s",
+                    "Retry %d/%d of %s %s in %.0fs: %s",
                     event.retry_count,
                     event.max_retries,
                     event.event_type,
                     event.id,
                     backoff_seconds,
                     dispatch_result.failures,
-                    suffix,
-                    **extra,
+                    exc_info=dispatch_result.bug if first else None,
                 )
 
         await session.flush()

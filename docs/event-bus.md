@@ -25,11 +25,13 @@ if and only if the change is committed: emails, webhooks, work in another contex
    Each attempt that fails is one WARNING line:
    `Retry 1/12 of enrollment.confirmed 2d42... in 5s: notifications.notify_confirmed failed
    (WebhookRejectedError: webhook answered 503)`. A failure the handler can name (an
-   `ExpectedFailure`) and one that ran past `OUTBOX_HANDLER_TIMEOUT_SECONDS` are that one line
-   on every attempt, and the line is what is stored. Any other exception, a `TimeoutError`
-   of the handler's own included, is a bug: the first and the last attempt also bring its
-   traceback (after the line on a terminal, as the `exception` field in JSON), so it can be
-   debugged at once, and it is stored with the event (`last_error`, `handler_state`).
+   `ExpectedFailure`) is that one line on every attempt, and the line is what is stored. A
+   handler still running after `OUTBOX_HANDLER_TIMEOUT_SECONDS` is one of them
+   (`HandlerTimeoutError: still running after 30s`). Any other exception, a `TimeoutError` of
+   the handler's own included, is a bug: the first and the last attempt are logged with it
+   (after the line on a terminal, as the `exception` field in JSON; several failing handlers
+   as one group, each traceback ending with `handler: <its key>`), so it can be debugged at
+   once, and its traceback is stored with the event (`last_error`, `handler_state`).
 
 `handler_state` (JSONB) records the outcome per handler; on a retry, handlers that already
 succeeded are skipped.

@@ -46,6 +46,7 @@ not count.
 
 ### Changed
 
+- A failing event handler travels to the log as its exception: the worker logs the first and the last attempt of a bug with `exc_info` (several failing handlers as one `ExceptionGroup`, each traceback ending with its handler), and a handler past its deadline is a `HandlerTimeoutError`, an `ExpectedFailure` like any other (`... failed (HandlerTimeoutError: still running after 30s)`) (#34).
 - Logging is configured when the app is built, with one handler on the root logger: in JSON, every line of a start is JSON, uvicorn's first ones included (#29).
 - Access log: the app writes one line per request with the status, the error code and the time (`GET /v1/workshops/7 404 not_found 3ms`; fields of `http` in JSON), without the query string. Probes (readiness included), the metrics scrape and preflights leave none; uvicorn's access log is off (#29).
 - Error handlers log one line at the level of whose error it is: a 4xx at DEBUG with the place in `app/` that raised it, the rate limit as one WARNING with the client and the time to retry, a 5xx as one ERROR with the traceback (#29).

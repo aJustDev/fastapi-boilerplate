@@ -9,6 +9,7 @@ from app.core.events.dispatcher import (
     EventDispatcher,
     ExpectedFailure,
     HandlerResult,
+    HandlerTimeoutError,
     handler_key,
 )
 
@@ -26,10 +27,20 @@ class TestHandlerResult:
         assert r.success is True
         assert r.error is None
 
-    def test_failure_result(self):
-        r = HandlerResult(handler_name="foo", success=False, error="boom")
-        assert r.success is False
-        assert r.error == "boom"
+    def test_a_bug_is_stored_as_its_traceback(self):
+        r = HandlerResult(handler_name="foo", success=False, exception=ValueError("boom"))
+        assert r.expected is False
+        assert r.error == "ValueError: boom\n"
+
+    def test_an_expected_failure_is_stored_as_its_line(self):
+        r = HandlerResult(
+            handler_name="foo",
+            success=False,
+            reason="foo failed (ExpectedFailure: no)",
+            exception=ExpectedFailure("no"),
+        )
+        assert r.expected is True
+        assert r.error == "foo failed (ExpectedFailure: no)"
 
 
 class TestDispatchResult:
@@ -49,7 +60,7 @@ class TestDispatchResult:
         result = DispatchResult(
             results=[
                 HandlerResult("a", success=True),
-                HandlerResult("b", success=False, error="err"),
+                HandlerResult("b", success=False, exception=ValueError("err")),
             ]
         )
         assert result.all_succeeded is False
@@ -58,13 +69,13 @@ class TestDispatchResult:
         result = DispatchResult(
             results=[
                 HandlerResult("a", success=True),
-                HandlerResult("b", success=False, error="err1"),
-                HandlerResult("c", success=False, error="err2"),
+                HandlerResult("b", success=False, exception=ValueError("err1")),
+                HandlerResult("c", success=False, exception=ValueError("err2")),
             ]
         )
         summary = result.errors_summary
-        assert "[b] err1" in summary
-        assert "[c] err2" in summary
+        assert "[b] ValueError: err1" in summary
+        assert "[c] ValueError: err2" in summary
         assert "---" in summary
 
 
@@ -144,10 +155,15 @@ class TestEventDispatcher:
         assert result.all_succeeded is False
         assert len(result.results) == 1
         assert result.results[0].success is False
-        # A timeout is a failure it can name: one line, no traceback to store or show.
-        assert result.results[0].expected is True
-        assert result.failures == "test_dispatcher.slow_handler timed out (0.1s)"
-        assert result.tracebacks == ""
+        # Running past the deadline is a failure with a name: one line, no traceback to
+        # store or show.
+        [failure] = result.results
+        assert isinstance(failure.exception, HandlerTimeoutError)
+        assert failure.expected is True
+        line = "test_dispatcher.slow_handler failed (HandlerTimeoutError: still running after 0.1s)"
+        assert result.failures == line
+        assert failure.error == line
+        assert result.bug is None
 
     async def test_skips_completed_handlers(self, fresh_dispatcher: EventDispatcher):
         call_order: list[str] = []
@@ -242,7 +258,7 @@ class TestExpectedFailures:
         line = "test_dispatcher.deliver failed (ExpectedFailure: receiver answered 404)"
         assert result.failures == line
         assert failure.error == line, "the stored error is the line, not a traceback"
-        assert result.tracebacks == ""
+        assert result.bug is None
 
     async def test_a_bug_keeps_its_traceback(self, fresh_dispatcher):
         @fresh_dispatcher.register("test.event")
@@ -251,9 +267,10 @@ class TestExpectedFailures:
 
         result = await fresh_dispatcher.dispatch("test.event", {}, event_id=EVENT_ID)
 
-        assert result.tracebacks.startswith("[")
-        assert "Traceback (most recent call last)" in result.tracebacks
-        assert not result.tracebacks.endswith("\n"), "no blank line after it in the log"
+        [failure] = result.results
+        assert isinstance(result.bug, KeyError), "the exception itself, for the log to format"
+        assert result.bug.__notes__ == [f"handler: {handler_key(deliver)}"]
+        assert "Traceback (most recent call last)" in failure.error
 
     async def test_a_timeout_of_the_handler_itself_is_not_the_deadline(self, fresh_dispatcher):
         # asyncpg's command_timeout, an asyncio.timeout() or a socket raise TimeoutError too:
@@ -269,4 +286,39 @@ class TestExpectedFailures:
         assert result.failures == (
             "test_dispatcher.charge failed (TimeoutError: billing did not answer)"
         )
-        assert "Traceback (most recent call last)" in result.tracebacks
+        assert isinstance(result.bug, TimeoutError)
+        assert "Traceback (most recent call last)" in failure.error
+
+    async def test_several_bugs_travel_as_a_group_each_with_its_handler(self, fresh_dispatcher):
+        @fresh_dispatcher.register("test.event")
+        async def first(payload: dict, event_id: uuid.UUID) -> None:
+            raise KeyError("workshop_id")
+
+        @fresh_dispatcher.register("test.event")
+        async def second(payload: dict, event_id: uuid.UUID) -> None:
+            raise ValueError("bad payload")
+
+        result = await fresh_dispatcher.dispatch("test.event", {}, event_id=EVENT_ID)
+
+        assert isinstance(result.bug, ExceptionGroup)
+        assert [(type(e), e.__notes__) for e in result.bug.exceptions] == [
+            (KeyError, [f"handler: {handler_key(first)}"]),
+            (ValueError, [f"handler: {handler_key(second)}"]),
+        ]
+
+    async def test_an_expected_failure_next_to_a_bug_leaves_the_bug_alone(self, fresh_dispatcher):
+        @fresh_dispatcher.register("test.event")
+        async def deliver(payload: dict, event_id: uuid.UUID) -> None:
+            raise ExpectedFailure("receiver answered 503")
+
+        @fresh_dispatcher.register("test.event")
+        async def record(payload: dict, event_id: uuid.UUID) -> None:
+            raise KeyError("workshop_id")
+
+        result = await fresh_dispatcher.dispatch("test.event", {}, event_id=EVENT_ID)
+
+        assert isinstance(result.bug, KeyError)
+        assert result.failures == (
+            "test_dispatcher.deliver failed (ExpectedFailure: receiver answered 503); "
+            "test_dispatcher.record failed (KeyError: 'workshop_id')"
+        )
