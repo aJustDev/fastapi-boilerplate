@@ -11,6 +11,7 @@ module of the logger.
   digits, `.`, `_`, `-`, at most 64 characters) and generates a UUID4 hex otherwise, stores it in
   a `ContextVar` for the duration of the request and returns it in the response header.
 - `RequestIdFilter` adds `request_id` to every record (empty outside a request: jobs, startup).
+  The text formats print it in brackets only when there is one.
   An event handler logs under the id of the request that published its event
   (`docs/event-bus.md`).
 - `LayerModuleFilter` derives `layer` and `module` from the logger name: the first of `api`,
@@ -51,13 +52,15 @@ A JSON line:
 ```
 
 Fields: `timestamp` (ISO 8601, UTC), `level`, `layer`, `module`, `logger`, `request_id`,
-`message`, and `exception` (the traceback) when one was logged.
+`message`, and `exception` (the traceback) when one was logged. A record logged with
+`extra={"fields": {...}}` adds those keys to its line, without replacing a standard one: the
+startup log puts its facts in `startup` (`docs/operations.md`).
 
 ## Configuration
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `LOG_LEVEL` | `INFO` | Level of the `app` loggers; uvicorn stays at WARNING and its access log at INFO |
+| `LOG_LEVEL` | `INFO` | Level of the `app` loggers; uvicorn's own loggers stay at INFO (where it listens, startup, shutdown, access lines) |
 | `LOG_FORMAT` | `auto` | `auto`, `json` or `text` |
 
 ## Guarantees and limits
@@ -77,7 +80,7 @@ Fields: `timestamp` (ISO 8601, UTC), `level`, `layer`, `module`, `logger`, `requ
 
 | File | Role |
 |---|---|
-| `app/core/logging/config.py` | `setup_logging()`, `JSONFormatter`, `ansi_enabled()` |
+| `app/core/logging/config.py` | `setup_logging()`, `JSONFormatter`, `ansi_enabled()`, `json_enabled()` |
 | `app/core/logging/filters.py` | Layer/module, request id and noise filters |
 | `app/core/logging/context.py` | `request_id` `ContextVar` |
 | `app/core/logging/middleware.py` | `RequestIdMiddleware` |

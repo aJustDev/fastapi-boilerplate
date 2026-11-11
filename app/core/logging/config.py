@@ -15,7 +15,11 @@ except ImportError:
 
 
 class JSONFormatter(logging.Formatter):
-    """Serializes LogRecords as single-line JSON for production log aggregators."""
+    """Serializes LogRecords as single-line JSON for production log aggregators.
+
+    A record logged with `extra={"fields": {...}}` carries those keys in its line too; the
+    standard keys above keep their meaning if a field has the same name.
+    """
 
     def format(self, record: logging.LogRecord) -> str:
         entry = {
@@ -29,6 +33,8 @@ class JSONFormatter(logging.Formatter):
         }
         if record.exc_info and record.exc_info[1]:
             entry["exception"] = "".join(traceback.format_exception(*record.exc_info))
+        for key, value in getattr(record, "fields", {}).items():
+            entry.setdefault(key, value)
         return json.dumps(entry, default=str)
 
 
@@ -40,6 +46,11 @@ def _resolve_format() -> tuple[bool, bool]:
     use_json = env not in ("local", "dev") if log_format == "auto" else log_format == "json"
     use_color = not use_json and _has_colorlog and env in ("local", "dev")
     return use_json, use_color
+
+
+def json_enabled() -> bool:
+    """Whether log lines are JSON: a message meant for a terminal can be shorter there."""
+    return _resolve_format()[0]
 
 
 def ansi_enabled() -> bool:
@@ -64,7 +75,7 @@ def setup_logging() -> None:
             "%(log_color)s%(levelname)s%(reset)s: "
             "[%(colored_layer)s] "
             "[%(colored_module)s] "
-            "[%(request_id)s] "
+            "%(request_tag)s"
             "%(log_color)s❯%(reset)s %(message)s"
         )
         formatter_config = {
@@ -81,7 +92,7 @@ def setup_logging() -> None:
     else:
         fmt = (
             "%(asctime)s %(levelname)s: [%(layer_name)s] [%(module_name)s]"
-            " [%(request_id)s] ❯ %(message)s"
+            " %(request_tag)s❯ %(message)s"
         )
         formatter_config = {
             "()": "logging.Formatter",
@@ -116,9 +127,11 @@ def setup_logging() -> None:
                 "level": settings.LOG_LEVEL.upper(),
                 "propagate": False,
             },
+            # INFO for the lines of the server itself: the address it listens on, startup
+            # complete, shutdown.
             "uvicorn": {
                 "handlers": ["console"],
-                "level": "WARNING",
+                "level": "INFO",
                 "propagate": False,
             },
             "uvicorn.access": {

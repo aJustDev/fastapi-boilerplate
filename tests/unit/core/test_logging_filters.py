@@ -228,6 +228,18 @@ class TestRequestIdFilter:
         f.filter(record)
         assert record.request_id == ""
 
+    def test_the_text_formats_print_the_id_only_during_a_request(self):
+        record = self._make_record()
+        RequestIdFilter().filter(record)
+        assert record.request_tag == ""
+
+        token = request_id_var.set("abc123")
+        try:
+            RequestIdFilter().filter(record)
+        finally:
+            request_id_var.reset(token)
+        assert record.request_tag == "[abc123] "
+
     def test_always_returns_true(self):
         f = RequestIdFilter()
         record = self._make_record()

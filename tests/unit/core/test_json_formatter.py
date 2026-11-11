@@ -54,3 +54,9 @@ class TestJSONFormatter:
         data = json.loads(line)
         assert data["layer"] == "App"
         assert data["request_id"] == ""
+
+    def test_fields_of_the_record_join_the_line(self):
+        record = self._make_record(fields={"startup": {"env": "production"}, "level": "fake"})
+        data = json.loads(JSONFormatter().format(record))
+        assert data["startup"] == {"env": "production"}
+        assert data["level"] == "INFO", "a field must not overwrite a standard key"
