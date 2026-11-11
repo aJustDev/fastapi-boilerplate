@@ -95,10 +95,16 @@ async def database_schema(engine: AsyncEngine) -> list[str] | None:
         return None
 
 
+# Client connections, the ones max_connections limits. A role that is not a superuser sees
+# no backend type for the sessions of other roles: for those, a session with a database and
+# a user is taken for a client, which the server's own workers are not (a parallel or a
+# replication worker is, so the count can run a little high while one lives).
 _CAPACITY = text(
     "SELECT current_setting('max_connections')::int,"
     " current_setting('superuser_reserved_connections')::int,"
-    " (SELECT count(*) FROM pg_stat_activity WHERE backend_type = 'client backend')"
+    " (SELECT count(*) FROM pg_stat_activity"
+    " WHERE backend_type = 'client backend'"
+    " OR (backend_type IS NULL AND datid IS NOT NULL AND usesysid IS NOT NULL))"
 )
 
 
