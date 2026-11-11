@@ -24,10 +24,11 @@ if and only if the change is committed: emails, webhooks, work in another contex
    becomes `FAILED` (logged at CRITICAL). An event type without handlers counts as a failure.
    Each attempt that fails is one WARNING line:
    `Retry 1/12 of enrollment.confirmed 2d42... in 5s: notifications.notify_confirmed failed
-   (ConnectTimeout)`. The first and the last attempt also bring the tracebacks (after the line
-   on a terminal, as the `exception` field in JSON), so a failing handler can be debugged at
-   once; the attempts between are one line each. The tracebacks are also stored with the event
-   (`last_error`, `handler_state`).
+   (WebhookRejectedError: webhook answered 503)`. A failure the handler can name (an
+   `ExpectedFailure`, or its timeout) is that one line on every attempt, and the line is what
+   is stored. Any other exception is a bug: the first and the last attempt also bring its
+   traceback (after the line on a terminal, as the `exception` field in JSON), so it can be
+   debugged at once, and it is stored with the event (`last_error`, `handler_state`).
 
 `handler_state` (JSONB) records the outcome per handler; on a retry, handlers that already
 succeeded are skipped.
@@ -54,8 +55,7 @@ class SeatingService:
 JSON-serializable. `aggregate_id` is the id of the entity the event is about. `correlation_id`
 defaults to the id of the current request, and the worker restores it while it handles the event,
 so the lines of the handlers and of the worker carry the `request_id` of the request that
-published it. Both are text
-columns, indexed for tracing.
+published it. Both are text columns, indexed for tracing.
 
 `publish_many(event_type, [(aggregate_id, payload), ...])` stores one event per pair in one
 batch, with a single NOTIFY. It is for a change that concerns many recipients (cancelling a
@@ -68,13 +68,18 @@ Handle it in the context that reacts, and import the module in `app/db_registry.
 @dispatcher.register("enrollment.confirmed")
 async def notify_confirmed(payload: dict, event_id: uuid.UUID) -> None:
     response = await client.post(url, json=payload, headers={"Idempotency-Key": str(event_id)})
-    response.raise_for_status()
+    if not response.is_success:
+        raise WebhookRejectedError(response.status_code)  # an ExpectedFailure
 ```
 
 A handler receives the payload and the id of the event, and has two duties:
 
 - **Raise unless the work was done.** A handler that returns is marked as done for good; one that
-  raises is retried with backoff. An HTTP answer is not a delivery: check the status.
+  raises is retried with backoff. An HTTP answer is not a delivery: check the status. For a
+  failure it can name (the receiver said no, did not answer), raise a subclass of
+  `ExpectedFailure` (`app/core/events/dispatcher.py`) with a short message: it is logged in one
+  line, without a traceback. Do not let an HTTP client's own error through: httpx puts the URL
+  in its messages, and a webhook URL often carries a secret.
 - **Be idempotent** (see the limits). The event id is the same on every attempt: pass it as the
   idempotency key of external calls, or record it. Read the current state of the entity from the
   database instead of trusting the payload.

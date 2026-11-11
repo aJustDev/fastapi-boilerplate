@@ -360,6 +360,31 @@ class TestWhatAnAttemptLogs:
         )
         assert traceback == "[app.x.notifications.notify] Traceback ..."
 
+    async def test_an_expected_failure_brings_no_traceback_even_the_first_time(self, caplog):
+        expected = DispatchResult(
+            results=[
+                HandlerResult(
+                    "app.x.notifications.notify",
+                    success=False,
+                    expected=True,
+                    error="notifications.notify failed (WebhookRejectedError: webhook answered 404)",
+                    reason="notifications.notify failed (WebhookRejectedError: webhook answered 404)",
+                )
+            ]
+        )
+        for retry_count in (0, 11):  # the first attempt and the last
+            caplog.clear()
+            with (
+                patch("app.core.events.worker.dispatcher.dispatch", return_value=expected),
+                caplog.at_level("INFO", logger="app.core.events.worker"),
+            ):
+                await OutboxWorker()._handle_event(
+                    AsyncMock(), _make_event(retry_count=retry_count, max_retries=12)
+                )
+            [record] = [r for r in caplog.records if r.name == "app.core.events.worker"]
+            assert "\n" not in record.getMessage()
+            assert not hasattr(record, "fields")
+
     async def test_in_json_the_traceback_is_a_field(self, caplog, monkeypatch):
         monkeypatch.setattr("app.core.events.worker.json_enabled", lambda: True)
 

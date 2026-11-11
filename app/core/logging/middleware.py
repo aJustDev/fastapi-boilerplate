@@ -117,12 +117,15 @@ class AccessLogMiddleware:
         if self._color:
             outcome = f"\033[{_STATUS_COLORS.get(str(status)[0], '0')}m{outcome}\033[0m"
         milliseconds = seconds * 1000
+        # Tenths below 10 ms, where most requests of an idle local server fall and a 0
+        # would say nothing; whole milliseconds above.
+        duration = f"{milliseconds:.1f}ms" if milliseconds < 10 else f"{milliseconds:.0f}ms"
         access_logger.info(
-            "%s %s %s %.0fms",
+            "%s %s %s %s",
             scope["method"],
             path,
             outcome,
-            milliseconds,
+            duration,
             extra={
                 "fields": {
                     "http": {

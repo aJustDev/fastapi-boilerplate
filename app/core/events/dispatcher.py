@@ -17,6 +17,15 @@ logger = logging.getLogger(__name__)
 HandlerFunc = Callable[[dict[str, Any], uuid.UUID], Coroutine[Any, Any, None]]
 
 
+class ExpectedFailure(Exception):  # noqa: N818 -- it names what it is, not an error class
+    """A failure the handler can name: a receiver that said no, a service that did not answer.
+
+    Retried like any failure, and logged in one line on every attempt: a traceback would
+    only show where the handler raised it. Any other exception is a bug, and its traceback
+    goes with the first and the last attempt.
+    """
+
+
 def handler_key(func: HandlerFunc) -> str:
     """Identity of a handler in `handler_state`: its module and qualified name.
 
@@ -34,6 +43,7 @@ class HandlerResult:
     error: str | None = None  # the traceback, stored with the event
     skipped: bool = False
     reason: str | None = None  # `notifications.notify_confirmed failed (ConnectTimeout)`
+    expected: bool = False  # an ExpectedFailure or a timeout: no traceback worth showing
 
 
 @dataclass
@@ -56,6 +66,15 @@ class DispatchResult:
             return "no handlers registered for this event_type"
         failed = [r for r in self.results if not r.success]
         return "\n---\n".join(f"[{r.handler_name}] {r.error}" for r in failed)
+
+    @property
+    def tracebacks(self) -> str:
+        """The tracebacks of the handlers that failed unexpectedly; empty if none did."""
+        return "\n---\n".join(
+            f"[{r.handler_name}] {(r.error or '').rstrip()}"
+            for r in self.results
+            if not r.success and not r.expected
+        )
 
     @property
     def failures(self) -> str:
@@ -123,19 +142,33 @@ class EventDispatcher:
                     timeout=settings.OUTBOX_HANDLER_TIMEOUT_SECONDS,
                 )
                 result.results.append(HandlerResult(key, success=True))
-            # The worker logs the attempt, with the traceback on the first and the last
-            # one; the traceback is also stored with the event (last_error).
+            # The worker logs the attempt; the traceback, when there is one worth having,
+            # is stored with the event (last_error) and logged on the first and last.
             except Exception as exc:  # noqa: BLE001
                 # The module and the function: enough to find it, short enough for a line.
                 label = f"{handler.__module__.rsplit('.', 1)[-1]}.{handler.__name__}"
-                result.results.append(
-                    HandlerResult(
+                if isinstance(exc, TimeoutError):
+                    timeout = settings.OUTBOX_HANDLER_TIMEOUT_SECONDS
+                    failure = HandlerResult(
+                        key, success=False, expected=True, reason=f"{label} timed out ({timeout}s)"
+                    )
+                elif isinstance(exc, ExpectedFailure):
+                    failure = HandlerResult(
+                        key,
+                        success=False,
+                        expected=True,
+                        reason=f"{label} failed ({one_line(exc)})",
+                    )
+                else:
+                    failure = HandlerResult(
                         key,
                         success=False,
                         error=traceback.format_exc(),
                         reason=f"{label} failed ({one_line(exc)})",
                     )
-                )
+                if failure.expected:
+                    failure.error = failure.reason  # what is stored: the line, not a traceback
+                result.results.append(failure)
 
         return result
 

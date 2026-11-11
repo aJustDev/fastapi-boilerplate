@@ -6,7 +6,9 @@ import uuid
 import httpx
 import pytest
 
+from app.core.events.dispatcher import ExpectedFailure
 from app.workshops.event_handlers import notifications
+from app.workshops.exceptions import WebhookRejectedError, WebhookUnreachableError
 
 EVENT_ID = uuid.uuid4()
 PAYLOAD = {"enrollment_id": 1, "workshop_id": 2, "attendee_id": 3}
@@ -42,13 +44,37 @@ def receiver(monkeypatch: pytest.MonkeyPatch):
     return fake
 
 
-@pytest.mark.parametrize("status", [400, 404, 500, 503])
+@pytest.mark.parametrize("status", [301, 400, 404, 500, 503])
 async def test_an_answer_that_is_not_a_success_raises(receiver, status: int):
     # Returning would mark the handler as done and the outbox would never retry it.
     receiver.status = status
 
-    with pytest.raises(httpx.HTTPStatusError):
+    with pytest.raises(WebhookRejectedError) as rejected:
         await notifications.notify_confirmed(PAYLOAD, EVENT_ID)
+
+    # httpx's own error names the URL, and a webhook URL is often a secret: it would land
+    # in every retry line and in the stored error.
+    assert str(rejected.value) == f"webhook answered {status}"
+    assert "hooks.example.com" not in str(rejected.value)
+
+
+async def test_a_receiver_that_does_not_answer_raises_without_the_url(monkeypatch):
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("[Errno 111] Connection refused", request=request)
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        notifications.httpx,
+        "AsyncClient",
+        lambda **kwargs: real_client(transport=httpx.MockTransport(refuse), **kwargs),
+    )
+    monkeypatch.setattr(notifications.settings, "WEBHOOK_URL", "https://hooks.example.com/t0k3n")
+
+    with pytest.raises(WebhookUnreachableError) as unreachable:
+        await notifications.notify_confirmed(PAYLOAD, EVENT_ID)
+
+    assert str(unreachable.value) == "ConnectError: [Errno 111] Connection refused"
+    assert isinstance(unreachable.value, ExpectedFailure)
 
 
 @pytest.mark.parametrize("event_type", HANDLERS)
