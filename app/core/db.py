@@ -101,11 +101,13 @@ async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 def build_asyncpg_dsn() -> str:
     """Plain DSN for the raw asyncpg LISTEN connections, which live outside the engine.
 
-    Derived from DATABASE_URL, not from the DB_* settings: DATABASE_URL is only built
-    from DB_* when empty, so setting it directly (pgbouncer, managed provider) would
-    otherwise point the listener at a different database than the pool.
+    LISTEN needs a session of its own: behind a pooler in transaction mode the
+    subscription would stay on a server connection lent to someone else, so it uses
+    DB_DIRECT_URL when there is one. Otherwise DATABASE_URL, not the DB_* settings:
+    DATABASE_URL is only built from DB_* when empty, so setting it directly would point
+    the listener at a different database than the pool.
     """
-    url = make_url(settings.DATABASE_URL).set(drivername="postgresql")
+    url = make_url(settings.direct_database_url).set(drivername="postgresql")
     # TLS is `ssl=` for SQLAlchemy's asyncpg dialect and `sslmode=` in an asyncpg DSN.
     query = dict(url.query)
     if "ssl" in query:

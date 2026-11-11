@@ -42,7 +42,7 @@ def _run(connection: Connection) -> None:
 def run_migrations_offline() -> None:
     """Render the SQL without connecting (`alembic upgrade head --sql`)."""
     context.configure(
-        url=settings.DATABASE_URL,
+        url=settings.direct_database_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -53,7 +53,8 @@ def run_migrations_offline() -> None:
 
 async def _run_async() -> None:
     section = config.get_section(config.config_ini_section) or {}
-    section["sqlalchemy.url"] = settings.DATABASE_URL
+    # Not through a pooler in transaction mode: DDL and long transactions need a session.
+    section["sqlalchemy.url"] = settings.direct_database_url
     engine = async_engine_from_config(section, prefix="sqlalchemy.", poolclass=pool.NullPool)
     async with engine.connect() as connection:
         await connection.run_sync(_run)

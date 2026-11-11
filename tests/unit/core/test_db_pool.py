@@ -45,6 +45,17 @@ class TestAsyncpgDsn:
         ):
             assert build_asyncpg_dsn() == "postgresql://user:secret@pgbouncer:6432/prod"
 
+    def test_behind_a_pooler_the_listener_goes_straight_to_postgres(self, monkeypatch):
+        # LISTEN through a pooler in transaction mode stays on a connection lent to others.
+        monkeypatch.setattr(
+            "app.core.db.settings.DATABASE_URL", "postgresql+asyncpg://app:s@pooler:6543/prod"
+        )
+        monkeypatch.setattr(
+            "app.core.db.settings.DB_DIRECT_URL",
+            "postgresql+asyncpg://app:s@db:5432/prod?ssl=require",
+        )
+        assert build_asyncpg_dsn() == "postgresql://app:s@db:5432/prod?sslmode=require"
+
 
 class TestJobLeaseSetting:
     def test_lease_shorter_than_twice_the_handler_timeout_is_rejected(self):
