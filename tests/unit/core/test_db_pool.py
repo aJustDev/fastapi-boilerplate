@@ -81,13 +81,12 @@ class TestBehindATransactionPooler:
         assert "statement_cache_size" not in connect_args
         assert set(connect_args["server_settings"]) == {"statement_timeout", "lock_timeout"}
 
-    def test_behind_a_pooler_no_statement_is_cached_and_each_has_its_own_name(self):
+    def test_behind_a_pooler_no_statement_is_cached_or_named(self):
         connect_args = engine_options(transaction_pooler=True)["connect_args"]
 
         assert connect_args["statement_cache_size"] == 0
         assert connect_args["prepared_statement_cache_size"] == 0
-        name = connect_args["prepared_statement_name_func"]
-        assert name() != name()
+        assert connect_args["prepared_statement_name_func"]() == ""
         # PgBouncer refuses a connection that sends parameters it does not know.
         assert "server_settings" not in connect_args
 

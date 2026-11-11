@@ -1,4 +1,3 @@
-import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Any, cast
@@ -17,8 +16,12 @@ from app.core.config import settings
 from app.core.logging.context import get_actor
 
 
-def _unique_statement_name() -> str:
-    return f"__asyncpg_{uuid.uuid4().hex}__"
+def _unnamed_statement() -> str:
+    # PostgreSQL replaces the unnamed statement with each new one, on whichever server
+    # connection: nothing is left behind. A named statement would pile up on the server
+    # connections of a transaction pooler (they are never reset between clients), or be
+    # missing on the next one.
+    return ""
 
 
 def engine_options(*, transaction_pooler: bool) -> dict[str, Any]:
@@ -26,9 +29,9 @@ def engine_options(*, transaction_pooler: bool) -> dict[str, Any]:
 
     Behind a pooler in transaction mode every transaction may run on another server
     connection, so nothing may live on the connection between transactions:
-    - asyncpg's and SQLAlchemy's caches of prepared statements are off, and each statement
-      gets a name of its own: a cached `__asyncpg_stmt_1__` would be missing, or taken by
-      another client, on the next server connection;
+    - asyncpg's and SQLAlchemy's caches of prepared statements are off and statements are
+      unnamed: a cached one would be missing on the next server connection, and named ones
+      would pile up on the server connections;
     - the timeouts are not sent when connecting, where PgBouncer refuses parameters it does
       not know: `set_timeouts_per_transaction` sets them inside each transaction.
     """
@@ -40,7 +43,7 @@ def engine_options(*, transaction_pooler: bool) -> dict[str, Any]:
         connect_args |= {
             "statement_cache_size": 0,
             "prepared_statement_cache_size": 0,
-            "prepared_statement_name_func": _unique_statement_name,
+            "prepared_statement_name_func": _unnamed_statement,
         }
     else:
         connect_args["server_settings"] = {

@@ -47,13 +47,14 @@ lock held by a migration fails the request instead of holding a worker forever.
 `tests/integration/core/test_engine_settings.py` checks that PostgreSQL receives them. Migrations
 use their own engine and are not limited by them.
 
-**Behind a pooler in transaction mode** (`DB_TRANSACTION_POOLER=true`) a transaction may run on a
-different server connection than the one before, so `engine_options()` keeps nothing on the
-connection: asyncpg's and SQLAlchemy's caches of prepared statements are off and every statement
-is prepared under a name of its own, and the timeouts, which PgBouncer would refuse at connect
-time, are set at the start of each transaction (`set_config(..., true)`, the same as `SET
-LOCAL`; one round trip more per transaction). `ALTER ROLE <app role> SET statement_timeout =
-'30s'` on the server avoids that round trip if the role is the app's alone.
+**Behind a pooler in transaction mode** (`DB_TRANSACTION_POOLER=true`) a transaction may run on
+a different server connection than the one before, so `engine_options()` keeps nothing on the
+connection: asyncpg's and SQLAlchemy's caches of prepared statements are off and statements are
+unnamed (PostgreSQL replaces the unnamed one with each new statement, so none piles up on the
+server connections, which the pooler never resets), and the timeouts, which PgBouncer would
+refuse at connect time, are set at the start of each transaction (`set_config(..., true)`, the
+same as `SET LOCAL`; one round trip more per transaction). `ALTER ROLE <app role> SET
+statement_timeout = '30s'` on the server avoids that round trip if the role is the app's alone.
 
 ## Models
 
