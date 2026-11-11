@@ -136,18 +136,19 @@ class EventDispatcher:
                 result.results.append(HandlerResult(key, success=True, skipped=True))
                 continue
 
+            deadline = asyncio.timeout(settings.OUTBOX_HANDLER_TIMEOUT_SECONDS)
             try:
-                await asyncio.wait_for(
-                    handler(payload, event_id),
-                    timeout=settings.OUTBOX_HANDLER_TIMEOUT_SECONDS,
-                )
+                async with deadline:
+                    await handler(payload, event_id)
                 result.results.append(HandlerResult(key, success=True))
             # The worker logs the attempt; the traceback, when there is one worth having,
             # is stored with the event (last_error) and logged on the first and last.
             except Exception as exc:  # noqa: BLE001
                 # The module and the function: enough to find it, short enough for a line.
                 label = f"{handler.__module__.rsplit('.', 1)[-1]}.{handler.__name__}"
-                if isinstance(exc, TimeoutError):
+                # Only the deadline above: a TimeoutError the handler raised by itself (a
+                # query, a socket) is a failure like any other, with its traceback.
+                if isinstance(exc, TimeoutError) and deadline.expired():
                     timeout = settings.OUTBOX_HANDLER_TIMEOUT_SECONDS
                     failure = HandlerResult(
                         key, success=False, expected=True, reason=f"{label} timed out ({timeout}s)"
