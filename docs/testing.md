@@ -80,6 +80,7 @@ the top of the file, each with its reason, keyed by method and path where routes
 | `tests/functional/test_middleware_behaviour.py` | Hosts, origins and trusted proxies let through what the settings say |
 | `tests/unit/core/test_env_example_sync.py` | `.env.example` lists every setting |
 | `tests/unit/test_dockerfile_runtime_copy.py` | The image copies an allow-list |
+| `tests/unit/test_release.py` | The newest version in `CHANGELOG.md` is the one in `pyproject.toml`, under an `[Unreleased]` section |
 | `tests/integration/test_migrations.py` | Models match the migrations, CHECK constraints and index predicates included; downgrades work |
 
 Meta-tests that walk the API use `tests/_routes.py` (`iter_api_routes`), not `app.routes`.

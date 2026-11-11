@@ -14,6 +14,7 @@ protected branch: a change reaches it through a PR whose `lint`, `test` and `ima
 | CI `test` job | The whole suite (unit, functional, integration with testcontainers) with coverage >= 80% |
 | CI `image` job | Builds the image; it must refuse to start unconfigured and become healthy with production settings |
 | `audit` workflow | Daily, and this one fails: pip-audit on the full dependency tree, and a scan of the image for vulnerabilities that have a fix |
+| `release` workflow | On a push to `main`: tags and publishes the version that was cut, if any (`docs/releases.md`) |
 | Dependabot | `uv`, GitHub Actions (pinned by commit) and the Docker base image (pinned by digest), weekly and grouped |
 
 Install both hooks with `bash scripts/install-hooks.sh`. Run what CI runs with
@@ -21,7 +22,8 @@ Install both hooks with `bash scripts/install-hooks.sh`. Run what CI runs with
 hadolint and the start-up checks of the image run only there, and pip-audit fails locally while
 in a PR it only warns (the daily audit is the one that fails).
 
-The workflows read the repository and nothing else (`permissions: contents: read`).
+The workflows read the repository and nothing else (`permissions: contents: read`), except the
+one job of `release`, which writes the tag and the release.
 
 ## Lint rules worth knowing
 

@@ -159,13 +159,14 @@ See `docs/architecture.md` for the full guide on adding a new module.
 
 ## Docs
 
-- `docs/architecture.md`: layers, how to add a context and how to replace the example
+- `docs/architecture.md`: layers, how to add a context, how to start a project from this base and replace the example
 - `docs/workshops.md`: the example context
 - `docs/database.md`, `docs/migrations.md`: sessions, models, repositories and schema changes
 - `docs/configuration.md`: settings, env files and validators
 - `docs/auth.md`, `docs/event-bus.md`, `docs/jobs.md`, `docs/logging.md`, `docs/metrics.md`
 - `docs/errors.md`, `docs/security.md`
 - `docs/operations.md`, `docs/deployment.md`: health endpoints, the command line, going to production
+- `docs/releases.md`: versions and how a release is cut and published
 - `docs/testing.md`, `docs/tooling.md`, `docs/docker.md`
 - `docs/adr/`: architecture decision records
 - `CHANGELOG.md`

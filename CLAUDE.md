@@ -43,6 +43,7 @@ case; the session commits before the response is sent.
 - `uv run alembic upgrade head`, `uv run alembic revision --autogenerate --rev-id NNNN -m "..."`
 - `uv run python scripts/seed_dev.py` - local admin (admin@example.com / admin123) and sample workshops
 - `uv run python -m app.cli --help` - create-admin, outbox replay/cleanup, worker
+- `uv run python scripts/release.py cut X.Y.Z` - cut a release (`docs/releases.md`); not in the base
 - `docker compose up --build` - db, migrate, api (needs `.env.local`: `cp .env.example .env.local`)
 
 ## Conventions
@@ -77,6 +78,9 @@ case; the session commits before the response is sent.
   `tests/integration/core/sample.py`.
 - Rows that must not change under each other are read with `SELECT ... FOR UPDATE` first
   (`WorkshopRepo.get_for_update` returns a `LockedWorkshop`, the type the seat rules require).
+- The base cuts no releases: `version` stays `0.1.0`, `CHANGELOG.md` has only `[Unreleased]`
+  and there are no tags. The release system (`scripts/release.py`, the `release` workflow) is
+  for the project started from it; a released section in the changelog here would publish a tag.
 - The pre-commit hook stashes unstaged changes and runs `uv run`, which syncs the venv to the
   stashed `pyproject.toml`: commit dependency changes first, in their own commit.
 
