@@ -1,37 +1,99 @@
+import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import BigInteger, DateTime, Identity, MetaData, Text, func
-from sqlalchemy.engine import CursorResult, Result, make_url
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy import BigInteger, DateTime, Identity, MetaData, Text, event, func, text
+from sqlalchemy.engine import Connection, CursorResult, Result, make_url
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.core.config import settings
 from app.core.logging.context import get_actor
 
-# Shared by the app engine and the integration test that checks the server settings.
-ENGINE_OPTIONS: dict[str, Any] = dict(
-    pool_size=settings.DB_POOL_SIZE,
-    max_overflow=settings.DB_MAX_OVERFLOW,
-    pool_timeout=settings.DB_POOL_TIMEOUT,
-    pool_recycle=settings.DB_POOL_RECYCLE,
-    pool_pre_ping=True,
-    echo=False,
-    # A DBAPIError carries its statement and, by default, the bound values. Its text ends
-    # up in the log: without this, a failed INSERT INTO users logs the password hash.
-    hide_parameters=True,
-    connect_args={
+
+def _unique_statement_name() -> str:
+    return f"__asyncpg_{uuid.uuid4().hex}__"
+
+
+def engine_options(*, transaction_pooler: bool) -> dict[str, Any]:
+    """Options of the app's engine; shared with the integration tests that check them.
+
+    Behind a pooler in transaction mode every transaction may run on another server
+    connection, so nothing may live on the connection between transactions:
+    - asyncpg's and SQLAlchemy's caches of prepared statements are off, and each statement
+      gets a name of its own: a cached `__asyncpg_stmt_1__` would be missing, or taken by
+      another client, on the next server connection;
+    - the timeouts are not sent when connecting, where PgBouncer refuses parameters it does
+      not know: `set_timeouts_per_transaction` sets them inside each transaction.
+    """
+    connect_args: dict[str, Any] = {
         "timeout": settings.DB_CONNECT_TIMEOUT,
         "command_timeout": settings.DB_COMMAND_TIMEOUT,
-        "server_settings": {
+    }
+    if transaction_pooler:
+        connect_args |= {
+            "statement_cache_size": 0,
+            "prepared_statement_cache_size": 0,
+            "prepared_statement_name_func": _unique_statement_name,
+        }
+    else:
+        connect_args["server_settings"] = {
+            "statement_timeout": str(settings.DB_STATEMENT_TIMEOUT_MS),
+            "lock_timeout": str(settings.DB_LOCK_TIMEOUT_MS),
+        }
+    return dict(
+        pool_size=settings.DB_POOL_SIZE,
+        max_overflow=settings.DB_MAX_OVERFLOW,
+        pool_timeout=settings.DB_POOL_TIMEOUT,
+        pool_recycle=settings.DB_POOL_RECYCLE,
+        pool_pre_ping=True,
+        echo=False,
+        # A DBAPIError carries its statement and, by default, the bound values. Its text
+        # ends up in the log: without this, a failed INSERT INTO users logs the password hash.
+        hide_parameters=True,
+        connect_args=connect_args,
+    )
+
+
+_LOCAL_TIMEOUTS = text(
+    "SELECT set_config('statement_timeout', :statement_timeout, true),"
+    " set_config('lock_timeout', :lock_timeout, true)"
+)
+
+
+def _set_local_timeouts(connection: Connection) -> None:
+    # set_config(..., true) is SET LOCAL: it lasts until the end of the transaction, on
+    # whichever server connection the pooler lent for it.
+    connection.execute(
+        _LOCAL_TIMEOUTS,
+        {
             "statement_timeout": str(settings.DB_STATEMENT_TIMEOUT_MS),
             "lock_timeout": str(settings.DB_LOCK_TIMEOUT_MS),
         },
-    },
-)
+    )
+
+
+def set_timeouts_per_transaction(engine: AsyncEngine) -> None:
+    """Start every transaction of `engine` with its statement and lock timeouts.
+
+    For an engine behind a transaction pooler, where they cannot be set per connection.
+    It costs one round trip per transaction; `ALTER ROLE ... SET statement_timeout` on the
+    server avoids it (docs/deployment.md).
+    """
+    event.listen(engine.sync_engine, "begin", _set_local_timeouts)
+
+
+ENGINE_OPTIONS = engine_options(transaction_pooler=settings.DB_TRANSACTION_POOLER)
 
 engine = create_async_engine(settings.DATABASE_URL, **ENGINE_OPTIONS)
+if settings.DB_TRANSACTION_POOLER:
+    set_timeouts_per_transaction(engine)
 
 async_session_factory = async_sessionmaker(engine, expire_on_commit=False)
 

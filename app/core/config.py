@@ -54,6 +54,13 @@ class Settings(BaseSettings):
     DB_COMMAND_TIMEOUT: int = 30
     DB_STATEMENT_TIMEOUT_MS: int = 30_000
     DB_LOCK_TIMEOUT_MS: int = 5_000
+    # DATABASE_URL goes through a pooler in transaction mode (PgBouncer, Supavisor, the
+    # "pooled" URL of a managed PostgreSQL): a connection is lent per transaction, so
+    # nothing may rely on the session. See docs/deployment.md.
+    DB_TRANSACTION_POOLER: bool = False
+    # PostgreSQL without the pooler, in the format of DATABASE_URL: for what needs a session
+    # of its own, the LISTEN of the event bus and the migrations. Empty: DATABASE_URL.
+    DB_DIRECT_URL: str = ""
 
     # JWT
     SECRET_KEY: str = _DEFAULT_SECRET_KEY
@@ -184,11 +191,17 @@ class Settings(BaseSettings):
                 port=self.DB_PORT,
                 database=self.DB_NAME,
             ).render_as_string(hide_password=False)
-        elif "sslmode=" in self.DATABASE_URL:
-            raise ValueError(
-                'DATABASE_URL: the asyncpg driver takes "ssl=require", not "sslmode=require".'
-            )
+        for name in ("DATABASE_URL", "DB_DIRECT_URL"):
+            if "sslmode=" in getattr(self, name):
+                raise ValueError(
+                    f'{name}: the asyncpg driver takes "ssl=require", not "sslmode=require".'
+                )
         return self
+
+    @property
+    def direct_database_url(self) -> str:
+        """The URL of a connection that is a session of its own: no pooler in between."""
+        return self.DB_DIRECT_URL or self.DATABASE_URL
 
     model_config = SettingsConfigDict(
         env_file=_ENV_FILE,

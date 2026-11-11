@@ -35,15 +35,25 @@ shows what happens to the changes of one request.
 | `DB_COMMAND_TIMEOUT` | `30` | Client-side limit (seconds) for one statement |
 | `DB_STATEMENT_TIMEOUT_MS` | `30000` | Server-side `statement_timeout` of every app connection |
 | `DB_LOCK_TIMEOUT_MS` | `5000` | Server-side `lock_timeout`: waiting for a lock fails instead of hanging |
+| `DB_TRANSACTION_POOLER` | `false` | `DATABASE_URL` goes through a pooler in transaction mode (see below) |
+| `DB_DIRECT_URL` | empty | PostgreSQL without the pooler, for the event bus listener and the migrations; empty means `DATABASE_URL` |
 
 `pool_pre_ping` discards dead connections before using them. With `--workers N`, the database
 sees up to `N * (DB_POOL_SIZE + DB_MAX_OVERFLOW)` connections plus one LISTEN connection per
-process for the event bus.
+process for the event bus; sizing for several replicas is in `docs/deployment.md`.
 
 The timeouts are set per connection by `ENGINE_OPTIONS` (`app/core/db.py`); a stuck query or a
 lock held by a migration fails the request instead of holding a worker forever.
 `tests/integration/core/test_engine_settings.py` checks that PostgreSQL receives them. Migrations
 use their own engine and are not limited by them.
+
+**Behind a pooler in transaction mode** (`DB_TRANSACTION_POOLER=true`) a transaction may run on a
+different server connection than the one before, so `engine_options()` keeps nothing on the
+connection: asyncpg's and SQLAlchemy's caches of prepared statements are off and every statement
+is prepared under a name of its own, and the timeouts, which PgBouncer would refuse at connect
+time, are set at the start of each transaction (`set_config(..., true)`, the same as `SET
+LOCAL`; one round trip more per transaction). `ALTER ROLE <app role> SET statement_timeout =
+'30s'` on the server avoids that round trip if the role is the app's alone.
 
 ## Models
 
