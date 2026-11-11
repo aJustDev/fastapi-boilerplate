@@ -109,7 +109,7 @@ log (`docs/operations.md`).
 
 ## Guarantees and limits
 
-- Output is newline-delimited on stdout; shipping it (Loki, ELK, CloudWatch...) is the platform's
+- Output is newline-delimited on stderr; shipping it (Loki, ELK, CloudWatch...) is the platform's
   job.
 - One handler, on the root logger: the `app` loggers at `LOG_LEVEL`, uvicorn at INFO and every
   other library at WARNING reach it by propagation, so every line has the same format.

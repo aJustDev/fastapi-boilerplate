@@ -62,8 +62,8 @@ A row without a registered handler is claimed and rescheduled with
 
 A handler without its row never runs either. The worker warns about both cases once at startup.
 
-Jobs of this boilerplate: `heartbeat_check` (every 5 min, does nothing: the line of its run
-says which worker took it),
+Jobs of this boilerplate: `heartbeat_check` (every 5 min, does nothing: in JSON the line of
+its run says which worker took it, in `job.worker`),
 `revoked_tokens_cleanup` (hourly, see `docs/auth.md`) and `outbox_cleanup` (daily, see
 `docs/event-bus.md`).
 

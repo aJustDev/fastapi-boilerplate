@@ -24,6 +24,16 @@ def _unnamed_statement() -> str:
     return ""
 
 
+# Nothing prepared may outlive a transaction behind a transaction pooler: neither asyncpg
+# nor SQLAlchemy caches statements, and none has a name. For any engine that goes through
+# the pooler: the app's, and the migrations' when there is no direct URL.
+POOLER_CONNECT_ARGS: dict[str, Any] = {
+    "statement_cache_size": 0,
+    "prepared_statement_cache_size": 0,
+    "prepared_statement_name_func": _unnamed_statement,
+}
+
+
 def engine_options(*, transaction_pooler: bool) -> dict[str, Any]:
     """Options of the app's engine; shared with the integration tests that check them.
 
@@ -40,11 +50,7 @@ def engine_options(*, transaction_pooler: bool) -> dict[str, Any]:
         "command_timeout": settings.DB_COMMAND_TIMEOUT,
     }
     if transaction_pooler:
-        connect_args |= {
-            "statement_cache_size": 0,
-            "prepared_statement_cache_size": 0,
-            "prepared_statement_name_func": _unnamed_statement,
-        }
+        connect_args |= POOLER_CONNECT_ARGS
     else:
         connect_args["server_settings"] = {
             "statement_timeout": str(settings.DB_STATEMENT_TIMEOUT_MS),
@@ -86,8 +92,7 @@ def set_timeouts_per_transaction(engine: AsyncEngine) -> None:
     """Start every transaction of `engine` with its statement and lock timeouts.
 
     For an engine behind a transaction pooler, where they cannot be set per connection.
-    It costs one round trip per transaction; `ALTER ROLE ... SET statement_timeout` on the
-    server avoids it (docs/deployment.md).
+    It costs one round trip per transaction.
     """
     event.listen(engine.sync_engine, "begin", _set_local_timeouts)
 

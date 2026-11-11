@@ -161,7 +161,8 @@ DB_DIRECT_URL=postgresql+asyncpg://app:<secret>@db.example.com:5432/app_db?ssl=r
 | The session lock that picks one process to print the startup table | Every process prints its table |
 
 - **`DB_DIRECT_URL`** is the provider's direct (or session-mode) URL. The migrations use it too:
-  DDL and long transactions do not belong in a transaction pooler.
+  DDL and long transactions do not belong in a transaction pooler. Without it they run through
+  the pooler, with the statement settings of the app.
 - **Size the pooler for the pools.** Its client limit (`max_client_conn` in PgBouncer) now takes
   the sum of the table above, and its server pool what PostgreSQL allows.
 - **A pooler in session mode** keeps a server connection per client connection: nothing breaks

@@ -34,3 +34,26 @@ async def test_the_connection_limits_of_a_real_server(async_engine: AsyncEngine)
     assert capacity is not None
     assert capacity["max"] >= 1 and capacity["reserved"] >= 0
     assert capacity["in_use"] >= 1, "the query itself holds a connection"
+
+
+async def test_a_role_without_privileges_counts_the_connections_of_the_others(
+    async_engine: AsyncEngine, pg_url
+):
+    # The app's role is rarely a superuser, and PostgreSQL hides from it the backend type
+    # of every session that is not its own: counting on it alone, it would see only itself.
+    async with async_engine.begin() as conn:
+        await conn.execute(text("CREATE ROLE plain LOGIN PASSWORD 'plain'"))
+    engine = create_async_engine(make_url(pg_url).set(username="plain", password="plain"))
+    try:
+        await database_capacity(engine)  # both pools hold their connection from here on
+        await database_capacity(async_engine)
+        seen_by_plain = await database_capacity(engine)
+        seen_by_owner = await database_capacity(async_engine)
+    finally:
+        await engine.dispose()
+        async with async_engine.begin() as conn:
+            await conn.execute(text("DROP ROLE plain"))
+
+    assert seen_by_plain is not None and seen_by_owner is not None
+    assert seen_by_owner["in_use"] >= 2, "the owner's connection and the plain role's"
+    assert seen_by_plain["in_use"] == seen_by_owner["in_use"]

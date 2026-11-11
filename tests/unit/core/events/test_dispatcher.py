@@ -254,3 +254,19 @@ class TestExpectedFailures:
         assert result.tracebacks.startswith("[")
         assert "Traceback (most recent call last)" in result.tracebacks
         assert not result.tracebacks.endswith("\n"), "no blank line after it in the log"
+
+    async def test_a_timeout_of_the_handler_itself_is_not_the_deadline(self, fresh_dispatcher):
+        # asyncpg's command_timeout, an asyncio.timeout() or a socket raise TimeoutError too:
+        # it failed at once, for a reason of its own that only its traceback shows.
+        @fresh_dispatcher.register("test.event")
+        async def charge(payload: dict, event_id: uuid.UUID) -> None:
+            raise TimeoutError("billing did not answer")
+
+        result = await fresh_dispatcher.dispatch("test.event", {}, event_id=EVENT_ID)
+
+        [failure] = result.results
+        assert failure.expected is False
+        assert result.failures == (
+            "test_dispatcher.charge failed (TimeoutError: billing did not answer)"
+        )
+        assert "Traceback (most recent call last)" in result.tracebacks
