@@ -7,6 +7,7 @@ import pytest
 from app.core.events.dispatcher import (
     DispatchResult,
     EventDispatcher,
+    ExpectedFailure,
     HandlerResult,
     handler_key,
 )
@@ -143,7 +144,10 @@ class TestEventDispatcher:
         assert result.all_succeeded is False
         assert len(result.results) == 1
         assert result.results[0].success is False
-        assert "TimeoutError" in (result.results[0].error or "")
+        # A timeout is a failure it can name: one line, no traceback to store or show.
+        assert result.results[0].expected is True
+        assert result.failures == "test_dispatcher.slow_handler timed out (0.1s)"
+        assert result.tracebacks == ""
 
     async def test_skips_completed_handlers(self, fresh_dispatcher: EventDispatcher):
         call_order: list[str] = []
@@ -221,3 +225,32 @@ class TestWhatAFailureLogs:
         assert DispatchResult(no_handlers=True).failures == (
             "no handlers registered for this event_type"
         )
+
+
+class TestExpectedFailures:
+    """A failure the handler can name has no traceback worth showing; a bug does."""
+
+    async def test_an_expected_failure_is_one_line_everywhere(self, fresh_dispatcher):
+        @fresh_dispatcher.register("test.event")
+        async def deliver(payload: dict, event_id: uuid.UUID) -> None:
+            raise ExpectedFailure("receiver answered 404")
+
+        result = await fresh_dispatcher.dispatch("test.event", {}, event_id=EVENT_ID)
+
+        [failure] = result.results
+        assert failure.expected is True
+        line = "test_dispatcher.deliver failed (ExpectedFailure: receiver answered 404)"
+        assert result.failures == line
+        assert failure.error == line, "the stored error is the line, not a traceback"
+        assert result.tracebacks == ""
+
+    async def test_a_bug_keeps_its_traceback(self, fresh_dispatcher):
+        @fresh_dispatcher.register("test.event")
+        async def deliver(payload: dict, event_id: uuid.UUID) -> None:
+            raise KeyError("workshop_id")
+
+        result = await fresh_dispatcher.dispatch("test.event", {}, event_id=EVENT_ID)
+
+        assert result.tracebacks.startswith("[")
+        assert "Traceback (most recent call last)" in result.tracebacks
+        assert not result.tracebacks.endswith("\n"), "no blank line after it in the log"

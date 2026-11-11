@@ -40,11 +40,15 @@ _CONNECTION_ERRORS = (
 
 
 def _with_tracebacks(result: DispatchResult) -> tuple[str, dict]:
-    """The tracebacks of the handlers that failed, for a log line: after the message on a
-    terminal, as the `exception` field in JSON."""
+    """The tracebacks of the handlers that failed unexpectedly, for a log line: after the
+    message on a terminal, as the `exception` field in JSON. Nothing for a failure the
+    handler could name (an ExpectedFailure, a timeout)."""
+    tracebacks = result.tracebacks
+    if not tracebacks:
+        return "", {}
     if json_enabled():
-        return "", {"extra": {"fields": {"exception": result.errors_summary}}}
-    return f"\n{result.errors_summary}", {}
+        return "", {"extra": {"fields": {"exception": tracebacks}}}
+    return f"\n{tracebacks}", {}
 
 
 class OutboxWorker:

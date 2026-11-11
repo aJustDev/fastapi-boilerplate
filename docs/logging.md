@@ -90,8 +90,9 @@ log (`docs/operations.md`).
 | CRITICAL | Lost work: an event the worker gave up on |
 
 - A failure that repeats on its own (a retry, a reconnection, a probe) is one line per attempt,
-  with the exception in one line (`one_line(exc)`, `app/core/logging/errors.py`). Its traceback
-  goes with the first attempt and the last at most, and is stored where it can be read later.
+  with the exception in one line (`one_line(exc)`, `app/core/logging/errors.py`). A failure
+  the code can name needs no traceback; a bug's goes with the first attempt and the last at
+  most, and is stored where it can be read later.
 - Name things by their identifier, after what happened: `enrollment.confirmed 2d42...`,
   `Job workshops_finish`, `GET /v1/workshops/7`. No `id=` or `PID=` prefixes: process ids and
   hosts go in JSON fields.
