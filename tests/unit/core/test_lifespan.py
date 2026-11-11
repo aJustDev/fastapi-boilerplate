@@ -52,7 +52,8 @@ async def test_the_banner_says_the_workers_are_waiting_for_the_database(workers)
         async with lifespan(FastAPI()):
             pass
 
-    assert banner.call_args.kwargs["worker_status"] == "WAITING (DB unavailable)"
+    assert banner.call_args.kwargs["outbox_status"] == "waiting for the database"
+    assert banner.call_args.kwargs["jobs_status"] == "waiting for the database"
 
 
 async def test_workers_can_be_left_to_another_process(workers, monkeypatch):
@@ -65,5 +66,5 @@ async def test_workers_can_be_left_to_another_process(workers, monkeypatch):
             outbox.start.assert_not_awaited()
             jobs.start.assert_not_awaited()
 
-    assert banner.call_args.kwargs["worker_status"] == "OFF (disabled)"
-    assert banner.call_args.kwargs["job_worker_status"] == "OFF (disabled)"
+    assert banner.call_args.kwargs["outbox_status"] == "disabled"
+    assert banner.call_args.kwargs["jobs_status"] == "disabled"
