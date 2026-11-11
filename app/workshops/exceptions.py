@@ -1,7 +1,11 @@
-"""What the workshop rules answer when they refuse an operation.
+"""The exceptions of the workshops context, in two families.
 
-All of them are 409: the request was well formed and allowed, and the state it met does
-not permit it. Each rule a client can react to differently has its own code.
+What the rules answer when they refuse an operation (`WorkshopRuleError`): all of them are
+409, the request was well formed and allowed, and the state it met does not permit it. Each
+rule a client can react to differently has its own code.
+
+What a notification handler raises when the webhook did not take an event
+(`ExpectedFailure`): no client sees them, the outbox worker logs them in one line and retries.
 """
 
 from app.core.events.dispatcher import ExpectedFailure
