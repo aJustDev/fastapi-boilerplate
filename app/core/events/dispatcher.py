@@ -123,10 +123,9 @@ class EventDispatcher:
                     timeout=settings.OUTBOX_HANDLER_TIMEOUT_SECONDS,
                 )
                 result.results.append(HandlerResult(key, success=True))
-            except Exception as exc:
-                # The worker logs the attempt in one line; the traceback is stored with
-                # the event (last_error) and shown here only to whoever runs at DEBUG.
-                logger.debug("Handler %s failed for %s", key, event_type, exc_info=True)
+            # The worker logs the attempt, with the traceback on the first and the last
+            # one; the traceback is also stored with the event (last_error).
+            except Exception as exc:  # noqa: BLE001
                 # The module and the function: enough to find it, short enough for a line.
                 label = f"{handler.__module__.rsplit('.', 1)[-1]}.{handler.__name__}"
                 result.results.append(

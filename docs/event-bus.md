@@ -22,10 +22,12 @@ if and only if the change is committed: emails, webhooks, work in another contex
 5. All handlers succeeded: the event is `PROCESSED`. Otherwise it stays `PENDING` with
    `scheduled_at = now + min(2^retry_count + random(0..5) s, 1 h)`, until `max_retries`, when it
    becomes `FAILED` (logged at CRITICAL). An event type without handlers counts as a failure.
-   Each attempt that fails is one WARNING line, without a traceback:
+   Each attempt that fails is one WARNING line:
    `Retry 1/12 of enrollment.confirmed 2d42... in 5s: notifications.notify_confirmed failed
-   (ConnectTimeout)`. The tracebacks are stored with the event (`last_error`, `handler_state`)
-   and logged by the dispatcher at DEBUG only.
+   (ConnectTimeout)`. The first and the last attempt also bring the tracebacks (after the line
+   on a terminal, as the `exception` field in JSON), so a failing handler can be debugged at
+   once; the attempts between are one line each. The tracebacks are also stored with the event
+   (`last_error`, `handler_state`).
 
 `handler_state` (JSONB) records the outcome per handler; on a retry, handlers that already
 succeeded are skipped.

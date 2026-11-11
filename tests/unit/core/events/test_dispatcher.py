@@ -203,9 +203,9 @@ class TestEventDispatcher:
 
 
 class TestWhatAFailureLogs:
-    """The worker writes the attempt in one line: the dispatcher keeps the traceback."""
+    """The worker writes the attempt; the dispatcher only reports what failed."""
 
-    async def test_a_failing_handler_logs_nothing_above_debug(self, fresh_dispatcher, caplog):
+    async def test_a_failing_handler_is_reported_not_logged(self, fresh_dispatcher, caplog):
         @fresh_dispatcher.register("test.event")
         async def notify(payload: dict, event_id: uuid.UUID) -> None:
             raise ValueError("bad input")
@@ -213,8 +213,7 @@ class TestWhatAFailureLogs:
         with caplog.at_level(logging.DEBUG, logger="app.core.events.dispatcher"):
             result = await fresh_dispatcher.dispatch("test.event", {}, event_id=EVENT_ID)
 
-        assert [r.levelname for r in caplog.records] == ["DEBUG"]
-        assert caplog.records[0].exc_info is not None
+        assert caplog.records == []
         assert result.failures == "test_dispatcher.notify failed (ValueError: bad input)"
         assert "Traceback" in result.errors_summary, "the stored error keeps the traceback"
 
