@@ -131,3 +131,11 @@ class TestRecoverStaleJobs:
         sql = str(session.execute.call_args.args[0].compile(dialect=postgresql.dialect()))
         assert "lease_until IS NULL" in sql
         assert "lease_until <" in sql
+
+
+class TestStop:
+    async def test_a_worker_that_never_started_reports_nothing(self, caplog):
+        # JOB_WORKER_ENABLED=false: the lifespan still calls stop().
+        with caplog.at_level("INFO", logger="app.core.jobs.worker"):
+            await JobWorker().stop()
+        assert "stopped" not in caplog.text

@@ -43,6 +43,7 @@ not count.
 
 ### Changed
 
+- Startup log: on a terminal, a framed table with a state per piece (database, workers, rate limits, docs, metrics); in JSON, one line with the facts in a `startup` field. A database whose schema is not the head of the migrations shipped with the code is a warning. Uvicorn logs where it listens again, and lines outside a request drop the empty `[]` (#28).
 - A lock that is not granted within `DB_LOCK_TIMEOUT_MS`, a deadlock or a serialization failure answers 503 `busy` with `Retry-After` instead of 500 (#27).
 - Tests of the infrastructure no longer depend on the example context: the repository tests use a model of their own (#27).
 - `fastapi` without the `standard` extra, plus `python-multipart` and `email-validator`: 46 runtime packages instead of 78 (#26).

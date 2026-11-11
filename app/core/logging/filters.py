@@ -120,10 +120,16 @@ class IgnoreMetricsFilter(logging.Filter):
 
 
 class RequestIdFilter(logging.Filter):
-    """Injects request_id from ContextVar into every LogRecord."""
+    """Injects request_id from ContextVar into every LogRecord.
+
+    `request_tag` is what the text formats print: `[<id>] ` during a request, nothing
+    outside one (startup, jobs), where empty brackets would only be noise.
+    """
 
     def filter(self, record: logging.LogRecord) -> bool:
         from app.core.logging.context import get_request_id
 
-        record.request_id = get_request_id()
+        request_id = get_request_id()
+        record.request_id = request_id
+        record.request_tag = f"[{request_id}] " if request_id else ""
         return True

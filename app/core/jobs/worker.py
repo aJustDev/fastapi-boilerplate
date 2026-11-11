@@ -60,7 +60,9 @@ class JobWorker:
 
     async def stop(self) -> None:
         self._shutdown_event.set()
-        if self._task and not self._task.done():
+        if self._task is None:  # never started (disabled): nothing to stop or to report
+            return
+        if not self._task.done():
             self._task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task

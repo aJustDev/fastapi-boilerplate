@@ -17,8 +17,55 @@ database: an instance that loses it, or starts before it is up, answers 503
 the window in which the process starts or shuts down. Neither endpoint needs a token or counts
 against a rate limit.
 
-Startup does not wait for the database. The API starts, the banner shows `DB: UNAVAILABLE` and
-the workers as `WAITING`, and both workers keep retrying until it answers.
+Startup does not wait for the database. The API starts, the startup log shows the database as
+`unavailable` and the workers as `waiting for the database`, and both workers keep retrying until
+it answers.
+
+## Startup log
+
+Each server logs, once, what it started with. The processes of one uvicorn take an advisory lock
+and only the one that gets it prints the table; the others log `Process ready (pid N)`. Without a
+database there is no lock, and every process prints it. On a terminal:
+
+```
+Startup summary
+  ┌────────────────────────────────────────────────────────────────────────────┐
+  │ FastAPI App v0.1.0                   local | log DEBUG | pid 2817 on api-1 │
+  ├──────┬──────────┬──────────────────────────────────────────────────────────┤
+  │  ok  │ Database │ localhost:5434/app_db, pool 5 + 10 overflow, timeout 30s │
+  │  ok  │ Outbox   │ listening for events                                     │
+  │  ok  │ Jobs     │ 5 handlers                                               │
+  │  on  │ Limits   │ 60/minute, strict 5/minute, in memory per process        │
+  │ off  │ Docs     │                                                          │
+  │  on  │ Metrics  │ /v1/metrics, no token                                    │
+  └──────┴──────────┴──────────────────────────────────────────────────────────┘
+```
+
+The first column is what to look at; on a color terminal it is green when the piece works,
+yellow when it needs a look, red when it does not work, and the rows of what is off are grey.
+
+| State | Means |
+|---|---|
+| `ok` | Working: the database answers and its schema matches the code, a worker is running |
+| `warn` | The database schema is not the head of the migrations shipped with the code; a warning follows, `Database schema is at 0002 but this code expects 0009: ...` |
+| `down` | The database did not answer at startup |
+| `wait` | The worker started and retries until the database answers |
+| `on`, `off` | A feature turned on or off by its setting (`RATE_LIMIT_ENABLED`, `DOCS_ENABLED`, `METRICS_ENABLED`; `OUTBOX_WORKER_ENABLED`, `JOB_WORKER_ENABLED` for the workers, shown as `not in this process`) |
+
+The database is shown as host, port and name, never with its credentials, followed by the size
+of the pool. Its schema revision appears only when there is something to say: under `warn` the
+revision against the one the code expects (`no schema` for a database never migrated), and
+without `migrations/` in the image the revision alone, since there is nothing to compare it with.
+`Jobs` counts the handlers registered in code, not their rows. With several processes the first
+line ends with their number.
+
+In JSON the message is the title line alone, `FastAPI App v0.1.0 | local | log DEBUG | ...`, and
+the facts travel in a `startup` field (`host`, `pid`, `processes`, `db`, `pool`, `outbox`, `jobs`,
+`rate_limit`, `docs`, `metrics`), so a log query can find, for example, the instances that started
+without a metrics token.
+
+Uvicorn then logs `Application startup complete.` and the address it listens on (with `--reload`
+or `--workers`, the parent process logs the address first).
 
 ## Command line
 
@@ -67,5 +114,6 @@ worker keeps one extra database connection for `LISTEN`.
 | File | Role |
 |---|---|
 | `app/api/v1/health.py` | Liveness and readiness |
-| `app/core/lifespan.py` | Startup and shutdown: workers, banner, `ready` flag |
+| `app/core/lifespan.py` | Startup and shutdown: workers, startup log, `ready` flag |
+| `app/core/startup.py` | Time zone and database checks, the startup log |
 | `app/cli.py` | `python -m app.cli` |
