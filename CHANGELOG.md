@@ -12,6 +12,9 @@ not count.
 
 ### Added
 
+- `DB_TRANSACTION_POOLER` and `DB_DIRECT_URL`: the app works behind a pooler in transaction mode (PgBouncer, a managed provider's pooled URL), with statements neither cached nor named, the timeouts set per transaction, and `LISTEN` and the migrations on the direct URL. Tested against a real PgBouncer (#31).
+- Startup table: a `Capacity` row, what this instance can open against what the server takes, `warn` when it does not fit; or a `Pooler` row behind a transaction pooler (#31).
+- Docs: scaling and connections in `docs/deployment.md`, the budget of a self-hosted deployment and how to set up a managed PostgreSQL (#31).
 - Example context `workshops`: workshops with limited seats and a waiting list. Eleven routes with a permission each and visibility rules, a state machine, enrollment under a row lock (idempotent, tested with simultaneous requests), a `version` on edits, four events and two jobs. Guide in `docs/workshops.md` (#27).
 - `BaseRepo.list_paginated` and `list_cursor` take `scope`: what the caller may see, apart from the filters the client sends (#27).
 - `EventBus.publish_many`: one event per recipient, stored in one batch (#27).

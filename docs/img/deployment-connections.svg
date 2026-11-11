@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-3 -3 766 510" width="766" height="510" font-family="Liberation Sans, DejaVu Sans, Arial, sans-serif">
+<g class="dep-f1">
+<rect x="0" y="0" width="760" height="230" rx="8" fill="#fff" stroke="#c9d3df" stroke-width="1.2"/>
+<rect x="0" y="0" width="760" height="30" rx="8" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.2"/>
+<text x="380" y="20" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="13.5">Self-hosted: every app connection is a server connection</tspan></text>
+<rect x="16" y="46" width="230" height="44" rx="6" fill="#fff" stroke="#1f4e79" stroke-width="1.2"/>
+<text x="28" y="64" text-anchor="start"><tspan font-weight="bold" fill="#222" font-size="12.5">Container 1</tspan></text>
+<text x="28" y="79" text-anchor="start"><tspan fill="#6b7785" font-size="11">pool 5 + 10 and one LISTEN</tspan></text>
+<rect x="16" y="98" width="230" height="44" rx="6" fill="#fff" stroke="#1f4e79" stroke-width="1.2"/>
+<text x="28" y="116" text-anchor="start"><tspan font-weight="bold" fill="#222" font-size="12.5">Container 2</tspan></text>
+<text x="28" y="131" text-anchor="start"><tspan fill="#6b7785" font-size="11">pool 5 + 10 and one LISTEN</tspan></text>
+<rect x="16" y="150" width="230" height="44" rx="6" fill="#fff" stroke="#1f4e79" stroke-width="1.2"/>
+<text x="28" y="168" text-anchor="start"><tspan font-weight="bold" fill="#222" font-size="12.5">Container N</tspan></text>
+<text x="28" y="183" text-anchor="start"><tspan fill="#6b7785" font-size="11">pool 5 + 10 and one LISTEN</tspan></text>
+<polyline points="246.0,68.0 530.0,77.8" fill="none" stroke="#1f4e79" stroke-width="1.6"/>
+<polygon points="536,78 528.8,81.5 529.1,74.0" fill="#1f4e79"/>
+<polyline points="246.0,120.0 530.0,92.6" fill="none" stroke="#1f4e79" stroke-width="1.6"/>
+<polygon points="536,92 529.3,96.4 528.6,88.9" fill="#1f4e79"/>
+<polyline points="246.0,172.0 530.1,107.3" fill="none" stroke="#1f4e79" stroke-width="1.6"/>
+<polygon points="536,106 529.9,111.2 528.3,103.9" fill="#1f4e79"/>
+<text x="262" y="84" text-anchor="start" stroke="#fff" stroke-width="4" stroke-linejoin="round" paint-order="stroke"><tspan font-weight="bold" fill="#1f4e79" font-size="11">up to 16 each</tspan></text>
+<path d="M540.0 58 v66 a80.0 6 0 0 0 160 0 v-66" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.4"/><ellipse cx="620" cy="58" rx="80.0" ry="6" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.4"/>
+<text x="620" y="94" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="12.5">PostgreSQL</tspan></text>
+<text x="620" y="112" text-anchor="middle"><tspan fill="#6b7785" font-size="11">max_connections 100</tspan></text>
+<path d="M20 204 l3.5 4 l6.5 -8" fill="none" stroke="#2e7d32" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="38" y="212" text-anchor="start"><tspan fill="#222" font-size="12">containers x processes x (pool + overflow + 1) must stay under max_connections</tspan></text>
+<rect x="0" y="246" width="760" height="258" rx="8" fill="#fff" stroke="#c9d3df" stroke-width="1.2"/>
+<rect x="0" y="246" width="760" height="30" rx="8" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.2"/>
+<text x="380" y="266" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="13.5">Behind a pooler in transaction mode</tspan></text>
+<rect x="16" y="292" width="230" height="44" rx="6" fill="#fff" stroke="#1f4e79" stroke-width="1.2"/>
+<text x="28" y="310" text-anchor="start"><tspan font-weight="bold" fill="#222" font-size="12.5">Container 1</tspan></text>
+<text x="28" y="325" text-anchor="start"><tspan fill="#6b7785" font-size="11">pool 5 + 10 and one LISTEN</tspan></text>
+<rect x="16" y="344" width="230" height="44" rx="6" fill="#fff" stroke="#1f4e79" stroke-width="1.2"/>
+<text x="28" y="362" text-anchor="start"><tspan font-weight="bold" fill="#222" font-size="12.5">Container 2</tspan></text>
+<text x="28" y="377" text-anchor="start"><tspan fill="#6b7785" font-size="11">pool 5 + 10 and one LISTEN</tspan></text>
+<rect x="16" y="396" width="230" height="44" rx="6" fill="#fff" stroke="#1f4e79" stroke-width="1.2"/>
+<text x="28" y="414" text-anchor="start"><tspan font-weight="bold" fill="#222" font-size="12.5">Container N</tspan></text>
+<text x="28" y="429" text-anchor="start"><tspan fill="#6b7785" font-size="11">pool 5 + 10 and one LISTEN</tspan></text>
+<polyline points="246.0,314.0 295.3,352.3" fill="none" stroke="#1f4e79" stroke-width="1.6"/>
+<polygon points="300,356 292.1,354.6 296.7,348.7" fill="#1f4e79"/>
+<polyline points="246.0,366.0 294.1,357.1" fill="none" stroke="#1f4e79" stroke-width="1.6"/>
+<polygon points="300,356 293.7,361.0 292.4,353.6" fill="#1f4e79"/>
+<polyline points="246.0,418.0 296.1,360.5" fill="none" stroke="#1f4e79" stroke-width="1.6"/>
+<polygon points="300,356 298.2,363.8 292.5,358.9" fill="#1f4e79"/>
+<rect x="300" y="322" width="190" height="66" rx="6" fill="#fff" stroke="#6b7785" stroke-width="1.2"/>
+<text x="312" y="340" text-anchor="start"><tspan font-weight="bold" fill="#222" font-size="12.5">Pooler</tspan></text>
+<text x="312" y="355" text-anchor="start"><tspan fill="#6b7785" font-size="11">lends a server connection per</tspan></text>
+<text x="312" y="369" text-anchor="start"><tspan fill="#6b7785" font-size="11">transaction</tspan></text>
+<polyline points="490.0,346.0 574.0,346.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
+<polygon points="580,346 572.9,349.8 572.9,342.2" fill="#6b7785"/>
+<text x="500" y="338" text-anchor="start"><tspan font-weight="bold" fill="#6b7785" font-size="11">a few</tspan></text>
+<path d="M585.0 316 v66 a75.0 6 0 0 0 150 0 v-66" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.4"/><ellipse cx="660" cy="316" rx="75.0" ry="6" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.4"/>
+<text x="660" y="352" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="12.5">PostgreSQL</tspan></text>
+<text x="660" y="370" text-anchor="middle"><tspan fill="#6b7785" font-size="11">max_connections 100</tspan></text>
+<polyline points="246.0,432.0 660.0,432.0 660.0,398.0" fill="none" stroke="#1f4e79" stroke-width="1.6" stroke-dasharray="5 3"/>
+<polygon points="660,392 663.8,399.1 656.2,399.1" fill="#1f4e79"/>
+<text x="300" y="426" text-anchor="start"><tspan font-weight="bold" fill="#1f4e79" font-size="11">DB_DIRECT_URL: LISTEN and migrations</tspan></text>
+<path d="M20 456 l3.5 4 l6.5 -8" fill="none" stroke="#2e7d32" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="38" y="464" text-anchor="start"><tspan fill="#222" font-size="12">DB_TRANSACTION_POOLER=true: no cached or named statements, timeouts per transaction</tspan></text>
+<path d="M20 476 l3.5 4 l6.5 -8" fill="none" stroke="#2e7d32" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="38" y="484" text-anchor="start"><tspan fill="#222" font-size="12">The pooler's client limit now takes the sum of the pools (PgBouncer max_client_conn)</tspan></text>
+</g>
+</svg>
