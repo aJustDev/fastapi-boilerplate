@@ -53,8 +53,7 @@ connection: asyncpg's and SQLAlchemy's caches of prepared statements are off and
 unnamed (PostgreSQL replaces the unnamed one with each new statement, so none piles up on the
 server connections, which the pooler never resets), and the timeouts, which PgBouncer would
 refuse at connect time, are set at the start of each transaction (`set_config(..., true)`, the
-same as `SET LOCAL`; one round trip more per transaction). `ALTER ROLE <app role> SET
-statement_timeout = '30s'` on the server avoids that round trip if the role is the app's alone.
+same as `SET LOCAL`; one round trip more per transaction).
 
 ## Models
 

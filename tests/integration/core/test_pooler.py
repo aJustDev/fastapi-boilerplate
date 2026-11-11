@@ -1,11 +1,15 @@
 """The engine behind a real pooler in transaction mode: what breaks, and what the settings fix.
 
 A connection is lent per transaction, so nothing may live on it in between. The
-`pgbouncer_url` fixture is the worst case: one server connection shared by every client
-and no support for prepared statements.
+`pgbouncer_url` fixture is the worst case: two server connections, so a client's
+transactions move between them, and no support for prepared statements.
 """
 
 import asyncio
+import os
+import subprocess
+import sys
+from pathlib import Path
 
 import asyncpg
 import pytest
@@ -20,6 +24,8 @@ from app.core.events.worker import CHANNEL
 from tests.integration.core.sample import SampleORM, SampleRepo
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
+
+ROOT = Path(__file__).resolve().parents[3]
 
 
 @pytest_asyncio.fixture(loop_scope="session")
@@ -119,3 +125,28 @@ async def test_a_notification_sent_through_the_pooler_reaches_a_direct_listener(
         await asyncio.wait_for(heard.wait(), timeout=5)
     finally:
         await listener.close()
+
+
+def _migrate(**env: str) -> subprocess.CompletedProcess[str]:
+    """`alembic upgrade head` as the migrate step of a deploy runs it: a process of its own."""
+    return subprocess.run(  # noqa: S603 -- fixed arguments, the interpreter running the suite
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=ROOT,
+        env={**os.environ, "SETTINGS_ENV_FILE": "", "ENVIRONMENT": "local", "TZ": "UTC", **env},
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+
+async def test_without_a_direct_url_the_migrations_run_through_the_pooler(
+    pgbouncer_url, async_engine
+):
+    # Every deploy runs them again, in a new process whose named statements would start at
+    # the same name and meet the ones the run before left on the server connection.
+    for _ in range(2):
+        result = await asyncio.to_thread(
+            _migrate, DATABASE_URL=pgbouncer_url, DB_TRANSACTION_POOLER="true", DB_DIRECT_URL=""
+        )
+        assert result.returncode == 0, result.stderr[-1500:]

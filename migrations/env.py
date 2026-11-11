@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 import app.db_registry as _db_registry  # noqa: F401 -- registers every table in Base.metadata
 from app.core.config import settings
-from app.core.db import Base
+from app.core.db import POOLER_CONNECT_ARGS, Base
 
 config = context.config
 target_metadata = Base.metadata
@@ -53,9 +53,18 @@ def run_migrations_offline() -> None:
 
 async def _run_async() -> None:
     section = config.get_section(config.config_ini_section) or {}
-    # Not through a pooler in transaction mode: DDL and long transactions need a session.
+    # The direct URL when there is one: DDL and long transactions do not belong in a pooler
+    # in transaction mode. Without it they go through the pooler like the app does, with
+    # nothing prepared left behind: every run is a new process, whose named statements
+    # would meet the ones the run before left on the server connections.
     section["sqlalchemy.url"] = settings.direct_database_url
-    engine = async_engine_from_config(section, prefix="sqlalchemy.", poolclass=pool.NullPool)
+    through_pooler = settings.DB_TRANSACTION_POOLER and not settings.DB_DIRECT_URL
+    engine = async_engine_from_config(
+        section,
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+        connect_args=POOLER_CONNECT_ARGS if through_pooler else {},
+    )
     async with engine.connect() as connection:
         await connection.run_sync(_run)
     await engine.dispose()
