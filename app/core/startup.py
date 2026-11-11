@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.core.config import settings
 from app.core.logging.config import ansi_enabled, json_enabled
+from app.core.logging.errors import one_line
 from app.core.logging.middleware import METRICS_PATH
 
 logger = logging.getLogger(__name__)
@@ -94,6 +95,25 @@ async def database_schema(engine: AsyncEngine) -> list[str] | None:
         return None
 
 
+_CAPACITY = text(
+    "SELECT current_setting('max_connections')::int,"
+    " current_setting('superuser_reserved_connections')::int,"
+    " (SELECT count(*) FROM pg_stat_activity WHERE backend_type = 'client backend')"
+)
+
+
+async def database_capacity(engine: AsyncEngine) -> dict[str, int] | None:
+    """The connections the server takes and the ones in use; None if unknown."""
+    try:
+        async with engine.connect() as conn:
+            limit, reserved, in_use = (await conn.execute(_CAPACITY)).one()
+        return {"max": limit, "reserved": reserved, "in_use": in_use}
+    # The banner must not stop the startup; without the numbers it says less.
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Could not read the connection limits: %s", one_line(e))
+        return None
+
+
 def _count_sibling_workers() -> int:
     """Count uvicorn worker processes (siblings sharing the same PPID).
 
@@ -134,6 +154,7 @@ def _facts(
     jobs_status: str,
     registered_jobs: int,
     processes: int,
+    capacity: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     url = make_url(settings.DATABASE_URL)
     address = url.host or "unknown"
@@ -153,6 +174,14 @@ def _facts(
             "status": "ok" if db_status == "OK" else "unavailable",
             "schema": schema,
             "expected": expected,
+            # Each process: its pool, its overflow and the LISTEN of the outbox worker.
+            "instance_max": processes
+            * (settings.DB_POOL_SIZE + settings.DB_MAX_OVERFLOW + (outbox_status != "disabled")),
+            "capacity": capacity,
+            "pooler": {
+                "transaction": settings.DB_TRANSACTION_POOLER,
+                "direct_url": bool(settings.DB_DIRECT_URL),
+            },
         },
         "pool": {
             "size": settings.DB_POOL_SIZE,
@@ -210,6 +239,26 @@ def _database(db: dict[str, Any], pool: dict[str, Any]) -> tuple[str, str]:
     return "ok", f"{where}, {pool_size}{shown}"
 
 
+def _connections(db: dict[str, Any]) -> tuple[str, str]:
+    """Whether this instance alone fits in what the server takes (it cannot see replicas)."""
+    reach = f"up to {db['instance_max']} from this instance"
+    capacity = db["capacity"]
+    if capacity is None:
+        return "", reach
+    allowed = capacity["max"] - capacity["reserved"]
+    state = "warn" if db["instance_max"] > allowed else "ok"
+    return state, f"{reach}, {capacity['in_use']} of {capacity['max']} in use"
+
+
+def _pooler(db: dict[str, Any]) -> tuple[str, str]:
+    if db["pooler"]["direct_url"]:
+        return "ok", "transaction mode, LISTEN and migrations direct"
+    return "warn", (
+        f"transaction mode, no DB_DIRECT_URL: events by polling every "
+        f"{settings.OUTBOX_POLL_INTERVAL_SECONDS}s"
+    )
+
+
 def _worker(status: str, running: str) -> tuple[str, str]:
     state = _WORKER_STATES[status]
     return state, _WORKER_VALUES.get(state, running)
@@ -225,6 +274,12 @@ def _rows(facts: dict[str, Any]) -> list[tuple[str, str, str]]:
     token = "token required" if metrics["token"] else "no token"
     lines = {
         "Database": _database(facts["db"], facts["pool"]),
+        # Behind a pooler the server's limit is the pooler's business, not this budget.
+        **(
+            {"Pooler": _pooler(facts["db"])}
+            if facts["db"]["pooler"]["transaction"]
+            else {"Capacity": _connections(facts["db"])}
+        ),
         "Outbox": _worker(facts["outbox"], "listening for events"),
         "Jobs": _worker(facts["jobs"]["status"], f"{facts['jobs']['handlers']} handlers"),
         "Limits": _switch(
@@ -301,9 +356,11 @@ async def log_system_info(
 
     # Only one process prints the full banner (advisory lock). Without a database there is
     # no lock to take: trying would wait for another connection timeout during startup,
-    # when uvicorn cannot be interrupted, so every process prints it.
+    # when uvicorn cannot be interrupted, so every process prints it. Behind a pooler in
+    # transaction mode a session lock stays on a server connection lent to others, so
+    # every process prints it too.
     is_banner_leader = True
-    if db_status == "OK":
+    if db_status == "OK" and not settings.DB_TRANSACTION_POOLER:
         try:
             async with engine.connect() as conn:
                 result = await conn.execute(
@@ -320,6 +377,8 @@ async def log_system_info(
         return
 
     schema = await database_schema(engine) if db_status == "OK" else None
+    direct = db_status == "OK" and not settings.DB_TRANSACTION_POOLER
+    capacity = await database_capacity(engine) if direct else None
     facts = _facts(
         db_status,
         schema,
@@ -328,6 +387,7 @@ async def log_system_info(
         jobs_status=jobs_status,
         registered_jobs=registered_jobs,
         processes=processes,
+        capacity=capacity,
     )
     # One line in JSON, where the facts travel as fields; a short table on a terminal.
     if json_enabled():

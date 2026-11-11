@@ -5,7 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
-from app.core.startup import database_schema, expected_schema
+from app.core.startup import database_capacity, database_schema, expected_schema
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio(loop_scope="session")]
 
@@ -26,3 +26,11 @@ async def test_a_database_never_migrated_has_no_revision(async_engine: AsyncEngi
         assert await database_schema(engine) == []
     finally:
         await engine.dispose()
+
+
+async def test_the_connection_limits_of_a_real_server(async_engine: AsyncEngine):
+    capacity = await database_capacity(async_engine)
+
+    assert capacity is not None
+    assert capacity["max"] >= 1 and capacity["reserved"] >= 0
+    assert capacity["in_use"] >= 1, "the query itself holds a connection"

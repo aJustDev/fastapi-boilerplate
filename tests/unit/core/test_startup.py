@@ -62,6 +62,9 @@ def _mock_engine_with_advisory_lock(*, acquired: bool = True) -> MagicMock:
     return engine
 
 
+CAPACITY = {"max": 100, "reserved": 3, "in_use": 12}
+
+
 @pytest.fixture
 def banner(monkeypatch):
     """Settings of a known deployment; the schema read and the log format are set per test."""
@@ -85,6 +88,9 @@ def banner(monkeypatch):
     monkeypatch.setattr(startup, "expected_schema", lambda: ["0009"])
     monkeypatch.setattr(startup, "json_enabled", lambda: False)
     monkeypatch.setattr(startup, "ansi_enabled", lambda: False)
+    monkeypatch.setattr("app.core.startup.settings.DB_TRANSACTION_POOLER", False)
+    monkeypatch.setattr("app.core.startup.settings.DB_DIRECT_URL", "")
+    monkeypatch.setattr(startup, "database_capacity", AsyncMock(return_value=CAPACITY))
     schema = AsyncMock(return_value=["0009"])
     monkeypatch.setattr(startup, "database_schema", schema)
     return schema
@@ -125,6 +131,7 @@ class TestLogSystemInfo:
 
         assert _rows(record) == [
             ("ok", "Database", "db-host:5432/mydb, pool 5 + 10 overflow, timeout 30s"),
+            ("ok", "Capacity", "up to 16 from this instance, 12 of 100 in use"),
             ("ok", "Outbox", "listening for events"),
             ("ok", "Jobs", "5 handlers"),
             ("on", "Limits", "60/minute, strict 5/minute, in memory per process"),
@@ -162,11 +169,11 @@ class TestLogSystemInfo:
 
         assert len({len(ANSI.sub("", line)) for line in table}) == 1, "color takes no width"
         assert "\033[1mTestApp v1.0.0\033[0m" in table[1]
-        assert f"\033[90m{V}\033[0m" in table[4], "the frame is grey"
-        assert " \033[32m ok \033[0m " in table[4]
+        assert f"\033[90m{V}\033[0m" in table[5], "the frame is grey"
+        assert " \033[32m ok \033[0m " in table[5]
         # What is off recedes, its label and value too.
-        assert " \033[90moff \033[0m " in table[7]
-        assert " \033[90mDocs    \033[0m " in table[7]
+        assert " \033[90moff \033[0m " in table[8]
+        assert " \033[90mDocs    \033[0m " in table[8]
 
     async def test_in_json_the_facts_are_fields_of_a_one_line_record(
         self, banner, caplog, monkeypatch
@@ -186,6 +193,9 @@ class TestLogSystemInfo:
             "status": "ok",
             "schema": ["0009"],
             "expected": ["0009"],
+            "instance_max": 15,
+            "capacity": CAPACITY,
+            "pooler": {"transaction": False, "direct_url": False},
         }
         assert line["startup"]["rate_limit"]["default"] == "60/minute"
 
@@ -226,11 +236,10 @@ class TestLogSystemInfo:
         waiting = "waiting for the database"
         record = await _log(caplog, "UNAVAILABLE", outbox_status=waiting, jobs_status=waiting)
 
-        assert _rows(record)[:3] == [
-            ("down", "Database", "db-host:5432/mydb, not answering"),
-            ("wait", "Outbox", waiting),
-            ("wait", "Jobs", waiting),
-        ]
+        rows = _rows(record)
+        assert rows[0] == ("down", "Database", "db-host:5432/mydb, not answering")
+        assert rows[1] == ("", "Capacity", "up to 16 from this instance")
+        assert rows[2:4] == [("wait", "Outbox", waiting), ("wait", "Jobs", waiting)]
         # No database, no lock to take: connecting again would wait for a second timeout
         # during startup, when Ctrl+C cannot interrupt uvicorn.
         banner.assert_not_awaited()
@@ -264,10 +273,62 @@ class TestLogSystemInfo:
     async def test_workers_left_to_another_process(self, banner, caplog):
         record = await _log(caplog, outbox_status="disabled", jobs_status="disabled")
 
-        assert _rows(record)[1:3] == [
+        assert _rows(record)[2:4] == [
             ("off", "Outbox", "not in this process"),
             ("off", "Jobs", "not in this process"),
         ]
+
+    async def test_an_instance_that_can_exhaust_the_server_is_a_warning(
+        self, banner, caplog, monkeypatch
+    ):
+        # 32 processes of 5 + 10 connections against 97 the server lets the app open.
+        monkeypatch.setattr(startup, "_count_sibling_workers", lambda: 32)
+
+        record = await _log(caplog)
+
+        assert _rows(record)[1] == (
+            "warn",
+            "Capacity",
+            "up to 480 from this instance, 12 of 100 in use",
+        )
+        assert record.fields["startup"]["db"]["capacity"] == CAPACITY
+
+    @pytest.mark.parametrize(
+        ("direct_url", "row"),
+        [
+            (
+                "postgresql+asyncpg://u:p@db:5432/mydb",
+                ("ok", "Pooler", "transaction mode, LISTEN and migrations direct"),
+            ),
+            (
+                "",
+                (
+                    "warn",
+                    "Pooler",
+                    "transaction mode, no DB_DIRECT_URL: events by polling every 30s",
+                ),
+            ),
+        ],
+    )
+    async def test_behind_a_pooler_the_table_says_how_it_is_reached(
+        self, banner, caplog, monkeypatch, direct_url, row
+    ):
+        monkeypatch.setattr("app.core.startup.settings.DB_TRANSACTION_POOLER", True)
+        monkeypatch.setattr("app.core.startup.settings.DB_DIRECT_URL", direct_url)
+        monkeypatch.setattr("app.core.startup.settings.OUTBOX_POLL_INTERVAL_SECONDS", 30)
+        engine = _mock_engine_with_advisory_lock(acquired=False)
+
+        with caplog.at_level(logging.INFO, logger="app.core.startup"):
+            await log_system_info(engine, "OK")
+
+        record = next(r for r in caplog.records if hasattr(r, "fields"))
+        rows = _rows(record)
+        assert rows[1] == row
+        assert "Capacity" not in [label for _, label, _ in rows]
+        # A session lock through the pooler would stay on a lent connection: every process
+        # prints its table, and the server's limit is the pooler's business.
+        engine.connect.assert_not_called()
+        startup.database_capacity.assert_not_awaited()
 
     async def test_the_title_counts_the_processes_when_there_are_several(
         self, banner, caplog, monkeypatch
