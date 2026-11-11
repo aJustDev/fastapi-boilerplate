@@ -7,6 +7,8 @@ LAYER_MAP = {
     "repos": ("Repo", "purple"),
     "core": ("Core", "cyan"),
     "deps": ("Deps", "white"),
+    "jobs": ("Job", "light_blue"),
+    "event_handlers": ("Handler", "light_purple"),
 }
 
 LAYER_COLORS = {
@@ -16,6 +18,8 @@ LAYER_COLORS = {
     "Repo": "purple",
     "Core": "cyan",
     "Deps": "white",
+    "Job": "light_blue",
+    "Handler": "light_purple",
     "App": "white",
 }
 
@@ -28,6 +32,8 @@ ANSI_CODES = {
     "purple": "\033[35m",
     "cyan": "\033[36m",
     "white": "\033[37m",
+    "light_blue": "\033[94m",
+    "light_purple": "\033[95m",
 }
 ANSI_RESET = "\033[0m"
 
@@ -39,10 +45,15 @@ class LayerModuleFilter(logging.Filter):
     Module name is title-cased for readability.
     """
 
-    # Map full logger names to friendly display names
+    # Loggers whose module name says little on its own: two workers would both be
+    # [Core] [Worker], and the exception handlers [Core] [Handlers], like event handlers.
     LOGGER_OVERRIDES: dict[str, tuple[str, str]] = {
         "uvicorn.error": ("App", "Server"),
-        "uvicorn.access": ("App", "Access"),
+        "app.core.events.worker": ("Core", "Outbox"),
+        "app.core.events.cleanup": ("Core", "Outbox"),
+        "app.core.jobs.worker": ("Core", "Jobs"),
+        "app.core.exceptions.handlers": ("Core", "Errors"),
+        "app.core.exceptions.middleware": ("Core", "Errors"),
     }
 
     def filter(self, record: logging.LogRecord) -> bool:

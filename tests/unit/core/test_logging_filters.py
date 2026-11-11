@@ -1,5 +1,7 @@
 import logging
 
+import pytest
+
 from app.core.logging.context import request_id_var
 from app.core.logging.filters import LayerModuleFilter, RequestIdFilter
 
@@ -120,6 +122,25 @@ class TestLayerModuleFilter:
         f.filter(record)
 
         assert record.module_name == "Refresh Token"
+
+    @pytest.mark.parametrize(
+        ("name", "layer", "module"),
+        [
+            ("app.workshops.jobs.reminders", "Job", "Reminders"),
+            ("app.workshops.event_handlers.notifications", "Handler", "Notifications"),
+            # Infrastructure stays Core, named so that two workers do not look alike.
+            ("app.core.events.worker", "Core", "Outbox"),
+            ("app.core.jobs.worker", "Core", "Jobs"),
+            ("app.core.exceptions.handlers", "Core", "Errors"),
+            ("app.access", "App", "Access"),
+        ],
+    )
+    def test_names_that_say_what_logged(self, name: str, layer: str, module: str):
+        record = self._make_record(name)
+
+        LayerModuleFilter().filter(record)
+
+        assert (record.layer_name, record.module_name) == (layer, module)
 
     def test_non_app_logger_extracts_last_segment(self):
         f = LayerModuleFilter()

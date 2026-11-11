@@ -15,9 +15,12 @@ its `request_id`, and every line carries the architectural layer and module of t
   An event handler logs under the id of the request that published its event
   (`docs/event-bus.md`).
 - `LayerModuleFilter` derives `layer` and `module` from the logger name: the first of `api`,
-  `use_cases`, `services`, `repos`, `core`, `deps` in it gives the layer (`Router`, `UseCase`,
-  `Service`, `Repo`, `Core`, `Deps`, else `App`) and the last part the module, title-cased. A
-  context router is named after its context: `app.workshops.api.router` logs as `[Router] [Workshops]`.
+  `use_cases`, `services`, `repos`, `core`, `deps`, `jobs`, `event_handlers` in it gives the
+  layer (`Router`, `UseCase`, `Service`, `Repo`, `Core`, `Deps`, `Job`, `Handler`, else `App`)
+  and the last part the module, title-cased. A context router is named after its context:
+  `app.workshops.api.router` logs as `[Router] [Workshops]`. A few modules with generic names
+  get one that says what logged: `[Core] [Outbox]` and `[Core] [Jobs]` for the two workers,
+  `[Core] [Errors]` for the exception handlers.
 - The formatter is chosen from `ENVIRONMENT` and `LOG_FORMAT`:
 
 | `LOG_FORMAT` | `local`/`dev` | other environments |
