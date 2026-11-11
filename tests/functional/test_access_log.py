@@ -9,7 +9,9 @@ from httpx import AsyncClient
 
 from app.core.logging.middleware import AccessLogMiddleware
 
-LINE = re.compile(r"^(?P<method>[A-Z]+) (?P<path>\S+) (?P<outcome>\d{3}(?: [a-z_]+)?) \d+ms$")
+LINE = re.compile(
+    r"^(?P<method>[A-Z]+) (?P<path>\S+) (?P<outcome>\d{3}(?: [a-z_]+)?) (?P<ms>\d+(?:\.\d)?)ms$"
+)
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
@@ -134,3 +136,18 @@ async def test_on_a_color_terminal_the_outcome_is_colored(caplog, monkeypatch):
 
     [record] = _access_lines(caplog)
     assert record.getMessage().startswith("GET /x \033[33m418\033[0m ")
+
+
+@pytest.mark.parametrize(
+    ("seconds", "shown"), [(0.0004, "0.4ms"), (0.0099, "9.9ms"), (0.0123, "12ms")]
+)
+def test_a_fast_request_is_not_0ms(caplog, seconds: float, shown: str):
+    scope = {"type": "http", "method": "GET", "path": "/x", "raw_path": b"/x"}
+    middleware = AccessLogMiddleware(None)
+    middleware._color = False
+
+    with caplog.at_level(logging.INFO, logger="app.access"):
+        middleware._log(scope, 200, None, seconds)
+
+    [record] = _access_lines(caplog)
+    assert record.getMessage() == f"GET /x 200 {shown}"
