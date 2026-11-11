@@ -68,7 +68,8 @@ go straight to PostgreSQL (`DB_DIRECT_URL`). Behind a pooler every process print
 because the session lock that picks one would stay on a server connection lent to others.
 
 `Jobs` counts the handlers registered in code, not their rows. With several processes the first
-line ends with their number.
+line ends with their number: the ones uvicorn started together (`--workers`), counted in `/proc`.
+Where there is no `/proc` (macOS) each worker counts itself alone, and `Capacity` with it.
 
 In JSON the message is the title line alone, `FastAPI App v0.1.0 | local | log DEBUG | ...`, and
 the facts travel in a `startup` field (`host`, `pid`, `processes`, `db` with `instance_max`,

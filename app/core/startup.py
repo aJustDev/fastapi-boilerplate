@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import logging
+import multiprocessing
 import os
 import socket
 import time
@@ -121,10 +122,16 @@ async def database_capacity(engine: AsyncEngine) -> dict[str, int] | None:
 
 
 def _count_sibling_workers() -> int:
-    """Count uvicorn worker processes (siblings sharing the same PPID).
+    """Processes of this server: this one and the workers uvicorn started next to it.
 
-    Excludes helper processes like multiprocessing.resource_tracker.
+    Uvicorn starts the processes of `--workers` and `--reload` with multiprocessing, as
+    children of one parent: they are counted in /proc, leaving out helpers like
+    multiprocessing.resource_tracker. A process nobody started that way is alone, whatever
+    else its parent runs (a shell with other jobs, an init with other services). Without
+    /proc (macOS) the workers cannot be counted, and each one says 1.
     """
+    if multiprocessing.parent_process() is None:
+        return 1
     my_ppid = os.getppid()
     count = 0
     try:
