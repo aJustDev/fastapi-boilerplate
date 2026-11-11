@@ -78,47 +78,6 @@ class LayerModuleFilter(logging.Filter):
         return True
 
 
-LIVENESS_PATH = "/v1/health/liveness"
-METRICS_PATH = "/v1/metrics"
-
-
-def _access_request(record: logging.LogRecord) -> tuple[str, str] | None:
-    """(method, path) of a uvicorn access record; None for any other record.
-
-    The noise filters decide on these two fields only. The formatted message also holds
-    the query string, which the client writes: matching on it would let any request
-    remove its own access line by carrying `?/v1/metrics`.
-    """
-    args = record.args
-    if record.name != "uvicorn.access" or not isinstance(args, tuple) or len(args) < 3:
-        return None
-    return str(args[1]), str(args[2]).split("?", 1)[0]
-
-
-class IgnoreOptionsFilter(logging.Filter):
-    """Suppresses the access line of OPTIONS requests (CORS preflights)."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        request = _access_request(record)
-        return request is None or request[0] != "OPTIONS"
-
-
-class IgnoreHealthcheckFilter(logging.Filter):
-    """Suppresses the access line of the liveness probe."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        request = _access_request(record)
-        return request is None or request[1] != LIVENESS_PATH
-
-
-class IgnoreMetricsFilter(logging.Filter):
-    """Suppresses the access line of the Prometheus scrape."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        request = _access_request(record)
-        return request is None or request[1] != METRICS_PATH
-
-
 class RequestIdFilter(logging.Filter):
     """Injects request_id from ContextVar into every LogRecord.
 

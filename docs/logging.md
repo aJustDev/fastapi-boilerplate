@@ -1,10 +1,9 @@
 # Logging
 
 Standard library logging configured once, when the app is built (`setup_logging()` in
-`create_app()`), with two output modes:
-colored text for local work and one-line JSON for log aggregators. Every line logged while
-serving a request carries its `request_id`, and every line carries the architectural layer and
-module of the logger.
+`create_app()`), with two output modes: colored text for local work and one-line JSON for log
+aggregators. Every request leaves one access line; every line logged while serving it carries
+its `request_id`, and every line carries the architectural layer and module of the logger.
 
 ## How it works
 
@@ -27,9 +26,15 @@ module of the logger.
 | `json` | JSON | JSON |
 | `text` | colored text | plain text |
 
-- The `uvicorn.access` logger drops OPTIONS requests, `/v1/health/liveness` and `/v1/metrics`.
-  The filters compare the method and the path of the access record, never its text: the query
-  string is written by the client and must not be able to hide a request.
+- `AccessLogMiddleware` writes the access line once the response is sent:
+  `GET /v1/workshops/7 404 not_found 3ms` (method, path, status, the `code` of the error body
+  when there is one, time to answer), colored by status on a color terminal. In JSON the same
+  facts are fields of `http`, with the client address. The path is the raw one, without the
+  query string: the client writes the query, and it can carry search terms, emails or tokens; a
+  `%0A` stays encoded and cannot start a new line. Probes, the metrics scrape and CORS
+  preflights leave no line (`QUIET_PATHS`). Uvicorn's own access log is off.
+- The exception handlers name the error code of the response with `record_error_code()`, which
+  the access line reads.
 - Exception handlers build a multi-line message (exception, location, request, status) and add
   color only when `ansi_enabled()`, so JSON lines never contain escape codes.
 
@@ -61,7 +66,7 @@ startup log puts its facts in `startup` (`docs/operations.md`).
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `LOG_LEVEL` | `INFO` | Level of the `app` loggers; uvicorn's own loggers stay at INFO (where it listens, startup, shutdown, access lines) |
+| `LOG_LEVEL` | `INFO` | Level of the `app` loggers; uvicorn stays at INFO (where it listens, startup, shutdown) |
 | `LOG_FORMAT` | `auto` | `auto`, `json` or `text` |
 
 ## Guarantees and limits
@@ -73,9 +78,8 @@ startup log puts its facts in `startup` (`docs/operations.md`).
 - Uvicorn imports the app before its first line, so a process started as `uvicorn main:app`
   (the image) logs in that format from the first line. With `--reload` or `--workers` the
   parent process never imports the app: its own lines stay in uvicorn's format.
-- A new noise filter goes in `app/core/logging/filters.py` (return `False` to drop the record) and
-  is registered in the `dictConfig` of `setup_logging()`. It decides on `_access_request(record)`
-  (method and path), like the existing ones.
+- A request that is not traffic (another probe, a scrape) is silenced by adding its path to
+  `QUIET_PATHS` in `app/core/logging/middleware.py`; nothing else drops access lines.
 - A client-supplied request id that is not a plain token is replaced, so it cannot inject text
   into the log lines or the response headers.
 - Database errors are logged without their bound parameters (`hide_parameters` on the engine):
@@ -86,6 +90,6 @@ startup log puts its facts in `startup` (`docs/operations.md`).
 | File | Role |
 |---|---|
 | `app/core/logging/config.py` | `setup_logging()`, `JSONFormatter`, `ansi_enabled()`, `json_enabled()` |
-| `app/core/logging/filters.py` | Layer/module, request id and noise filters |
+| `app/core/logging/filters.py` | Layer/module and request id filters |
 | `app/core/logging/context.py` | `request_id` `ContextVar` |
-| `app/core/logging/middleware.py` | `RequestIdMiddleware` |
+| `app/core/logging/middleware.py` | `RequestIdMiddleware`, `AccessLogMiddleware`, `QUIET_PATHS` |

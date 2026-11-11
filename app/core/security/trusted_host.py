@@ -4,6 +4,8 @@ from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from app.core.logging.middleware import record_error_code
+
 
 class TrustedHostMiddleware:
     """Rejects requests whose Host header is not one of `allowed_hosts`.
@@ -58,6 +60,7 @@ class TrustedHostMiddleware:
             await self.app(scope, receive, send)
             return
 
+        record_error_code(scope, "invalid_host")
         response = JSONResponse(
             status_code=400, content={"detail": "Invalid host header", "code": "invalid_host"}
         )

@@ -18,6 +18,7 @@ def _make_request(method: str = "GET", path: str = "/test") -> MagicMock:
     request.method = method
     request.url = MagicMock(spec=URL)
     request.url.path = path
+    request.scope = {}
     return request
 
 

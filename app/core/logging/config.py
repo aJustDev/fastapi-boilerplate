@@ -113,9 +113,6 @@ def setup_logging() -> None:
         "filters": {
             "layer_module": {"()": "app.core.logging.filters.LayerModuleFilter"},
             "request_id": {"()": "app.core.logging.filters.RequestIdFilter"},
-            "ignore_options": {"()": "app.core.logging.filters.IgnoreOptionsFilter"},
-            "ignore_healthcheck": {"()": "app.core.logging.filters.IgnoreHealthcheckFilter"},
-            "ignore_metrics": {"()": "app.core.logging.filters.IgnoreMetricsFilter"},
         },
         "formatters": {
             "default": formatter_config,
@@ -124,7 +121,7 @@ def setup_logging() -> None:
             "console": {
                 "class": "logging.StreamHandler",
                 "formatter": "default",
-                "filters": ["layer_module", "request_id", "ignore_options"],
+                "filters": ["layer_module", "request_id"],
                 "level": "DEBUG",
             },
         },
@@ -136,12 +133,8 @@ def setup_logging() -> None:
             # INFO for the lines of the server itself: the address it listens on, startup
             # complete, shutdown. Its own handler, installed by uvicorn, is replaced.
             "uvicorn": {"level": "INFO", "propagate": True},
-            "uvicorn.access": {
-                "handlers": ["console"],
-                "filters": ["ignore_options", "ignore_healthcheck", "ignore_metrics"],
-                "level": "INFO",
-                "propagate": False,
-            },
+            # The app writes its own access line (AccessLogMiddleware).
+            "uvicorn.access": {"level": "WARNING", "propagate": True},
         },
         "root": {
             "handlers": ["console"],

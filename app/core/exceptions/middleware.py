@@ -4,6 +4,7 @@ from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.exceptions.handlers import describe_unhandled, internal_error_response
+from app.core.logging.middleware import record_error_code
 
 logger = logging.getLogger(__name__)
 
@@ -42,4 +43,5 @@ class UnhandledErrorMiddleware:
                 # server closes the connection and logs the error.
                 raise
             logger.exception(describe_unhandled(Request(scope), exc))
+            record_error_code(scope, "internal_error")
             await internal_error_response()(scope, receive, send)

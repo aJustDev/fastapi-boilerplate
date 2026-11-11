@@ -13,6 +13,7 @@ from starlette.responses import JSONResponse
 
 from app.core.exceptions.exceptions import AuthException, DomainException
 from app.core.logging.config import ansi_enabled
+from app.core.logging.middleware import record_error_code
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,17 @@ def _status_color(code: int) -> str:
     if code < 500:
         return _YELLOW
     return _BOLD_RED
+
+
+def _error(
+    request: Request,
+    status_code: int,
+    content: dict,
+    headers: dict[str, str] | None = None,
+) -> JSONResponse:
+    """The JSON error of the contract; its `code` is also named in the access line."""
+    record_error_code(request.scope, content["code"])
+    return JSONResponse(status_code=status_code, content=content, headers=headers)
 
 
 def _shorten_path(filepath: str) -> str:
@@ -93,10 +105,8 @@ async def domain_exception_handler(request: Request, exc: DomainException) -> JS
     ctx = _extract_context(request, exc)
     logger.warning(_format_log(ctx))
     headers = getattr(exc, "headers", None) or {}
-    return JSONResponse(
-        status_code=ctx["status_code"],
-        content={"detail": ctx["message"], "code": exc.code},
-        headers=headers,
+    return _error(
+        request, ctx["status_code"], {"detail": ctx["message"], "code": exc.code}, headers
     )
 
 
@@ -116,10 +126,11 @@ _HTTP_CODES = {
 
 
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail, "code": _HTTP_CODES.get(exc.status_code, "http_error")},
-        headers=getattr(exc, "headers", None),
+    return _error(
+        request,
+        exc.status_code,
+        {"detail": exc.detail, "code": _HTTP_CODES.get(exc.status_code, "http_error")},
+        getattr(exc, "headers", None),
     )
 
 
@@ -128,9 +139,8 @@ async def validation_exception_handler(
 ) -> JSONResponse:
     errors = [f"{'.'.join(str(loc) for loc in err['loc'])}: {err['msg']}" for err in exc.errors()]
     logger.warning("Validation error on %s %s: %s", request.method, request.url.path, errors)
-    return JSONResponse(
-        status_code=422,
-        content={"detail": "Validation error", "code": "validation_error", "errors": errors},
+    return _error(
+        request, 422, {"detail": "Validation error", "code": "validation_error", "errors": errors}
     )
 
 
@@ -157,10 +167,11 @@ def _retry_after_seconds(request: Request, exc: RateLimitExceeded) -> int:
 async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     retry_after = str(_retry_after_seconds(request, exc))
     logger.warning("Rate limit exceeded: %s %s (%s)", request.method, request.url.path, retry_after)
-    return JSONResponse(
-        status_code=429,
-        content={"detail": "Too many requests", "code": "rate_limited"},
-        headers={"Retry-After": retry_after},
+    return _error(
+        request,
+        429,
+        {"detail": "Too many requests", "code": "rate_limited"},
+        {"Retry-After": retry_after},
     )
 
 
@@ -195,10 +206,11 @@ def _log_rejected_by_database(request: Request, exc: DBAPIError, status_code: in
     )
 
 
-def _invalid_input_response() -> JSONResponse:
-    return JSONResponse(
-        status_code=422,
-        content={
+def _invalid_input_response(request: Request) -> JSONResponse:
+    return _error(
+        request,
+        422,
+        {
             "detail": "Validation error",
             "code": "invalid_input",
             "errors": ["a value was rejected by the database"],
@@ -214,11 +226,10 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
     # broken reference is a conflict with what is already stored.
     if getattr(exc.orig, "sqlstate", None) in (_NOT_NULL_VIOLATION, _CHECK_VIOLATION):
         _log_rejected_by_database(request, exc, 422)
-        return _invalid_input_response()
+        return _invalid_input_response(request)
     _log_rejected_by_database(request, exc, 409)
-    return JSONResponse(
-        status_code=409,
-        content={"detail": "Conflict with existing resource", "code": "integrity_conflict"},
+    return _error(
+        request, 409, {"detail": "Conflict with existing resource", "code": "integrity_conflict"}
     )
 
 
@@ -241,15 +252,16 @@ async def database_error_handler(request: Request, exc: DBAPIError) -> JSONRespo
     """
     if getattr(exc.orig, "sqlstate", None) in _LOST_TO_ANOTHER_TRANSACTION:
         _log_rejected_by_database(request, exc, 503)
-        return JSONResponse(
-            status_code=503,
-            content={"detail": "The resource is busy, try again", "code": "busy"},
-            headers={"Retry-After": "1"},
+        return _error(
+            request,
+            503,
+            {"detail": "The resource is busy, try again", "code": "busy"},
+            {"Retry-After": "1"},
         )
     if not _is_data_error(exc):
         raise exc
     _log_rejected_by_database(request, exc, 422)
-    return _invalid_input_response()
+    return _invalid_input_response(request)
 
 
 def describe_unhandled(request: Request, exc: Exception) -> str:
@@ -269,6 +281,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     # UnhandledErrorMiddleware answers them from inside it. This one only sees what a
     # middleware itself raises.
     logger.error(describe_unhandled(request, exc), exc_info=True)
+    record_error_code(request.scope, "internal_error")
     return internal_error_response()
 
 

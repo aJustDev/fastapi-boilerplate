@@ -5,24 +5,31 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.core.config import settings
 from app.core.exceptions.middleware import UnhandledErrorMiddleware
-from app.core.logging.middleware import RequestIdMiddleware
+from app.core.logging.middleware import (
+    LIVENESS_PATH,
+    READINESS_PATH,
+    AccessLogMiddleware,
+    RequestIdMiddleware,
+)
 from app.core.metrics.middleware import PrometheusMiddleware
 from app.core.ratelimit import limiter
 from app.core.security.headers import SecurityHeadersMiddleware
 from app.core.security.trusted_host import TrustedHostMiddleware
 
 # Served whatever the Host header says (see TrustedHostMiddleware).
-PROBE_PATHS = ("/v1/health/liveness", "/v1/health/readiness")
+PROBE_PATHS = (LIVENESS_PATH, READINESS_PATH)
 
 
 def register_middleware(app: FastAPI) -> None:
     # Execution order is bottom-to-top (last added = outermost, runs first on request).
     #
-    # Request:  ProxyHeaders -> TrustedHost -> Prometheus -> RequestId
+    # Request:  ProxyHeaders -> RequestId -> AccessLog -> TrustedHost -> Prometheus
     #           -> SecurityHeaders -> CORS -> GZip -> UnhandledError -> App
     #
     # ProxyHeaders goes first so every later layer (rate limit keys, logs) sees the real
-    # client address; TrustedHost rejects a forged Host before any work is done.
+    # client address. RequestId and AccessLog come next, so every response, a rejected
+    # Host included, carries an id and leaves an access line. TrustedHost rejects a forged
+    # Host before any work is done.
     # UnhandledError goes last, right around the routes, so the 500 it builds returns
     # through every other layer like any response.
 
@@ -59,14 +66,14 @@ def register_middleware(app: FastAPI) -> None:
     # default limits, and it cannot see the routes of an included router.
     app.state.limiter = limiter
 
-    app.add_middleware(RequestIdMiddleware)
-
     if settings.METRICS_ENABLED:
         app.add_middleware(PrometheusMiddleware)
 
     app.add_middleware(
         TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS, exempt_paths=PROBE_PATHS
     )
+    app.add_middleware(AccessLogMiddleware)
+    app.add_middleware(RequestIdMiddleware)
     # The only place forwarded headers are honored: run uvicorn with --no-proxy-headers
     # (the image does), or its own copy of this middleware reads FORWARDED_ALLOW_IPS from
     # the process environment and the two can disagree.
