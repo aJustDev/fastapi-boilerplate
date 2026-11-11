@@ -51,12 +51,10 @@ class AuthService:
         ):
             raise AuthenticationError("Invalid credentials")
 
-        logger.debug("Looking up user credentials")
         user = await self.user_repo.get_by_email(username)
         if not user:
             user = await self.user_repo.get_by_username(username)
 
-        logger.debug("User lookup result: %s", "found" if user else "not found")
         if not user:
             # Same argon2 cost as a real check: otherwise the response time tells
             # whether the account exists.

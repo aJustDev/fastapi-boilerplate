@@ -1,4 +1,3 @@
-import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -23,8 +22,6 @@ from app.core.exceptions.schemas import CONFLICT, RATE_LIMITED, UNAUTHENTICATED
 from app.core.ratelimit import limiter
 from app.deps.auth import CurrentUser, oauth2_scheme
 from app.deps.repository import get_repo
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Auth"], responses={**RATE_LIMITED})
 
@@ -58,7 +55,6 @@ async def login(
     OAuth2 password form, not JSON. `username` takes the email or the username. A wrong
     password and an unknown account answer the same 401.
     """
-    logger.info("Login request received")
     _never_cache(response)
     uc = LoginUseCase(service)
     return await uc.execute(form.username, form.password)
