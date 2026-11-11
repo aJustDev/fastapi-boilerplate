@@ -127,5 +127,6 @@ worker keeps one extra database connection for `LISTEN`.
 |---|---|
 | `app/api/v1/health.py` | Liveness and readiness |
 | `app/core/lifespan.py` | Startup and shutdown: workers, startup log, `ready` flag |
-| `app/core/startup.py` | Time zone and database checks, the startup log |
+| `app/core/startup.py` | Time zone and database checks, the facts of the startup log |
+| `app/core/startup_table.py` | How the startup log reads: the table, and the title line of JSON |
 | `app/cli.py` | `python -m app.cli` |
