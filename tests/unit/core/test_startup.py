@@ -89,7 +89,6 @@ def banner(monkeypatch):
     monkeypatch.setattr(startup, "json_enabled", lambda: False)
     monkeypatch.setattr(startup, "ansi_enabled", lambda: False)
     monkeypatch.setattr("app.core.startup.settings.DB_TRANSACTION_POOLER", False)
-    monkeypatch.setattr("app.core.startup.settings.DB_DIRECT_URL", "")
     monkeypatch.setattr(startup, "database_capacity", AsyncMock(return_value=CAPACITY))
     schema = AsyncMock(return_value=["0009"])
     monkeypatch.setattr(startup, "database_schema", schema)
@@ -195,7 +194,7 @@ class TestLogSystemInfo:
             "expected": ["0009"],
             "instance_max": 15,
             "capacity": CAPACITY,
-            "pooler": {"transaction": False, "direct_url": False},
+            "pooler": False,
         }
         assert line["startup"]["rate_limit"]["default"] == "60/minute"
 
@@ -293,29 +292,10 @@ class TestLogSystemInfo:
         )
         assert record.fields["startup"]["db"]["capacity"] == CAPACITY
 
-    @pytest.mark.parametrize(
-        ("direct_url", "row"),
-        [
-            (
-                "postgresql+asyncpg://u:p@db:5432/mydb",
-                ("ok", "Pooler", "transaction mode, LISTEN and migrations direct"),
-            ),
-            (
-                "",
-                (
-                    "warn",
-                    "Pooler",
-                    "transaction mode, no DB_DIRECT_URL: events by polling every 30s",
-                ),
-            ),
-        ],
-    )
     async def test_behind_a_pooler_the_table_says_how_it_is_reached(
-        self, banner, caplog, monkeypatch, direct_url, row
+        self, banner, caplog, monkeypatch
     ):
         monkeypatch.setattr("app.core.startup.settings.DB_TRANSACTION_POOLER", True)
-        monkeypatch.setattr("app.core.startup.settings.DB_DIRECT_URL", direct_url)
-        monkeypatch.setattr("app.core.startup.settings.OUTBOX_POLL_INTERVAL_SECONDS", 30)
         engine = _mock_engine_with_advisory_lock(acquired=False)
 
         with caplog.at_level(logging.INFO, logger="app.core.startup"):
@@ -323,8 +303,9 @@ class TestLogSystemInfo:
 
         record = next(r for r in caplog.records if hasattr(r, "fields"))
         rows = _rows(record)
-        assert rows[1] == row
+        assert rows[1] == ("ok", "Pooler", "transaction mode, LISTEN and migrations direct")
         assert "Capacity" not in [label for _, label, _ in rows]
+        assert record.fields["startup"]["db"]["pooler"] is True
         # A session lock through the pooler would stay on a lent connection: every process
         # prints its table, and the server's limit is the pooler's business.
         engine.connect.assert_not_called()

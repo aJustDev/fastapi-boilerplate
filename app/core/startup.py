@@ -184,10 +184,7 @@ def _facts(
             "instance_max": processes
             * (settings.DB_POOL_SIZE + settings.DB_MAX_OVERFLOW + (outbox_status != "disabled")),
             "capacity": capacity,
-            "pooler": {
-                "transaction": settings.DB_TRANSACTION_POOLER,
-                "direct_url": bool(settings.DB_DIRECT_URL),
-            },
+            "pooler": settings.DB_TRANSACTION_POOLER,
         },
         "pool": {
             "size": settings.DB_POOL_SIZE,
@@ -256,15 +253,6 @@ def _connections(db: dict[str, Any]) -> tuple[str, str]:
     return state, f"{reach}, {capacity['in_use']} of {capacity['max']} in use"
 
 
-def _pooler(db: dict[str, Any]) -> tuple[str, str]:
-    if db["pooler"]["direct_url"]:
-        return "ok", "transaction mode, LISTEN and migrations direct"
-    return "warn", (
-        f"transaction mode, no DB_DIRECT_URL: events by polling every "
-        f"{settings.OUTBOX_POLL_INTERVAL_SECONDS}s"
-    )
-
-
 def _worker(status: str, running: str) -> tuple[str, str]:
     state = _WORKER_STATES[status]
     return state, _WORKER_VALUES.get(state, running)
@@ -282,8 +270,8 @@ def _rows(facts: dict[str, Any]) -> list[tuple[str, str, str]]:
         "Database": _database(facts["db"], facts["pool"]),
         # Behind a pooler the server's limit is the pooler's business, not this budget.
         **(
-            {"Pooler": _pooler(facts["db"])}
-            if facts["db"]["pooler"]["transaction"]
+            {"Pooler": ("ok", "transaction mode, LISTEN and migrations direct")}
+            if facts["db"]["pooler"]
             else {"Capacity": _connections(facts["db"])}
         ),
         "Outbox": _worker(facts["outbox"], "listening for events"),

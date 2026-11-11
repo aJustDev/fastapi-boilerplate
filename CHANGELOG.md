@@ -12,7 +12,7 @@ not count.
 
 ### Added
 
-- `DB_TRANSACTION_POOLER` and `DB_DIRECT_URL`: the app works behind a pooler in transaction mode (PgBouncer, a managed provider's pooled URL), with statements neither cached nor named, the timeouts set per transaction, and `LISTEN` and the migrations on the direct URL. Tested against a real PgBouncer (#31).
+- `DB_TRANSACTION_POOLER` and `DB_DIRECT_URL`: the app works behind a pooler in transaction mode (PgBouncer, a managed provider's pooled URL), with statements neither cached nor named, the timeouts set per transaction, and `LISTEN` and the migrations on the direct URL, which is required with it. Tested against a real PgBouncer (#31, #33).
 - Startup table: a `Capacity` row, what this instance can open against what the server takes, `warn` when it does not fit; or a `Pooler` row behind a transaction pooler (#31).
 - Docs: scaling and connections in `docs/deployment.md`, the budget of a self-hosted deployment and how to set up a managed PostgreSQL (#31).
 - Example context `workshops`: workshops with limited seats and a waiting list. Eleven routes with a permission each and visibility rules, a state machine, enrollment under a row lock (idempotent, tested with simultaneous requests), a `version` on edits, four events and two jobs. Guide in `docs/workshops.md` (#27).
@@ -93,7 +93,6 @@ not count.
 
 ### Fixed
 
-- Behind a transaction pooler without `DB_DIRECT_URL`, `alembic upgrade head` failed from its second run (`prepared statement "__asyncpg_stmt_1__" already exists`): the migrations go through the pooler with no statement cached or named, like the app (#32).
 - A `TimeoutError` an event handler raises itself (a query, a socket) is no longer reported as the handler running past its deadline, and keeps its traceback. A 5xx domain error is logged with its traceback. The `Capacity` row of the startup table counts the connections of other roles when the app's role is not a superuser (#32).
 - A webhook that answers with an error or does not answer is one line per attempt, without a traceback and without its URL, which httpx put in every retry line and in the stored error; handlers raise `ExpectedFailure` for failures they can name, and a handler timeout counts as one. The access line shows tenths of a millisecond below 10 ms instead of `0ms` (#30).
 - The first command of the quick start failed on a fresh clone: compose needs `.env.local` and no step created it (#26).
