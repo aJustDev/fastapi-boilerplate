@@ -68,6 +68,8 @@ async def test_a_cached_statement_breaks_on_the_next_server_connection(pgbouncer
 
 async def test_with_the_pooler_options_concurrent_sessions_work(pooled_engine, sample_table):
     sessions = async_sessionmaker(pooled_engine, expire_on_commit=False)
+    async with pooled_engine.connect() as conn:  # the server's clock, for the leak check
+        started = (await conn.execute(text("SELECT now()"))).scalar_one()
 
     async def work(n: int) -> int:
         async with sessions() as session:
@@ -84,10 +86,14 @@ async def test_with_the_pooler_options_concurrent_sessions_work(pooled_engine, s
         assert sorted(await asyncio.gather(*(work(n) for n in range(20)))) == list(range(20))
 
     # And none is left on them: named statements piled up there, a few per transaction,
-    # on connections the pooler never resets.
-    for _ in range(4):  # each transaction may see either server connection
+    # on connections the pooler never resets. Only this test's: the negative control
+    # above leaves its own on the same server connections.
+    for _ in range(4):
         async with pooled_engine.connect() as conn:
-            left = await conn.execute(text("SELECT count(*) FROM pg_prepared_statements"))
+            left = await conn.execute(
+                text("SELECT count(*) FROM pg_prepared_statements WHERE prepare_time >= :started"),
+                {"started": started},
+            )
             assert left.scalar_one() == 0
 
 
