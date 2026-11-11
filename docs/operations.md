@@ -15,7 +15,9 @@ Readiness asks the database on every call (`SELECT 1`, at most 2 seconds), so it
 database: an instance that loses it, or starts before it is up, answers 503
 `{"status": "database unavailable"}` and comes back by itself. `{"status": "not ready"}` is only
 the window in which the process starts or shuts down. Neither endpoint needs a token or counts
-against a rate limit.
+against a rate limit, and neither leaves an access line. An outage is logged when it starts
+(`Not ready: the database does not answer (...)`, WARNING) and when it ends (`Ready again`,
+INFO), not on every probe.
 
 Startup does not wait for the database. The API starts, the startup log shows the database as
 `unavailable` and the workers as `waiting for the database`, and both workers keep retrying until

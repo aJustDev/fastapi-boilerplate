@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import uuid
 
 import pytest
@@ -199,3 +200,25 @@ class TestEventDispatcher:
             pass
 
         assert sorted(fresh_dispatcher.registered_events) == ["event.a", "event.b"]
+
+
+class TestWhatAFailureLogs:
+    """The worker writes the attempt in one line: the dispatcher keeps the traceback."""
+
+    async def test_a_failing_handler_logs_nothing_above_debug(self, fresh_dispatcher, caplog):
+        @fresh_dispatcher.register("test.event")
+        async def notify(payload: dict, event_id: uuid.UUID) -> None:
+            raise ValueError("bad input")
+
+        with caplog.at_level(logging.DEBUG, logger="app.core.events.dispatcher"):
+            result = await fresh_dispatcher.dispatch("test.event", {}, event_id=EVENT_ID)
+
+        assert [r.levelname for r in caplog.records] == ["DEBUG"]
+        assert caplog.records[0].exc_info is not None
+        assert result.failures == "test_dispatcher.notify failed (ValueError: bad input)"
+        assert "Traceback" in result.errors_summary, "the stored error keeps the traceback"
+
+    def test_without_handlers_the_failure_says_so(self):
+        assert DispatchResult(no_handlers=True).failures == (
+            "no handlers registered for this event_type"
+        )

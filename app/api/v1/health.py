@@ -7,6 +7,7 @@ from sqlalchemy import text
 from starlette.responses import JSONResponse
 
 from app.core.db import engine
+from app.core.logging.errors import one_line
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,10 @@ async def liveness():
 # A probe must answer quickly: without a limit of its own it would wait for the pool
 # (DB_POOL_TIMEOUT) or for a connection attempt (DB_CONNECT_TIMEOUT).
 READINESS_DB_CHECK_SECONDS = 2
+
+# Why readiness last failed in this process. A probe comes every few seconds: the outage
+# is logged when it starts, when its reason changes and when it ends, not on every call.
+_outage: dict[str, str | None] = {"reason": None}
 
 
 @router.get(
@@ -48,10 +53,22 @@ async def readiness(request: Request):
         async with asyncio.timeout(READINESS_DB_CHECK_SECONDS):
             async with engine.connect() as conn:
                 await conn.execute(text("SELECT 1"))
-    except Exception:
+    # Whatever the failure, the instance is not ready; its traceback adds nothing to a
+    # probe that repeats every few seconds.
+    except Exception as exc:  # noqa: BLE001
         # The 503 is read by the orchestrator, not a person: without this line the
         # reason why the instance stopped being ready is recorded nowhere.
-        logger.warning("Readiness check failed", exc_info=True)
+        reason = (
+            f"no answer in {READINESS_DB_CHECK_SECONDS}s"
+            if isinstance(exc, TimeoutError)
+            else one_line(exc)
+        )
+        if _outage["reason"] != reason:
+            logger.warning("Not ready: the database does not answer (%s)", reason)
+            _outage["reason"] = reason
         return JSONResponse(status_code=503, content={"status": "database unavailable"})
 
+    if _outage["reason"] is not None:
+        logger.info("Ready again: the database answers")
+        _outage["reason"] = None
     return {"status": "ready"}
