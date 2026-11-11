@@ -20,8 +20,8 @@ against a rate limit, and neither leaves an access line. An outage is logged whe
 INFO), not on every probe.
 
 Startup does not wait for the database. The API starts, the startup log shows the database as
-`unavailable` and the workers as `waiting for the database`, and both workers keep retrying until
-it answers.
+`down` and the workers as `waiting for the database`, and both workers keep retrying until it
+answers.
 
 ## Startup log
 

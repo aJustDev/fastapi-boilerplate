@@ -93,6 +93,8 @@ not count.
 
 ### Fixed
 
+- Behind a transaction pooler without `DB_DIRECT_URL`, `alembic upgrade head` failed from its second run (`prepared statement "__asyncpg_stmt_1__" already exists`): the migrations go through the pooler with no statement cached or named, like the app (#32).
+- A `TimeoutError` an event handler raises itself (a query, a socket) is no longer reported as the handler running past its deadline, and keeps its traceback. A 5xx domain error is logged with its traceback. The `Capacity` row of the startup table counts the connections of other roles when the app's role is not a superuser (#32).
 - A webhook that answers with an error or does not answer is one line per attempt, without a traceback and without its URL, which httpx put in every retry line and in the stored error; handlers raise `ExpectedFailure` for failures they can name, and a handler timeout counts as one. The access line shows tenths of a millisecond below 10 ms instead of `0ms` (#30).
 - The first command of the quick start failed on a fresh clone: compose needs `.env.local` and no step created it (#26).
 - A `DB_PASSWORD` changed in `.env.local` reached the API and not the database container (#26).
