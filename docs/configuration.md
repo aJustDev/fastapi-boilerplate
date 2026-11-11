@@ -48,6 +48,7 @@ and it wins; the LISTEN connections of the event bus derive from it too. For TLS
 | `FORWARDED_ALLOW_IPS` not `*` | outside `local` | any client could forge its IP (see `docs/security.md`) |
 | `FORWARDED_ALLOW_IPS` is set (empty means no proxy) | outside `local` | behind an unlisted proxy every client shares one rate limit |
 | `DATABASE_URL` and `DB_DIRECT_URL` have no `sslmode=` | always | the driver would fail on the first connection; it takes `ssl=` |
+| `DB_DIRECT_URL` is set with `DB_TRANSACTION_POOLER` | always | through the pooler a `LISTEN` hears nothing and the migrations fail from their second run (`docs/deployment.md`) |
 
 At startup (not a validator) the process must run in UTC outside `local`: `check_utc_timezone`
 in `app/core/startup.py`.

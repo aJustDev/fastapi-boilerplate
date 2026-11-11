@@ -36,7 +36,7 @@ shows what happens to the changes of one request.
 | `DB_STATEMENT_TIMEOUT_MS` | `30000` | Server-side `statement_timeout` of every app connection |
 | `DB_LOCK_TIMEOUT_MS` | `5000` | Server-side `lock_timeout`: waiting for a lock fails instead of hanging |
 | `DB_TRANSACTION_POOLER` | `false` | `DATABASE_URL` goes through a pooler in transaction mode (see below) |
-| `DB_DIRECT_URL` | empty | PostgreSQL without the pooler, for the event bus listener and the migrations; empty means `DATABASE_URL` |
+| `DB_DIRECT_URL` | empty | PostgreSQL without the pooler, for the event bus listener and the migrations. Required with `DB_TRANSACTION_POOLER`; otherwise empty means `DATABASE_URL` |
 
 `pool_pre_ping` discards dead connections before using them. With `--workers N`, the database
 sees up to `N * (DB_POOL_SIZE + DB_MAX_OVERFLOW)` connections plus one LISTEN connection per

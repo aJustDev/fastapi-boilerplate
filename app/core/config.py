@@ -59,7 +59,8 @@ class Settings(BaseSettings):
     # nothing may rely on the session. See docs/deployment.md.
     DB_TRANSACTION_POOLER: bool = False
     # PostgreSQL without the pooler, in the format of DATABASE_URL: for what needs a session
-    # of its own, the LISTEN of the event bus and the migrations. Empty: DATABASE_URL.
+    # of its own, the LISTEN of the event bus and the migrations. Required with
+    # DB_TRANSACTION_POOLER; without a pooler, empty means DATABASE_URL.
     DB_DIRECT_URL: str = ""
 
     # JWT
@@ -196,6 +197,18 @@ class Settings(BaseSettings):
                 raise ValueError(
                     f'{name}: the asyncpg driver takes "ssl=require", not "sslmode=require".'
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_transaction_pooler(self) -> "Settings":
+        # Through the pooler a LISTEN hears nothing, and each run of the migrations meets the
+        # prepared statements the run before left on connections lent to others. Falling
+        # back to the pooled URL would start an app that fails later and less clearly.
+        if self.DB_TRANSACTION_POOLER and not self.DB_DIRECT_URL:
+            raise ValueError(
+                "DB_TRANSACTION_POOLER needs DB_DIRECT_URL: the direct (or session-mode) URL "
+                "of PostgreSQL, for the LISTEN of the event bus and the migrations."
+            )
         return self
 
     @property

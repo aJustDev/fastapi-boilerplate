@@ -50,7 +50,7 @@ yellow when it needs a look, red when it does not work, and the rows of what is 
 | State | Means |
 |---|---|
 | `ok` | Working: the database answers and its schema matches the code, a worker is running |
-| `warn` | The database schema is not the head of the migrations shipped with the code (a warning follows, `Database schema is at 0002 but this code expects 0009: ...`); this instance alone can open more connections than the server takes; behind a pooler, `DB_DIRECT_URL` is not set |
+| `warn` | The database schema is not the head of the migrations shipped with the code (a warning follows, `Database schema is at 0002 but this code expects 0009: ...`); this instance alone can open more connections than the server takes |
 | `down` | The database did not answer at startup |
 | `wait` | The worker started and retries until the database answers |
 | `on`, `off` | A feature turned on or off by its setting (`RATE_LIMIT_ENABLED`, `DOCS_ENABLED`, `METRICS_ENABLED`; `OUTBOX_WORKER_ENABLED`, `JOB_WORKER_ENABLED` for the workers, shown as `not in this process`) |
@@ -63,10 +63,9 @@ without `migrations/` in the image the revision alone, since there is nothing to
 `LISTEN` of the outbox, against `max_connections` minus the connections reserved for superusers,
 and how many are in use. It is `warn` when the instance alone does not fit; it cannot see other
 replicas, so the sum for a deployment is in `docs/deployment.md`. With `DB_TRANSACTION_POOLER`
-the row is `Pooler` instead: the server's limit is the pooler's, and the row says whether
-`LISTEN` and the migrations go straight to PostgreSQL (`DB_DIRECT_URL`) or the outbox works by
-polling. Behind a pooler every process prints its table, because the session lock that picks one
-would stay on a server connection lent to others.
+the row is `Pooler` instead: the server's limit is the pooler's, and `LISTEN` and the migrations
+go straight to PostgreSQL (`DB_DIRECT_URL`). Behind a pooler every process prints its table,
+because the session lock that picks one would stay on a server connection lent to others.
 
 `Jobs` counts the handlers registered in code, not their rows. With several processes the first
 line ends with their number.

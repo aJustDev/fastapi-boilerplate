@@ -144,8 +144,9 @@ A pooler sits between the app and PostgreSQL and lends a few server connections 
 connections. In **transaction mode**, the one most managed providers give as their "pooled" URL
 and the one that actually saves connections, a server connection is lent for one transaction:
 the next transaction of the same client may run on another one. Anything kept on the connection
-between transactions breaks, and four things in this app did. With the pooled URL in
-`DATABASE_URL`:
+between transactions breaks, and four things in this app would. With the pooled URL in
+`DATABASE_URL`, two more settings go together; the app does not start with the first and without
+the second:
 
 ```bash
 DATABASE_URL=postgresql+asyncpg://app:<secret>@pooler.example.com:6543/app_db?ssl=require
@@ -157,12 +158,13 @@ DB_DIRECT_URL=postgresql+asyncpg://app:<secret>@db.example.com:5432/app_db?ssl=r
 |---|---|
 | A prepared statement cached on one server connection is missing on the next | No statement is cached or named (`docs/database.md`) |
 | `statement_timeout` and `lock_timeout` sent at connect time are refused | They are set at the start of each transaction |
-| A `LISTEN` stays on a server connection lent to others, and hears nothing | It goes to `DB_DIRECT_URL`; without it the outbox works by polling every `OUTBOX_POLL_INTERVAL_SECONDS` |
+| A `LISTEN` stays on a server connection lent to others, and hears nothing | It goes to `DB_DIRECT_URL` |
 | The session lock that picks one process to print the startup table | Every process prints its table |
 
-- **`DB_DIRECT_URL`** is the provider's direct (or session-mode) URL. The migrations use it too:
-  DDL and long transactions do not belong in a transaction pooler. Without it they run through
-  the pooler, with the statement settings of the app.
+- **`DB_DIRECT_URL`** is the provider's direct (or session-mode) URL, and it is required: the
+  `LISTEN` and the migrations use it. DDL and long transactions do not belong in a transaction
+  pooler, and every run of the migrations would meet the prepared statements the run before
+  left on its connections.
 - **Size the pooler for the pools.** Its client limit (`max_client_conn` in PgBouncer) now takes
   the sum of the table above, and its server pool what PostgreSQL allows.
 - **A pooler in session mode** keeps a server connection per client connection: nothing breaks

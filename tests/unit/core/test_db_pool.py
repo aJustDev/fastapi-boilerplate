@@ -101,8 +101,19 @@ class TestBehindATransactionPooler:
         with pytest.raises(ValueError, match="DB_DIRECT_URL"):
             Settings(DB_DIRECT_URL="postgresql+asyncpg://u:p@db/app?sslmode=require")
 
-    def test_the_direct_url_falls_back_to_database_url(self):
-        url = "postgresql+asyncpg://u:p@pooler:6543/app"
+    def test_without_a_pooler_the_direct_url_falls_back_to_database_url(self):
+        url = "postgresql+asyncpg://u:p@db:5432/app"
         assert Settings(DATABASE_URL=url).direct_database_url == url
-        direct = "postgresql+asyncpg://u:p@db:5432/app"
+        direct = "postgresql+asyncpg://u:p@primary:5432/app"
         assert Settings(DATABASE_URL=url, DB_DIRECT_URL=direct).direct_database_url == direct
+
+    def test_a_transaction_pooler_needs_a_direct_url(self):
+        # LISTEN and the migrations need a session of their own. Falling back to the pooled
+        # URL would start an app that never hears a notification and cannot migrate twice.
+        pooled = "postgresql+asyncpg://u:p@pooler:6543/app"
+        with pytest.raises(ValueError, match="DB_DIRECT_URL"):
+            Settings(DATABASE_URL=pooled, DB_TRANSACTION_POOLER=True)
+
+        direct = "postgresql+asyncpg://u:p@db:5432/app"
+        behind = Settings(DATABASE_URL=pooled, DB_TRANSACTION_POOLER=True, DB_DIRECT_URL=direct)
+        assert behind.direct_database_url == direct
