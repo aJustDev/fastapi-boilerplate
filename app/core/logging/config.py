@@ -56,14 +56,21 @@ def json_enabled() -> bool:
 def ansi_enabled() -> bool:
     """Whether log output accepts ANSI escape codes.
 
-    Used by code that builds a colored message before any Formatter runs (the
-    exception handlers): JSONFormatter serializes `record.getMessage()` as is, so a
+    Used by code that builds a colored message before any Formatter runs (the access
+    line, the startup table): JSONFormatter serializes `record.getMessage()` as is, so a
     color code added there would end up inside the JSON `message` field.
     """
     return _resolve_format()[1]
 
 
 def setup_logging() -> None:
+    """Configure logging for the process. Called when the app is built (main.py).
+
+    Uvicorn imports the app before it writes its first line ("Started server process"):
+    configured here, that line is already JSON where JSON is due. Configured later, in
+    the lifespan, the first lines of every start would be in uvicorn's own format, which
+    a collector expecting one JSON object per line cannot read.
+    """
     use_json, use_color = _resolve_format()
 
     if use_json:
@@ -106,9 +113,6 @@ def setup_logging() -> None:
         "filters": {
             "layer_module": {"()": "app.core.logging.filters.LayerModuleFilter"},
             "request_id": {"()": "app.core.logging.filters.RequestIdFilter"},
-            "ignore_options": {"()": "app.core.logging.filters.IgnoreOptionsFilter"},
-            "ignore_healthcheck": {"()": "app.core.logging.filters.IgnoreHealthcheckFilter"},
-            "ignore_metrics": {"()": "app.core.logging.filters.IgnoreMetricsFilter"},
         },
         "formatters": {
             "default": formatter_config,
@@ -117,29 +121,23 @@ def setup_logging() -> None:
             "console": {
                 "class": "logging.StreamHandler",
                 "formatter": "default",
-                "filters": ["layer_module", "request_id", "ignore_options"],
+                "filters": ["layer_module", "request_id"],
                 "level": "DEBUG",
             },
         },
+        # One handler, on the root: every logger reaches it by propagation, so a library
+        # that logs is formatted like the app, and pytest's caplog (also on the root) sees
+        # the app's records.
         "loggers": {
-            "app": {
-                "handlers": ["console"],
-                "level": settings.LOG_LEVEL.upper(),
-                "propagate": False,
-            },
+            "app": {"level": settings.LOG_LEVEL.upper()},
             # INFO for the lines of the server itself: the address it listens on, startup
-            # complete, shutdown.
-            "uvicorn": {
-                "handlers": ["console"],
-                "level": "INFO",
-                "propagate": False,
-            },
-            "uvicorn.access": {
-                "handlers": ["console"],
-                "filters": ["ignore_options", "ignore_healthcheck", "ignore_metrics"],
-                "level": "INFO",
-                "propagate": False,
-            },
+            # complete, shutdown. Its own handler, installed by uvicorn, is replaced.
+            "uvicorn": {"level": "INFO", "propagate": True},
+            # The app writes its own access line (AccessLogMiddleware).
+            "uvicorn.access": {"level": "WARNING", "propagate": True},
+            # Its warning repeats the line of the rate limit handler, which also says
+            # when the client may try again.
+            "slowapi": {"level": "ERROR"},
         },
         "root": {
             "handlers": ["console"],

@@ -17,7 +17,6 @@ def workers():
     with (
         patch.object(lifespan_module, "OutboxWorker", return_value=outbox),
         patch.object(lifespan_module, "JobWorker", return_value=jobs),
-        patch.object(lifespan_module, "setup_logging"),
         patch.object(lifespan_module, "check_utc_timezone"),
         patch.object(lifespan_module, "log_system_info", new_callable=AsyncMock) as banner,
         patch.object(lifespan_module, "engine", MagicMock(dispose=AsyncMock())),

@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 from app.core.events.dispatcher import DispatchResult, HandlerResult
 from app.core.events.models import OutboxEventORM
 from app.core.events.worker import OutboxWorker
+from app.core.logging.context import request_id_var
 
 
 def _make_event(
@@ -303,3 +304,116 @@ class TestStop:
         with caplog.at_level("INFO", logger="app.core.events.worker"):
             await OutboxWorker().stop()
         assert "stopped" not in caplog.text
+
+
+class TestWhatAnAttemptLogs:
+    """One line per attempt, without a traceback; the traceback stays with the event."""
+
+    _FAILED = DispatchResult(
+        results=[
+            HandlerResult(
+                "app.x.notifications.notify",
+                success=False,
+                error="Traceback ...",
+                reason="notifications.notify failed (ConnectTimeout)",
+            )
+        ]
+    )
+
+    async def _handle(self, event, caplog):
+        with (
+            patch("app.core.events.worker.dispatcher.dispatch", return_value=self._FAILED),
+            caplog.at_level("INFO", logger="app.core.events.worker"),
+        ):
+            await OutboxWorker()._handle_event(AsyncMock(), event)
+        return [r for r in caplog.records if r.name == "app.core.events.worker"]
+
+    async def test_an_attempt_between_the_first_and_the_last_is_one_line(self, caplog):
+        event = _make_event(retry_count=3, max_retries=12)
+
+        [record] = await self._handle(event, caplog)
+
+        assert record.levelname == "WARNING"
+        assert record.exc_info is None
+        message = record.getMessage()
+        assert message.startswith(f"Retry 4/12 of test.event {event.id} in ")
+        assert message.endswith("s: notifications.notify failed (ConnectTimeout)")
+
+    async def test_the_first_failure_brings_its_traceback(self, caplog):
+        # To debug a handler without waiting for its last attempt, an hour later.
+        [record] = await self._handle(_make_event(retry_count=0, max_retries=12), caplog)
+
+        first_line, traceback = record.getMessage().split("\n", 1)
+        assert first_line.startswith("Retry 1/12 of test.event ")
+        assert traceback == "[app.x.notifications.notify] Traceback ..."
+
+    async def test_the_last_attempt_brings_its_traceback(self, caplog):
+        event = _make_event(retry_count=11, max_retries=12)
+
+        [record] = await self._handle(event, caplog)
+
+        assert record.levelname == "CRITICAL"
+        first_line, traceback = record.getMessage().split("\n", 1)
+        assert first_line.startswith(
+            f"Gave up on test.event {event.id} after 12 attempts: "
+            "notifications.notify failed (ConnectTimeout); "
+        )
+        assert traceback == "[app.x.notifications.notify] Traceback ..."
+
+    async def test_in_json_the_traceback_is_a_field(self, caplog, monkeypatch):
+        monkeypatch.setattr("app.core.events.worker.json_enabled", lambda: True)
+
+        [record] = await self._handle(_make_event(retry_count=11, max_retries=12), caplog)
+
+        assert "\n" not in record.getMessage()
+        assert record.fields == {"exception": "[app.x.notifications.notify] Traceback ..."}
+
+    async def test_the_lines_of_an_event_carry_the_request_that_published_it(self):
+        seen: list[str] = []
+        event = _make_event()
+        event.correlation_id = "trace-abc"
+
+        with (
+            patch("app.core.events.worker.dispatcher.dispatch", return_value=self._FAILED),
+            patch(
+                "app.core.events.worker.logger.warning",
+                side_effect=lambda *a, **k: seen.append(request_id_var.get()),
+            ),
+        ):
+            await OutboxWorker()._handle_event(AsyncMock(), event)
+
+        assert seen == ["trace-abc"]
+        assert request_id_var.get() == "", "reset once the event is handled"
+
+
+class TestWhatTheListenerLogs:
+    async def _run_once(self, error: Exception, caplog) -> list:
+        worker = OutboxWorker()
+
+        async def stop_instead_of_waiting(_delay):
+            worker._shutdown_event.set()
+
+        with (
+            patch("app.core.events.worker.asyncpg.connect", side_effect=error),
+            patch("app.core.events.worker.asyncio.sleep", side_effect=stop_instead_of_waiting),
+            caplog.at_level("INFO", logger="app.core.events.worker"),
+        ):
+            await worker._run()
+        return [r for r in caplog.records if r.name == "app.core.events.worker"]
+
+    async def test_a_database_that_does_not_answer_is_one_line_per_attempt(self, caplog):
+        [record] = await self._run_once(ConnectionRefusedError("refused"), caplog)
+
+        assert record.levelname == "WARNING"
+        assert record.exc_info is None
+        assert record.getMessage() == (
+            "Outbox worker cannot reach the database (ConnectionRefusedError: refused), "
+            "retrying in 2s"
+        )
+
+    async def test_any_other_error_keeps_its_traceback(self, caplog):
+        # A bug in the worker must not hide behind a reconnection line.
+        [record] = await self._run_once(RuntimeError("bug"), caplog)
+
+        assert record.levelname == "ERROR"
+        assert record.exc_info is not None

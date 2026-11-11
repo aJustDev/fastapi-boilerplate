@@ -1,13 +1,9 @@
 import logging
 
+import pytest
+
 from app.core.logging.context import request_id_var
-from app.core.logging.filters import (
-    IgnoreHealthcheckFilter,
-    IgnoreMetricsFilter,
-    IgnoreOptionsFilter,
-    LayerModuleFilter,
-    RequestIdFilter,
-)
+from app.core.logging.filters import LayerModuleFilter, RequestIdFilter
 
 
 class TestLayerModuleFilter:
@@ -127,6 +123,25 @@ class TestLayerModuleFilter:
 
         assert record.module_name == "Refresh Token"
 
+    @pytest.mark.parametrize(
+        ("name", "layer", "module"),
+        [
+            ("app.workshops.jobs.reminders", "Job", "Reminders"),
+            ("app.workshops.event_handlers.notifications", "Handler", "Notifications"),
+            # Infrastructure stays Core, named so that two workers do not look alike.
+            ("app.core.events.worker", "Core", "Outbox"),
+            ("app.core.jobs.worker", "Core", "Jobs"),
+            ("app.core.exceptions.handlers", "Core", "Errors"),
+            ("app.access", "App", "Access"),
+        ],
+    )
+    def test_names_that_say_what_logged(self, name: str, layer: str, module: str):
+        record = self._make_record(name)
+
+        LayerModuleFilter().filter(record)
+
+        assert (record.layer_name, record.module_name) == (layer, module)
+
     def test_non_app_logger_extracts_last_segment(self):
         f = LayerModuleFilter()
         record = self._make_record("uvicorn.access")
@@ -143,61 +158,6 @@ class TestLayerModuleFilter:
         f.filter(record)
 
         assert "\033[36m" in record.colored_module  # cyan
-
-
-def _access(method: str, full_path: str, status: int = 200) -> logging.LogRecord:
-    """A record shaped like the ones uvicorn's access logger emits."""
-    return logging.LogRecord(
-        name="uvicorn.access",
-        level=logging.INFO,
-        pathname="",
-        lineno=0,
-        msg='%s - "%s %s HTTP/%s" %d',
-        args=("127.0.0.1:5000", method, full_path, "1.1", status),
-        exc_info=None,
-    )
-
-
-def _plain(msg: str, name: str = "app.orders.api.router") -> logging.LogRecord:
-    return logging.LogRecord(
-        name=name, level=logging.INFO, pathname="", lineno=0, msg=msg, args=(), exc_info=None
-    )
-
-
-class TestIgnoreOptionsFilter:
-    def test_options_request_is_dropped(self):
-        assert IgnoreOptionsFilter().filter(_access("OPTIONS", "/v1/orders")) is False
-
-    def test_other_methods_are_kept(self):
-        assert IgnoreOptionsFilter().filter(_access("GET", "/v1/orders")) is True
-        assert IgnoreOptionsFilter().filter(_access("POST", "/v1/orders", 201)) is True
-
-    def test_only_access_records_are_judged(self):
-        # The filter sits on the console handler of every logger: an application line that
-        # happens to quote a request must never be dropped.
-        assert IgnoreOptionsFilter().filter(_plain('client sent "OPTIONS /v1/orders"')) is True
-
-
-class TestNoiseFiltersLookAtThePathOnly:
-    def test_liveness_probe_is_dropped(self):
-        assert IgnoreHealthcheckFilter().filter(_access("GET", "/v1/health/liveness")) is False
-
-    def test_metrics_scrape_is_dropped(self):
-        assert IgnoreMetricsFilter().filter(_access("GET", "/v1/metrics")) is False
-
-    def test_a_query_string_cannot_hide_a_request(self):
-        # The access line of a request is its audit trail (source address, status). Anything
-        # a client controls must not be able to remove it.
-        login = _access("POST", "/v1/auth/login?/v1/metrics", 401)
-        delete = _access("DELETE", "/v1/orders/3?x=/v1/health/liveness", 204)
-
-        for f in (IgnoreHealthcheckFilter(), IgnoreMetricsFilter()):
-            assert f.filter(login) is True
-            assert f.filter(delete) is True
-
-    def test_a_longer_path_is_not_the_probe(self):
-        assert IgnoreMetricsFilter().filter(_access("GET", "/v1/metrics/extra")) is True
-        assert IgnoreHealthcheckFilter().filter(_access("GET", "/x/v1/health/liveness")) is True
 
 
 class TestRequestIdFilter:

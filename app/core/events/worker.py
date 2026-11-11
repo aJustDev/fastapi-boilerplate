@@ -5,15 +5,18 @@ import random
 from datetime import UTC, datetime, timedelta
 
 import asyncpg
+import sqlalchemy.exc
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.config import settings
 from app.core.db import async_session_factory, build_asyncpg_dsn
-from app.core.events.dispatcher import dispatcher
+from app.core.events.dispatcher import DispatchResult, dispatcher
 from app.core.events.models import OutboxEventORM
+from app.core.logging.config import json_enabled
 from app.core.logging.context import request_id_var
+from app.core.logging.errors import one_line
 from app.core.metrics.instruments import outbox_events_failed_total, outbox_events_processed_total
 
 logger = logging.getLogger(__name__)
@@ -22,6 +25,26 @@ CHANNEL = "outbox_event_channel"
 BATCH_SIZE = 50
 MAX_BACKOFF_HOURS = 1
 MAX_RECONNECT_DELAY = 60
+
+# A database that does not answer, or answers that it cannot take connections yet: the
+# worker retries on its own, so each attempt is one line, without a traceback.
+_CONNECTION_ERRORS = (
+    OSError,
+    TimeoutError,
+    asyncpg.PostgresConnectionError,
+    asyncpg.CannotConnectNowError,
+    asyncpg.InterfaceError,
+    sqlalchemy.exc.OperationalError,
+    sqlalchemy.exc.InterfaceError,
+)
+
+
+def _with_tracebacks(result: DispatchResult) -> tuple[str, dict]:
+    """The tracebacks of the handlers that failed, for a log line: after the message on a
+    terminal, as the `exception` field in JSON."""
+    if json_enabled():
+        return "", {"extra": {"fields": {"exception": result.errors_summary}}}
+    return f"\n{result.errors_summary}", {}
 
 
 class OutboxWorker:
@@ -77,21 +100,28 @@ class OutboxWorker:
                     # Heartbeat: verify connection is alive
                     try:
                         await conn.execute("SELECT 1")
-                    except Exception:
-                        logger.warning("Heartbeat failed, reconnecting...", exc_info=True)
+                    except _CONNECTION_ERRORS as exc:
+                        logger.warning(
+                            "Outbox listener lost its connection (%s), reconnecting",
+                            one_line(exc),
+                        )
                         break
 
                     await self._process_batch()
 
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as exc:
                 reconnect_attempt += 1
                 delay = min(2**reconnect_attempt, MAX_RECONNECT_DELAY)
-                logger.exception(
-                    "Outbox worker connection error, retrying in %ds",
-                    delay,
-                )
+                if isinstance(exc, _CONNECTION_ERRORS):
+                    logger.warning(
+                        "Outbox worker cannot reach the database (%s), retrying in %ds",
+                        one_line(exc),
+                        delay,
+                    )
+                else:
+                    logger.exception("Outbox worker error, retrying in %ds", delay)
                 await asyncio.sleep(delay)
             finally:
                 if conn and not conn.is_closed():
@@ -138,22 +168,26 @@ class OutboxWorker:
         session: AsyncSession,
         event: OutboxEventORM,
     ) -> None:
+        # The handlers, and the lines of this event, log under the request id of the
+        # request that published it.
+        token = request_id_var.set(event.correlation_id or "")
+        try:
+            await self._dispatch_and_record(session, event)
+        finally:
+            request_id_var.reset(token)
+
+    async def _dispatch_and_record(self, session: AsyncSession, event: OutboxEventORM) -> None:
         # Build set of handlers that already succeeded (from previous retries)
         completed = {
             name for name, info in (event.handler_state or {}).items() if info.get("status") == "ok"
         }
 
-        # Handlers log under the request id of the request that published the event.
-        token = request_id_var.set(event.correlation_id or "")
-        try:
-            dispatch_result = await dispatcher.dispatch(
-                event.event_type,
-                event.payload,
-                event_id=event.id,
-                completed_handlers=completed,
-            )
-        finally:
-            request_id_var.reset(token)
+        dispatch_result = await dispatcher.dispatch(
+            event.event_type,
+            event.payload,
+            event_id=event.id,
+            completed_handlers=completed,
+        )
 
         # Merge per-handler results into handler_state
         new_state = dict(event.handler_state or {})
@@ -172,11 +206,7 @@ class OutboxWorker:
             event.status = "PROCESSED"
             event.processed_at = datetime.now(UTC)
             outbox_events_processed_total.labels(event_type=event.event_type).inc()
-            logger.info(
-                "Event %s processed (type=%s)",
-                event.id,
-                event.event_type,
-            )
+            logger.info("Processed %s %s", event.event_type, event.id)
         else:
             event.retry_count += 1
             event.last_error = dispatch_result.errors_summary
@@ -184,12 +214,16 @@ class OutboxWorker:
             if event.retry_count >= event.max_retries:
                 event.status = "FAILED"
                 outbox_events_failed_total.labels(event_type=event.event_type).inc()
+                suffix, extra = _with_tracebacks(dispatch_result)
                 logger.critical(
-                    "Event %s FAILED after %d retries (type=%s): %s",
+                    "Gave up on %s %s after %d attempts: %s; `python -m app.cli outbox replay` "
+                    "retries it%s",
+                    event.event_type,
                     event.id,
                     event.retry_count,
-                    event.event_type,
-                    dispatch_result.errors_summary[:500],
+                    dispatch_result.failures,
+                    suffix,
+                    **extra,
                 )
             else:
                 # Exponential backoff with jitter and cap
@@ -200,13 +234,20 @@ class OutboxWorker:
                 event.scheduled_at = datetime.now(UTC) + timedelta(
                     seconds=backoff_seconds,
                 )
+                # The traceback goes with the first failure, to debug it without waiting for
+                # the last attempt, and with the last; the ones between are one line each.
+                first = event.retry_count == 1
+                suffix, extra = _with_tracebacks(dispatch_result) if first else ("", {})
                 logger.warning(
-                    "Event %s retry %d/%d scheduled at %s (type=%s)",
-                    event.id,
+                    "Retry %d/%d of %s %s in %.0fs: %s%s",
                     event.retry_count,
                     event.max_retries,
-                    event.scheduled_at,
                     event.event_type,
+                    event.id,
+                    backoff_seconds,
+                    dispatch_result.failures,
+                    suffix,
+                    **extra,
                 )
 
         await session.flush()

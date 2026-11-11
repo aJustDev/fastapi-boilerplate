@@ -86,6 +86,7 @@ and its log line (class, SQLSTATE and constraint, never the values) says which.
   declares 401, one on a resource 404, every rate-limited one 429; every operation has a
   description and a typed success response; every field of a request body is described.
 - A 500 never exposes the exception message; the traceback goes to the log with the request id.
+  A 4xx is logged at DEBUG only: its access line already names the code (`docs/logging.md`).
 - An exception no handler knows is answered by `UnhandledErrorMiddleware`
   (`app/core/exceptions/middleware.py`), the innermost middleware. The 500 is built inside the
   stack, so it has the CORS, security and `X-Request-ID` headers of any other response and is

@@ -8,7 +8,6 @@ from app.core.db import engine
 from app.core.events.worker import OutboxWorker
 from app.core.jobs.registry import job_registry
 from app.core.jobs.worker import JobWorker
-from app.core.logging.config import setup_logging
 from app.core.startup import check_database, check_utc_timezone, log_system_info
 
 
@@ -20,7 +19,6 @@ def _worker_status(enabled: bool, db_status: str) -> str:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    setup_logging()
     check_utc_timezone()
 
     # Only for the banner. A database that does not answer now is not a reason to give

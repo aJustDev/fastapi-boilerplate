@@ -239,8 +239,11 @@ class TestRealRequests:
         assert response.headers["Access-Control-Allow-Origin"] == "http://localhost:3000"
         assert response.headers["X-Content-Type-Options"] == "nosniff"
         errors = [r for r in caplog.records if r.levelname == "ERROR"]
-        assert len(errors) == 1, "one log line per unhandled error"
+        assert len(errors) == 1, "one log record per unhandled error"
         assert errors[0].exc_info is not None
+        # The message is one line; the traceback travels apart (the `exception` field).
+        assert errors[0].getMessage().startswith("Unhandled RuntimeError: boom (app/")
+        assert errors[0].getMessage().endswith(", GET /v1/workshops/1)")
 
 
 @pytest.mark.parametrize("status", ["422", "500"])

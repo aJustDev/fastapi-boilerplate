@@ -7,6 +7,8 @@ LAYER_MAP = {
     "repos": ("Repo", "purple"),
     "core": ("Core", "cyan"),
     "deps": ("Deps", "white"),
+    "jobs": ("Job", "light_blue"),
+    "event_handlers": ("Handler", "light_purple"),
 }
 
 LAYER_COLORS = {
@@ -16,6 +18,8 @@ LAYER_COLORS = {
     "Repo": "purple",
     "Core": "cyan",
     "Deps": "white",
+    "Job": "light_blue",
+    "Handler": "light_purple",
     "App": "white",
 }
 
@@ -28,6 +32,8 @@ ANSI_CODES = {
     "purple": "\033[35m",
     "cyan": "\033[36m",
     "white": "\033[37m",
+    "light_blue": "\033[94m",
+    "light_purple": "\033[95m",
 }
 ANSI_RESET = "\033[0m"
 
@@ -39,10 +45,15 @@ class LayerModuleFilter(logging.Filter):
     Module name is title-cased for readability.
     """
 
-    # Map full logger names to friendly display names
+    # Loggers whose module name says little on its own: two workers would both be
+    # [Core] [Worker], and the exception handlers [Core] [Handlers], like event handlers.
     LOGGER_OVERRIDES: dict[str, tuple[str, str]] = {
         "uvicorn.error": ("App", "Server"),
-        "uvicorn.access": ("App", "Access"),
+        "app.core.events.worker": ("Core", "Outbox"),
+        "app.core.events.cleanup": ("Core", "Outbox"),
+        "app.core.jobs.worker": ("Core", "Jobs"),
+        "app.core.exceptions.handlers": ("Core", "Errors"),
+        "app.core.exceptions.middleware": ("Core", "Errors"),
     }
 
     def filter(self, record: logging.LogRecord) -> bool:
@@ -76,47 +87,6 @@ class LayerModuleFilter(logging.Filter):
         record.colored_module = f"{module_color}{clean_module}{ANSI_RESET}"
 
         return True
-
-
-LIVENESS_PATH = "/v1/health/liveness"
-METRICS_PATH = "/v1/metrics"
-
-
-def _access_request(record: logging.LogRecord) -> tuple[str, str] | None:
-    """(method, path) of a uvicorn access record; None for any other record.
-
-    The noise filters decide on these two fields only. The formatted message also holds
-    the query string, which the client writes: matching on it would let any request
-    remove its own access line by carrying `?/v1/metrics`.
-    """
-    args = record.args
-    if record.name != "uvicorn.access" or not isinstance(args, tuple) or len(args) < 3:
-        return None
-    return str(args[1]), str(args[2]).split("?", 1)[0]
-
-
-class IgnoreOptionsFilter(logging.Filter):
-    """Suppresses the access line of OPTIONS requests (CORS preflights)."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        request = _access_request(record)
-        return request is None or request[0] != "OPTIONS"
-
-
-class IgnoreHealthcheckFilter(logging.Filter):
-    """Suppresses the access line of the liveness probe."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        request = _access_request(record)
-        return request is None or request[1] != LIVENESS_PATH
-
-
-class IgnoreMetricsFilter(logging.Filter):
-    """Suppresses the access line of the Prometheus scrape."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        request = _access_request(record)
-        return request is None or request[1] != METRICS_PATH
 
 
 class RequestIdFilter(logging.Filter):

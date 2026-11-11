@@ -22,6 +22,12 @@ if and only if the change is committed: emails, webhooks, work in another contex
 5. All handlers succeeded: the event is `PROCESSED`. Otherwise it stays `PENDING` with
    `scheduled_at = now + min(2^retry_count + random(0..5) s, 1 h)`, until `max_retries`, when it
    becomes `FAILED` (logged at CRITICAL). An event type without handlers counts as a failure.
+   Each attempt that fails is one WARNING line:
+   `Retry 1/12 of enrollment.confirmed 2d42... in 5s: notifications.notify_confirmed failed
+   (ConnectTimeout)`. The first and the last attempt also bring the tracebacks (after the line
+   on a terminal, as the `exception` field in JSON), so a failing handler can be debugged at
+   once; the attempts between are one line each. The tracebacks are also stored with the event
+   (`last_error`, `handler_state`).
 
 `handler_state` (JSONB) records the outcome per handler; on a retry, handlers that already
 succeeded are skipped.
@@ -46,8 +52,9 @@ class SeatingService:
 
 `publish(event_type, payload, *, aggregate_id=None, correlation_id=None)`: the payload must be
 JSON-serializable. `aggregate_id` is the id of the entity the event is about. `correlation_id`
-defaults to the id of the current request, and the worker restores it while the handlers run, so
-their log lines carry the `request_id` of the request that published the event. Both are text
+defaults to the id of the current request, and the worker restores it while it handles the event,
+so the lines of the handlers and of the worker carry the `request_id` of the request that
+published it. Both are text
 columns, indexed for tracing.
 
 `publish_many(event_type, [(aggregate_id, payload), ...])` stores one event per pair in one
@@ -91,7 +98,7 @@ A handler receives the payload and the id of the event, and has two duties:
 - **Replay** is a command: `python -m app.cli outbox replay` puts `FAILED` events back to
   `PENDING` (`docs/operations.md`). Replay after fixing what made the handlers fail.
 - **Watch** `outbox_events_failed_total` (`docs/metrics.md`): any increase is an event that needs
-  a decision. Each one is also logged at CRITICAL with its id and last error.
+  a decision. Each one is also logged at CRITICAL with its id and what failed.
 
 ## Guarantees and limits
 

@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="-3 -3 766 588" width="766" height="588" font-family="Liberation Sans, DejaVu Sans, Arial, sans-serif">
 <g class="sec-f1">
 <rect x="40" y="0" width="320" height="46" rx="8" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.4"/>
-<text x="200.0" y="19" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="12.5">1 - ProxyHeaders</tspan></text>
-<text x="200.0" y="36" text-anchor="middle"><tspan fill="#6b7785" font-size="11">client IP and scheme from trusted proxies only</tspan></text>
+<text x="200.0" y="19" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="12.5">1 - ProxyHeaders, request id, access line</tspan></text>
+<text x="200.0" y="36" text-anchor="middle"><tspan fill="#6b7785" font-size="11">real client IP; an id and a log line per response</tspan></text>
 <polyline points="200.0,46.0 200.0,60.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
 <polygon points="200.0,66 196.2,58.9 203.8,58.9" fill="#6b7785"/>
 <rect x="40" y="66" width="320" height="46" rx="22" fill="#fff3dc" stroke="#a35f00" stroke-width="1.4"/>
@@ -17,7 +17,7 @@
 <polygon points="200.0,132 196.2,124.9 203.8,124.9" fill="#6b7785"/>
 <text x="208.0" y="126" text-anchor="start"><tspan font-weight="bold" fill="#6b7785" font-size="11">yes</tspan></text>
 <rect x="40" y="132" width="320" height="46" rx="8" fill="#e8f0f8" stroke="#1f4e79" stroke-width="1.4"/>
-<text x="200.0" y="151" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="12.5">3 - Metrics, request id, headers, CORS</tspan></text>
+<text x="200.0" y="151" text-anchor="middle"><tspan font-weight="bold" fill="#1f4e79" font-size="12.5">3 - Metrics, security headers, CORS</tspan></text>
 <text x="200.0" y="168" text-anchor="middle"><tspan fill="#6b7785" font-size="11">security headers are added on the way out</tspan></text>
 <polyline points="200.0,178.0 200.0,192.0" fill="none" stroke="#6b7785" stroke-width="1.6"/>
 <polygon points="200.0,198 196.2,190.9 203.8,190.9" fill="#6b7785"/>

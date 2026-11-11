@@ -63,7 +63,8 @@ class TestReminders:
             timedelta(hours=20), [confirmed, confirmed, waitlisted]
         )
 
-        await workshop_reminders()
+        # What the job worker writes in the line of the run.
+        assert await workshop_reminders() == "2 reminders published"
 
         published = await _reminders()
         assert sorted(e.aggregate_id for e in published) == sorted([str(first), str(second)])
@@ -74,7 +75,7 @@ class TestReminders:
         await _workshop_with_attendees(timedelta(hours=20), [EnrollmentStatus.CONFIRMED] * 3)
 
         await workshop_reminders()
-        await workshop_reminders()
+        assert await workshop_reminders() is None, "nothing to do the second time"
 
         assert len(await _reminders()) == 3
 
@@ -111,7 +112,7 @@ async def test_the_finish_job_closes_what_ended(app_database):
         session.add(upcoming)
         await session.commit()
 
-    await workshops_finish()
+    assert await workshops_finish() == "1 workshop finished"
 
     async with async_session_factory() as session:
         statuses = dict((await session.execute(select(WorkshopORM.id, WorkshopORM.status))).all())

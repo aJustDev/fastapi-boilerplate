@@ -4,7 +4,9 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-JobFunc = Callable[[], Coroutine[Any, Any, None]]
+# A job returns a few words on what the run did ("3 reminders published"), or None when
+# there was nothing to do: the worker writes the one line of the run with it.
+JobFunc = Callable[[], Coroutine[Any, Any, str | None]]
 
 
 class JobRegistry:
@@ -16,7 +18,7 @@ class JobRegistry:
 
         def decorator(func: JobFunc) -> JobFunc:
             self._jobs[job_name] = func
-            logger.info("Registered job handler %s for %s", func.__name__, job_name)
+            logger.debug("Registered job handler %s for %s", func.__name__, job_name)
             return func
 
         return decorator

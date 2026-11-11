@@ -1,13 +1,9 @@
-import logging
-
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import selectinload
 
 from app.auth.models.role import RoleORM
 from app.auth.models.user import UserORM
 from app.core.repo import BaseRepo
-
-logger = logging.getLogger(__name__)
 
 
 class UserRepo(BaseRepo[UserORM]):
@@ -17,7 +13,6 @@ class UserRepo(BaseRepo[UserORM]):
     # LOWER(username): "Foo@x.com" is the same account as "foo@x.com".
 
     async def get_by_email(self, email: str) -> UserORM | None:
-        logger.debug("Querying user by email")
         stmt = (
             select(UserORM)
             .options(selectinload(UserORM.roles))
@@ -27,7 +22,6 @@ class UserRepo(BaseRepo[UserORM]):
         return result.scalars().first()
 
     async def get_by_username(self, username: str) -> UserORM | None:
-        logger.debug("Querying user by username")
         stmt = (
             select(UserORM)
             .options(selectinload(UserORM.roles))

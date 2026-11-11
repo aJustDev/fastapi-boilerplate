@@ -8,8 +8,8 @@ and hosts, security headers, CORS, authentication and rate limits.
 ![Request path through the security layers](img/security-stack.svg)
 
 `app/core/middleware.py` registers, from outermost to innermost: `ProxyHeadersMiddleware`,
-`TrustedHostMiddleware`, metrics, request id, `SecurityHeadersMiddleware`, CORS, GZip and
-`UnhandledErrorMiddleware` (`docs/errors.md`). The order is checked by
+request id, access log (`docs/logging.md`), `TrustedHostMiddleware`, metrics,
+`SecurityHeadersMiddleware`, CORS, GZip and `UnhandledErrorMiddleware` (`docs/errors.md`). The order is checked by
 `tests/unit/core/test_register_middleware.py`.
 
 - **Proxies.** `X-Forwarded-For` and `X-Forwarded-Proto` are honored only from the addresses in

@@ -6,10 +6,12 @@ from app.core.config import settings
 from app.core.exceptions.handlers import register_exception_handlers
 from app.core.exceptions.schemas import ERROR_RESPONSES
 from app.core.lifespan import lifespan
+from app.core.logging.config import setup_logging
 from app.core.middleware import register_middleware
 
 
 def create_app() -> FastAPI:
+    setup_logging()
     # Swagger UI, ReDoc and the OpenAPI document are served only when asked for.
     docs = {} if settings.DOCS_ENABLED else {"docs_url": None, "redoc_url": None}
     application = FastAPI(

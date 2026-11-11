@@ -3,6 +3,7 @@ import contextlib
 import logging
 import os
 import socket
+import time
 import traceback
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -56,7 +57,7 @@ class JobWorker:
     async def start(self) -> None:
         self._shutdown_event.clear()
         self._task = asyncio.create_task(self._run(), name="job-worker")
-        logger.debug("Job worker started (id=%s)", self._worker_id)
+        logger.debug("Job worker started as %s", self._worker_id)
 
     async def stop(self) -> None:
         self._shutdown_event.set()
@@ -133,6 +134,12 @@ class JobWorker:
         for job_id in candidate_ids:
             await self._execute_job(job_id)
 
+    def _fields(self, job_name: str, start: float, summary: str | None) -> dict:
+        """The facts of a run, as JSON fields of the log record."""
+        milliseconds = round((time.perf_counter() - start) * 1000, 1)
+        job = {"name": job_name, "duration_ms": milliseconds, "worker": self._worker_id}
+        return {"fields": {"job": {**job, "result": summary}}}
+
     async def _execute_job(self, job_id: uuid.UUID) -> None:
         # Phase 1: atomic claim. The conditional UPDATE ... RETURNING lets only one
         # worker move the row from PENDING to RUNNING; no row back means another
@@ -166,22 +173,30 @@ class JobWorker:
             error = f"No handler registered for job '{job_name}'"
             logger.warning(error)
         else:
-            start = datetime.now(UTC)
+            start = time.perf_counter()
             try:
-                await asyncio.wait_for(
+                summary = await asyncio.wait_for(
                     handler(),
                     timeout=settings.JOB_HANDLER_TIMEOUT_SECONDS,
                 )
-                elapsed_ms = (datetime.now(UTC) - start).total_seconds() * 1000
-                logger.info(
-                    "Job '%s' done (%.0fms, PID=%d)",
-                    job_name,
-                    elapsed_ms,
-                    os.getpid(),
-                )
             except Exception:
                 error = traceback.format_exc()
-                logger.exception("Job '%s' failed (PID=%d)", job_name, os.getpid())
+                logger.exception(
+                    "Job %s failed", job_name, extra=self._fields(job_name, start, None)
+                )
+            else:
+                # One line per run: INFO when it did something, DEBUG when there was
+                # nothing to do, which is most runs of most jobs.
+                fields = self._fields(job_name, start, summary)
+                milliseconds = fields["fields"]["job"]["duration_ms"]
+                if summary:
+                    logger.info(
+                        "Job %s: %s (%.0fms)", job_name, summary, milliseconds, extra=fields
+                    )
+                else:
+                    logger.debug(
+                        "Job %s: nothing to do (%.0fms)", job_name, milliseconds, extra=fields
+                    )
 
         # Phase 3: reschedule. run_count is incremented in SQL to avoid lost updates.
         async with async_session_factory() as session:

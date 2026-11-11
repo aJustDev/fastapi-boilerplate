@@ -10,8 +10,8 @@ def stack():
         "sec-f1",
         [
             {
-                "title": "1 - ProxyHeaders",
-                "sub": "client IP and scheme from trusted proxies only",
+                "title": "1 - ProxyHeaders, request id, access line",
+                "sub": "real client IP; an id and a log line per response",
             },
             {
                 "title": "2 - TrustedHost: allowed Host?",
@@ -20,7 +20,7 @@ def stack():
                 "branch": ("no", "400 before any work is done. Health probes are exempt.", "bad"),
             },
             {
-                "title": "3 - Metrics, request id, headers, CORS",
+                "title": "3 - Metrics, security headers, CORS",
                 "sub": "security headers are added on the way out",
             },
             {

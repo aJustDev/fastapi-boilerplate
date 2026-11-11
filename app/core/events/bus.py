@@ -46,7 +46,8 @@ class EventBus:
         await self.session.refresh(event)
 
         await self._notify(str(event.id))
-        logger.info("Published event %s (id=%s)", event_type, event.id)
+        # DEBUG: the line that matters is the worker's, once it is processed.
+        logger.debug("Published %s %s", event_type, event.id)
         return event
 
     async def publish_many(
@@ -77,7 +78,7 @@ class EventBus:
         self.session.add_all(rows)
         await self.session.flush()
         await self._notify(event_type)
-        logger.info("Published %d %s events", len(rows), event_type)
+        logger.debug("Published %d %s events", len(rows), event_type)
         return len(rows)
 
     async def _notify(self, payload: str) -> None:

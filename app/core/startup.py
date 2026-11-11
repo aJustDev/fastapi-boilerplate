@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app.core.config import settings
 from app.core.logging.config import ansi_enabled, json_enabled
-from app.core.logging.filters import METRICS_PATH
+from app.core.logging.middleware import METRICS_PATH
 
 logger = logging.getLogger(__name__)
 

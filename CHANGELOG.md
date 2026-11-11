@@ -43,6 +43,12 @@ not count.
 
 ### Changed
 
+- Logging is configured when the app is built, with one handler on the root logger: in JSON, every line of a start is JSON, uvicorn's first ones included (#29).
+- Access log: the app writes one line per request with the status, the error code and the time (`GET /v1/workshops/7 404 not_found 3ms`; fields of `http` in JSON), without the query string. Probes (readiness included), the metrics scrape and preflights leave none; uvicorn's access log is off (#29).
+- Error handlers log one line at the level of whose error it is: a 4xx at DEBUG with the place in `app/` that raised it, the rate limit as one WARNING with the client and the time to retry, a 5xx as one ERROR with the traceback (#29).
+- Jobs return a few words on what they did, or `None`, and the worker writes one line per run: INFO when it did something, DEBUG otherwise (#29).
+- A failure that repeats is one line per attempt: an event handler brings its traceback on the first and the last attempt only; the outbox listener tells a database that does not answer in one line; readiness logs an outage when it starts and when it ends (#29).
+- Log layers `Job` and `Handler`, and module names `Outbox`, `Jobs` and `Errors` for the workers and the exception handlers (#29).
 - Startup log: on a terminal, a framed table with a state per piece (database, workers, rate limits, docs, metrics); in JSON, one line with the facts in a `startup` field. A database whose schema is not the head of the migrations shipped with the code is a warning. Uvicorn logs where it listens again, and lines outside a request drop the empty `[]` (#28).
 - A lock that is not granted within `DB_LOCK_TIMEOUT_MS`, a deadlock or a serialization failure answers 503 `busy` with `Retry-After` instead of 500 (#27).
 - Tests of the infrastructure no longer depend on the example context: the repository tests use a model of their own (#27).
@@ -71,6 +77,7 @@ not count.
 
 ### Removed
 
+- The log lines that narrated the login, and the filters of uvicorn's access log (#29).
 - The `items` example context, with its table and its permissions (migration 0009). `workshops` takes its place (#27).
 - The `ROOT_PATH` setting (`FastAPI(root_path=...)` is deprecated): give the prefix to the server with `uvicorn --root-path` (#26).
 - Unused schemas `UserCreate` and `PermissionRead` (#26).

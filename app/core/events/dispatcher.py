@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.config import settings
+from app.core.logging.errors import one_line
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +31,9 @@ def handler_key(func: HandlerFunc) -> str:
 class HandlerResult:
     handler_name: str
     success: bool
-    error: str | None = None
+    error: str | None = None  # the traceback, stored with the event
     skipped: bool = False
+    reason: str | None = None  # `notifications.notify_confirmed failed (ConnectTimeout)`
 
 
 @dataclass
@@ -55,6 +57,15 @@ class DispatchResult:
         failed = [r for r in self.results if not r.success]
         return "\n---\n".join(f"[{r.handler_name}] {r.error}" for r in failed)
 
+    @property
+    def failures(self) -> str:
+        """What failed, in one line: `notifications.notify_confirmed failed (ConnectTimeout)`."""
+        if self.no_handlers:
+            return "no handlers registered for this event_type"
+        return "; ".join(
+            r.reason or f"{r.handler_name} failed" for r in self.results if not r.success
+        )
+
 
 class EventDispatcher:
     def __init__(self) -> None:
@@ -69,7 +80,7 @@ class EventDispatcher:
             if key in self._handlers[event_type]:
                 raise ValueError(f"handler {key} is already registered for {event_type}")
             self._handlers[event_type][key] = func
-            logger.info("Registered handler %s for %s", key, event_type)
+            logger.debug("Registered handler %s for %s", key, event_type)
             return func
 
         return decorator
@@ -95,7 +106,8 @@ class EventDispatcher:
         """
         handlers = self._handlers.get(event_type, {})
         if not handlers:
-            logger.critical("No handlers registered for event_type=%s", event_type)
+            # The worker says it on every attempt and gives up loudly (CRITICAL).
+            logger.debug("No handlers registered for %s", event_type)
             return DispatchResult(no_handlers=True)
 
         completed = completed_handlers or set()
@@ -111,10 +123,19 @@ class EventDispatcher:
                     timeout=settings.OUTBOX_HANDLER_TIMEOUT_SECONDS,
                 )
                 result.results.append(HandlerResult(key, success=True))
-            except Exception:
-                tb = traceback.format_exc()
-                logger.exception("Handler %s failed for event_type=%s", key, event_type)
-                result.results.append(HandlerResult(key, success=False, error=tb))
+            # The worker logs the attempt, with the traceback on the first and the last
+            # one; the traceback is also stored with the event (last_error).
+            except Exception as exc:  # noqa: BLE001
+                # The module and the function: enough to find it, short enough for a line.
+                label = f"{handler.__module__.rsplit('.', 1)[-1]}.{handler.__name__}"
+                result.results.append(
+                    HandlerResult(
+                        key,
+                        success=False,
+                        error=traceback.format_exc(),
+                        reason=f"{label} failed ({one_line(exc)})",
+                    )
+                )
 
         return result
 

@@ -3,7 +3,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.core.exceptions.middleware import UnhandledErrorMiddleware
-from app.core.logging.middleware import RequestIdMiddleware
+from app.core.logging.middleware import AccessLogMiddleware, RequestIdMiddleware
 from app.core.metrics.middleware import PrometheusMiddleware
 from app.core.middleware import PROBE_PATHS
 from app.core.security.headers import SecurityHeadersMiddleware
@@ -14,12 +14,14 @@ from tests._routes import iter_api_routes
 
 def test_middleware_stack_order():
     # Outermost first. ProxyHeaders before everything (real client IP for the rate limit
-    # and the logs), TrustedHost before any work.
+    # and the logs); an id and an access line for every response, a rejected Host
+    # included; TrustedHost before any work.
     assert [m.cls for m in app.user_middleware] == [
         ProxyHeadersMiddleware,
+        RequestIdMiddleware,
+        AccessLogMiddleware,
         TrustedHostMiddleware,
         PrometheusMiddleware,
-        RequestIdMiddleware,
         SecurityHeadersMiddleware,
         CORSMiddleware,
         GZipMiddleware,
