@@ -1,17 +1,10 @@
-import logging
-import os
-import socket
-
 from app.core.jobs.registry import job_registry
-
-logger = logging.getLogger(__name__)
 
 
 @job_registry.register("heartbeat_check")
 async def heartbeat_check() -> None:
-    """Example job that verifies which worker instance runs it."""
-    logger.debug(
-        "heartbeat from %s (PID=%d)",
-        socket.gethostname(),
-        os.getpid(),
-    )
+    """Example job: it does nothing, and the line of its run says which worker took it.
+
+    The job worker logs every run at DEBUG with the worker that claimed it (`job.worker`
+    in JSON), so with several instances it shows that each run went to only one.
+    """

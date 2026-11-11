@@ -38,11 +38,6 @@ async def cleanup_processed_events(days: int | None = None) -> int:
             if deleted < settings.OUTBOX_CLEANUP_BATCH_SIZE:
                 break
 
-    logger.info(
-        "Cleaned up %d processed outbox events older than %d days",
-        total_deleted,
-        retention_days,
-    )
     return total_deleted
 
 

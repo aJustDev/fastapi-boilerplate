@@ -29,13 +29,19 @@ Register the handler in the context that owns it and import the module in
 ```python
 # app/<context>/jobs/cleanup.py
 @job_registry.register("daily_cleanup")
-async def daily_cleanup() -> None:
+async def daily_cleanup() -> str | None:
     async with async_session_factory() as session:
-        ...
+        deleted = ...
         await session.commit()
+    return f"{deleted} temp files deleted" if deleted else None
 ```
 
-A handler takes no arguments and opens its own session. Then add the job row with a migration
+A handler takes no arguments and opens its own session. It returns a few words on what the run
+did, or `None` when there was nothing to do, and does not log its result itself: the worker
+writes one line per run, `Job daily_cleanup: 3 temp files deleted (12ms)` at INFO, or
+`Job daily_cleanup: nothing to do (2ms)` at DEBUG, which is most runs of most jobs. A failure is
+one ERROR line with the traceback. In JSON the facts are fields of `job` (`name`, `duration_ms`,
+`worker`, `result`). Then add the job row with a migration
 (see `migrations/versions/0002_seed_reference_data.py`):
 
 ```python
@@ -56,7 +62,8 @@ A row without a registered handler is claimed and rescheduled with
 
 A handler without its row never runs either. The worker warns about both cases once at startup.
 
-Jobs of this boilerplate: `heartbeat_check` (every 5 min, logs the worker identity at DEBUG),
+Jobs of this boilerplate: `heartbeat_check` (every 5 min, does nothing: the line of its run
+says which worker took it),
 `revoked_tokens_cleanup` (hourly, see `docs/auth.md`) and `outbox_cleanup` (daily, see
 `docs/event-bus.md`).
 

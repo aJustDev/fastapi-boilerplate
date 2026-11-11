@@ -139,3 +139,36 @@ class TestStop:
         with caplog.at_level("INFO", logger="app.core.jobs.worker"):
             await JobWorker().stop()
         assert "stopped" not in caplog.text
+
+
+class TestTheLineOfARun:
+    """One line per run: INFO when the job did something, DEBUG when it had nothing to do."""
+
+    async def _run(self, handler: AsyncMock, caplog) -> list:
+        claim, reschedule = _claim_session(("cleanup", 60)), AsyncMock()
+        with (
+            patch(
+                "app.core.jobs.worker.async_session_factory", _session_factory(claim, reschedule)
+            ),
+            patch("app.core.jobs.worker.job_registry.get", return_value=handler),
+            caplog.at_level("DEBUG", logger="app.core.jobs.worker"),
+        ):
+            await JobWorker()._execute_job(uuid.uuid4())
+        return [r for r in caplog.records if r.name == "app.core.jobs.worker"]
+
+    async def test_a_run_that_did_something_is_one_info_line(self, caplog):
+        [record] = await self._run(AsyncMock(return_value="3 rows deleted"), caplog)
+        assert record.levelname == "INFO"
+        assert record.getMessage().startswith("Job cleanup: 3 rows deleted (")
+        assert record.fields["job"]["result"] == "3 rows deleted"
+
+    async def test_a_run_with_nothing_to_do_is_one_debug_line(self, caplog):
+        [record] = await self._run(AsyncMock(return_value=None), caplog)
+        assert record.levelname == "DEBUG"
+        assert record.getMessage().startswith("Job cleanup: nothing to do (")
+
+    async def test_a_failed_run_is_one_error_with_its_traceback(self, caplog):
+        [record] = await self._run(AsyncMock(side_effect=RuntimeError("boom")), caplog)
+        assert record.levelname == "ERROR"
+        assert record.getMessage() == "Job cleanup failed"
+        assert record.exc_info is not None
