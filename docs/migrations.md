@@ -2,7 +2,9 @@
 
 Alembic owns the schema. Revisions live in `migrations/versions/`, numbered (`0001_baseline`,
 `0002_seed_reference_data`, ...); `alembic_version` records the revision a database is at.
-`migrations/env.py` is async and reads `settings.DATABASE_URL`, the same configuration as the app.
+`migrations/env.py` is async and reads the same configuration as the app: `DB_DIRECT_URL` when
+it is set (a pooler in transaction mode cannot carry DDL and long transactions, see
+`docs/deployment.md`), otherwise `DATABASE_URL`.
 
 ## How a deploy applies them
 

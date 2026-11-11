@@ -120,7 +120,9 @@ A handler receives the payload and the id of the event, and has two duties:
   name their handlers alike. Moving or renaming a handler re-runs it on pending retries, and
   registering the same handler twice for an event fails at import.
 - Each process keeps one extra connection for `LISTEN`, checked with `SELECT 1` on every cycle
-  and reopened with backoff (up to 60 s) when it fails.
+  and reopened with backoff (up to 60 s) when it fails. It goes to `DB_DIRECT_URL` when set: a
+  pooler in transaction mode lends connections per transaction, so a `LISTEN` through it would
+  never hear its notifications and the worker would only poll (`docs/deployment.md`).
 
 ## Files
 

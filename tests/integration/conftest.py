@@ -4,9 +4,12 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from testcontainers.community.postgres import PostgresContainer
+from testcontainers.core.container import DockerContainer
+from testcontainers.core.wait_strategies import LogMessageWaitStrategy
 
 import app.db_registry  # noqa: F401 -- register all ORM models in Base.metadata
 from app.auth.models.user import UserORM
@@ -28,6 +31,43 @@ def pg_container():
 @pytest.fixture(scope="session")
 def pg_url(pg_container):
     return pg_container.get_connection_url()
+
+
+# PgBouncer 1.26.1, pinned by digest: the pooler most managed PostgreSQL put in front.
+PGBOUNCER_IMAGE = (
+    "edoburu/pgbouncer@sha256:8638aa563607256d3c7440437534195f1066a92b68015d89ae9d6b935b444a6d"
+)
+
+
+@pytest.fixture(scope="session")
+def pgbouncer_url(pg_container, pg_url):
+    """A pooler in transaction mode in front of the test database, as a URL for the app.
+
+    The worst case on purpose: two server connections, so a client's transactions move
+    between them, and no support for prepared statements (`max_prepared_statements = 0`),
+    like the poolers that have none.
+    """
+    networks = pg_container.get_wrapped_container().attrs["NetworkSettings"]["Networks"]
+    postgres_ip = next(iter(networks.values()))["IPAddress"]
+    database = make_url(pg_url)
+    pooler = (
+        DockerContainer(PGBOUNCER_IMAGE)
+        .with_env("DB_HOST", postgres_ip)
+        .with_env("DB_PORT", "5432")
+        .with_env("DB_USER", database.username)
+        .with_env("DB_PASSWORD", database.password)
+        .with_env("DB_NAME", database.database)
+        .with_env("AUTH_TYPE", "scram-sha-256")
+        .with_env("POOL_MODE", "transaction")
+        .with_env("DEFAULT_POOL_SIZE", "2")
+        .with_env("MAX_PREPARED_STATEMENTS", "0")
+        .with_exposed_ports(5432)
+        .waiting_for(LogMessageWaitStrategy("process up"))
+    )
+    with pooler:
+        yield database.set(
+            host=pooler.get_container_host_ip(), port=int(pooler.get_exposed_port(5432))
+        ).render_as_string(hide_password=False)
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")
