@@ -64,6 +64,13 @@ def ansi_enabled() -> bool:
 
 
 def setup_logging() -> None:
+    """Configure logging for the process. Called when the app is built (main.py).
+
+    Uvicorn imports the app before it writes its first line ("Started server process"):
+    configured here, that line is already JSON where JSON is due. Configured later, in
+    the lifespan, the first lines of every start would be in uvicorn's own format, which
+    a collector expecting one JSON object per line cannot read.
+    """
     use_json, use_color = _resolve_format()
 
     if use_json:
@@ -121,19 +128,14 @@ def setup_logging() -> None:
                 "level": "DEBUG",
             },
         },
+        # One handler, on the root: every logger reaches it by propagation, so a library
+        # that logs is formatted like the app, and pytest's caplog (also on the root) sees
+        # the app's records.
         "loggers": {
-            "app": {
-                "handlers": ["console"],
-                "level": settings.LOG_LEVEL.upper(),
-                "propagate": False,
-            },
+            "app": {"level": settings.LOG_LEVEL.upper()},
             # INFO for the lines of the server itself: the address it listens on, startup
-            # complete, shutdown.
-            "uvicorn": {
-                "handlers": ["console"],
-                "level": "INFO",
-                "propagate": False,
-            },
+            # complete, shutdown. Its own handler, installed by uvicorn, is replaced.
+            "uvicorn": {"level": "INFO", "propagate": True},
             "uvicorn.access": {
                 "handlers": ["console"],
                 "filters": ["ignore_options", "ignore_healthcheck", "ignore_metrics"],

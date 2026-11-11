@@ -1,7 +1,7 @@
 """What `setup_logging()` installs, read from the configuration it hands to dictConfig.
 
-Applying it here would reconfigure logging for the rest of the suite (the `app` logger
-stops propagating, so caplog would see nothing).
+The suite already runs under the configuration main.py applied at import; these tests
+build others (JSON, plain text) without installing them.
 """
 
 import logging

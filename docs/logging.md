@@ -1,6 +1,7 @@
 # Logging
 
-Standard library logging configured once at startup (`setup_logging()`), with two output modes:
+Standard library logging configured once, when the app is built (`setup_logging()` in
+`create_app()`), with two output modes:
 colored text for local work and one-line JSON for log aggregators. Every line logged while
 serving a request carries its `request_id`, and every line carries the architectural layer and
 module of the logger.
@@ -67,7 +68,11 @@ startup log puts its facts in `startup` (`docs/operations.md`).
 
 - Output is newline-delimited on stdout; shipping it (Loki, ELK, CloudWatch...) is the platform's
   job.
-- Third-party loggers propagate to the root logger, at WARNING.
+- One handler, on the root logger: the `app` loggers at `LOG_LEVEL`, uvicorn at INFO and every
+  other library at WARNING reach it by propagation, so every line has the same format.
+- Uvicorn imports the app before its first line, so a process started as `uvicorn main:app`
+  (the image) logs in that format from the first line. With `--reload` or `--workers` the
+  parent process never imports the app: its own lines stay in uvicorn's format.
 - A new noise filter goes in `app/core/logging/filters.py` (return `False` to drop the record) and
   is registered in the `dictConfig` of `setup_logging()`. It decides on `_access_request(record)`
   (method and path), like the existing ones.
