@@ -1,0 +1,62 @@
+# Publishes a version when the PR that cut it reaches main: the tag and the GitHub release,
+# with its section of CHANGELOG.md as the notes. A version is cut with scripts/release.py
+# (docs/releases.md). A push that cut none publishes nothing, which is every push of a project
+# that has not released yet.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One at a time, and never cancelled halfway through a release.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The only job of the repository that writes to it: the tag and the release.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.7"
+
+      # The current version, once CHANGELOG.md has its section and while no tag carries it.
+      # The script needs the project's Python and none of its packages.
+      - name: Version to publish
+        id: pending
+        run: |
+          version="$(uv run --no-project python scripts/release.py pending)"
+          if [ -z "$version" ]; then
+            echo "No version was cut: nothing to publish."
+            exit 0
+          fi
+          found=0
+          git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null || found=$?
+          case "$found" in
+            0) echo "v$version is published already." ;;
+            2) echo "version=$version" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::could not read the tags of the repository"; exit 1 ;;
+          esac
+
+      - name: Tag and release
+        if: steps.pending.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.pending.outputs.version }}
+        run: |
+          uv run --no-project python scripts/release.py notes "$VERSION" > notes.md
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "v$VERSION" --notes-file notes.md
+
+      # What a release also ships (the image in a registry, a deployment) goes here, as steps
+      # with the same condition: a tag created with this token starts no other workflow.
