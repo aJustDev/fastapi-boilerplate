@@ -50,10 +50,18 @@ def _raised_at(exc: BaseException) -> str:
 
 async def domain_exception_handler(request: Request, exc: DomainException) -> JSONResponse:
     # A 4xx is the API answering a client as it should: the access line names its code,
-    # and where it was raised is a detail for whoever is debugging. A 5xx is ours.
+    # and where it was raised is a detail for whoever is debugging. A 5xx is ours: an
+    # ERROR with its traceback.
     status_code = exc.status_code
-    level = logging.ERROR if status_code >= 500 else logging.DEBUG
-    logger.log(level, "%s: %s (%s)", type(exc).__name__, exc, _raised_at(exc))
+    ours = status_code >= 500
+    logger.log(
+        logging.ERROR if ours else logging.DEBUG,
+        "%s: %s (%s)",
+        type(exc).__name__,
+        exc,
+        _raised_at(exc),
+        exc_info=exc if ours else None,
+    )
     headers = getattr(exc, "headers", None) or {}
     return _error(request, status_code, {"detail": str(exc), "code": exc.code}, headers)
 

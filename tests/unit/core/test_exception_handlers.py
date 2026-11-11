@@ -122,6 +122,7 @@ class TestWhatIsLogged:
         assert record.getMessage().startswith("NotFoundError: Order not found (ID: 42) (")
         assert "test_exception_handlers.py:" in record.getMessage()
         assert "\n" not in record.getMessage()
+        assert record.exc_info is None
 
     async def test_a_domain_error_of_ours_is_an_error(self, caplog):
         with caplog.at_level(logging.DEBUG, logger="app.core.exceptions.handlers"):
@@ -129,6 +130,7 @@ class TestWhatIsLogged:
 
         [record] = caplog.records
         assert record.levelno == logging.ERROR
+        assert record.exc_info is not None, "a 5xx is ours to fix: it brings its traceback"
 
     async def test_validation_errors_are_joined(self, caplog):
         exc = RequestValidationError(
