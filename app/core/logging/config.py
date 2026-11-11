@@ -56,8 +56,8 @@ def json_enabled() -> bool:
 def ansi_enabled() -> bool:
     """Whether log output accepts ANSI escape codes.
 
-    Used by code that builds a colored message before any Formatter runs (the
-    exception handlers): JSONFormatter serializes `record.getMessage()` as is, so a
+    Used by code that builds a colored message before any Formatter runs (the access
+    line, the startup table): JSONFormatter serializes `record.getMessage()` as is, so a
     color code added there would end up inside the JSON `message` field.
     """
     return _resolve_format()[1]
@@ -135,6 +135,9 @@ def setup_logging() -> None:
             "uvicorn": {"level": "INFO", "propagate": True},
             # The app writes its own access line (AccessLogMiddleware).
             "uvicorn.access": {"level": "WARNING", "propagate": True},
+            # Its warning repeats the line of the rate limit handler, which also says
+            # when the client may try again.
+            "slowapi": {"level": "ERROR"},
         },
         "root": {
             "handlers": ["console"],

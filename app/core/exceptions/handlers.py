@@ -1,7 +1,9 @@
 import logging
 import math
+import os
 import time
 import traceback
+from pathlib import Path
 
 import asyncpg
 from fastapi import FastAPI, Request
@@ -12,38 +14,9 @@ from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
 from app.core.exceptions.exceptions import AuthException, DomainException
-from app.core.logging.config import ansi_enabled
 from app.core.logging.middleware import record_error_code
 
 logger = logging.getLogger(__name__)
-
-
-_DIM = "\033[2m"
-_CYAN = "\033[36m"
-_YELLOW = "\033[33m"
-_GREEN = "\033[32m"
-_BLUE = "\033[34m"
-_RED = "\033[31m"
-_BOLD_RED = "\033[1;31m"
-_RESET = "\033[0m"
-
-_METHOD_COLORS = {
-    "GET": _GREEN,
-    "POST": _BLUE,
-    "PATCH": _YELLOW,
-    "PUT": _YELLOW,
-    "DELETE": _RED,
-}
-
-
-def _status_color(code: int) -> str:
-    if code < 300:
-        return _GREEN
-    if code < 400:
-        return _CYAN
-    if code < 500:
-        return _YELLOW
-    return _BOLD_RED
 
 
 def _error(
@@ -57,57 +30,32 @@ def _error(
     return JSONResponse(status_code=status_code, content=content, headers=headers)
 
 
-def _shorten_path(filepath: str) -> str:
-    marker = "/app/"
-    idx = filepath.find(marker)
-    return filepath[idx + 1 :] if idx != -1 else filepath
+# The code of the project: where an error is worth pointing at. The last frame of a
+# traceback is often in a library (httpx, SQLAlchemy) or in a mock.
+_ROOT = Path(__file__).resolve().parents[3]
+_OUR_CODE = str(_ROOT / "app") + os.sep
 
 
-def _extract_context(request: Request, exc: Exception) -> dict:
-    tb = traceback.extract_tb(exc.__traceback__)
-    last = tb[-1] if tb else None
-    return {
-        "exc_name": type(exc).__name__,
-        "message": str(exc),
-        "filename": _shorten_path(last.filename) if last else "unknown",
-        "lineno": last.lineno if last else 0,
-        "func": last.name if last else "unknown",
-        "method": request.method,
-        "path": request.url.path,
-        "status_code": getattr(exc, "status_code", 500),
-    }
-
-
-def _format_log(ctx: dict) -> str:
-    method = ctx["method"]
-    # Color is decided here, not in a Formatter, because this message is already
-    # built when the formatter runs: JSONFormatter would ship the escape codes
-    # inside the `message` field.
-    codes = (
-        _DIM,
-        _RESET,
-        _CYAN,
-        _YELLOW,
-        _METHOD_COLORS.get(method, _DIM),
-        _status_color(ctx["status_code"]),
-    )
-    dim, reset, cyan, yellow, mc, sc = codes if ansi_enabled() else ("",) * len(codes)
-    return (
-        f"{ctx['exc_name']}: {ctx['message']}\n"
-        f"  {dim}Location:{reset} {cyan}{ctx['filename']}:{ctx['lineno']}{reset}"
-        f" in {yellow}{ctx['func']}(){reset}\n"
-        f"  {dim}Request:{reset}  {mc}{method}{reset} {ctx['path']}\n"
-        f"  {dim}Status:{reset}   {sc}{ctx['status_code']}{reset}"
-    )
+def _raised_at(exc: BaseException) -> str:
+    """The line of our code that raised it: `app/workshops/services/access.py:45 in ensure_visible()`."""
+    frames = traceback.extract_tb(exc.__traceback__)
+    ours = [frame for frame in frames if frame.filename.startswith(_OUR_CODE)]
+    if not (ours or frames):
+        return "unknown place"
+    frame = (ours or frames)[-1]
+    where = Path(frame.filename)
+    shown = where.relative_to(_ROOT) if where.is_relative_to(_ROOT) else where
+    return f"{shown}:{frame.lineno} in {frame.name}()"
 
 
 async def domain_exception_handler(request: Request, exc: DomainException) -> JSONResponse:
-    ctx = _extract_context(request, exc)
-    logger.warning(_format_log(ctx))
+    # A 4xx is the API answering a client as it should: the access line names its code,
+    # and where it was raised is a detail for whoever is debugging. A 5xx is ours.
+    status_code = exc.status_code
+    level = logging.ERROR if status_code >= 500 else logging.DEBUG
+    logger.log(level, "%s: %s (%s)", type(exc).__name__, exc, _raised_at(exc))
     headers = getattr(exc, "headers", None) or {}
-    return _error(
-        request, ctx["status_code"], {"detail": ctx["message"], "code": exc.code}, headers
-    )
+    return _error(request, status_code, {"detail": str(exc), "code": exc.code}, headers)
 
 
 # `code` for errors that are not a DomainException: 404 of an unknown route, 405 of a
@@ -138,7 +86,7 @@ async def validation_exception_handler(
     request: Request, exc: RequestValidationError
 ) -> JSONResponse:
     errors = [f"{'.'.join(str(loc) for loc in err['loc'])}: {err['msg']}" for err in exc.errors()]
-    logger.warning("Validation error on %s %s: %s", request.method, request.url.path, errors)
+    logger.debug("Validation error: %s", "; ".join(errors))
     return _error(
         request, 422, {"detail": "Validation error", "code": "validation_error", "errors": errors}
     )
@@ -166,7 +114,14 @@ def _retry_after_seconds(request: Request, exc: RateLimitExceeded) -> int:
 
 async def rate_limit_exception_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
     retry_after = str(_retry_after_seconds(request, exc))
-    logger.warning("Rate limit exceeded: %s %s (%s)", request.method, request.url.path, retry_after)
+    logger.warning(
+        "Rate limit %s exceeded by %s on %s %s, retry in %ss",
+        exc.detail,
+        request.client.host if request.client else "unknown client",
+        request.method,
+        request.url.path,
+        retry_after,
+    )
     return _error(
         request,
         429,
@@ -265,8 +220,13 @@ async def database_error_handler(request: Request, exc: DBAPIError) -> JSONRespo
 
 
 def describe_unhandled(request: Request, exc: Exception) -> str:
-    """Log message of an unhandled error: exception, where it was raised and the request."""
-    return _format_log(_extract_context(request, exc))
+    """Log message of an unhandled error, logged with its traceback: the exception, where
+    it was raised and the request."""
+    message = f": {exc}" if str(exc) else ""
+    return (
+        f"Unhandled {type(exc).__name__}{message} ({_raised_at(exc)}, "
+        f"{request.method} {request.url.path})"
+    )
 
 
 def internal_error_response() -> JSONResponse:

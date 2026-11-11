@@ -1,16 +1,35 @@
-from unittest.mock import MagicMock, patch
+import logging
+from unittest.mock import MagicMock
 
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
+from limits import parse
+from slowapi.errors import RateLimitExceeded
+from slowapi.wrappers import Limit
 from starlette.datastructures import URL
 
-from app.core.exceptions import AuthenticationError, ConflictError, NotFoundError
+from app.core.exceptions import AuthenticationError, ConflictError, NotFoundError, RepoException
+from app.core.exceptions.exceptions import DomainException
 from app.core.exceptions.handlers import (
-    _format_log,
     domain_exception_handler,
+    rate_limit_exception_handler,
     unhandled_exception_handler,
     validation_exception_handler,
 )
+
+
+def _limit() -> Limit:
+    return Limit(
+        limit=parse("1/minute"),
+        key_func=lambda: "k",
+        scope=None,
+        per_method=False,
+        methods=None,
+        error_message=None,
+        exempt_when=None,
+        cost=1,
+        override_defaults=False,
+    )
 
 
 def _make_request(method: str = "GET", path: str = "/test") -> MagicMock:
@@ -83,25 +102,68 @@ class TestUnhandledExceptionHandler:
         assert b"Internal server error" in response.body
 
 
-class TestLogColors:
-    def _ctx(self) -> dict:
-        return {
-            "exc_name": "NotFoundError",
-            "message": "Order not found",
-            "filename": "app/x.py",
-            "lineno": 1,
-            "func": "f",
-            "method": "GET",
-            "path": "/v1/orders/1",
-            "status_code": 404,
+def _raised(exc: DomainException) -> DomainException:
+    """The exception with a traceback, as a handler receives it."""
+    try:
+        raise exc
+    except DomainException as raised:
+        return raised
+
+
+class TestWhatIsLogged:
+    """A 4xx is the API answering as it should: one DEBUG line. A 5xx is an ERROR."""
+
+    async def test_a_client_error_is_one_debug_line_with_where_it_was_raised(self, caplog):
+        with caplog.at_level(logging.DEBUG, logger="app.core.exceptions.handlers"):
+            await domain_exception_handler(_make_request(), _raised(NotFoundError("Order", 42)))
+
+        [record] = caplog.records
+        assert record.levelno == logging.DEBUG
+        assert record.getMessage().startswith("NotFoundError: Order not found (ID: 42) (")
+        assert "test_exception_handlers.py:" in record.getMessage()
+        assert "\n" not in record.getMessage()
+
+    async def test_a_domain_error_of_ours_is_an_error(self, caplog):
+        with caplog.at_level(logging.DEBUG, logger="app.core.exceptions.handlers"):
+            await domain_exception_handler(_make_request(), _raised(RepoException("lost")))
+
+        [record] = caplog.records
+        assert record.levelno == logging.ERROR
+
+    async def test_validation_errors_are_joined(self, caplog):
+        exc = RequestValidationError(
+            [
+                {"loc": ("body", "a"), "msg": "Field required", "type": "missing"},
+                {"loc": ("body", "b"), "msg": "Field required", "type": "missing"},
+            ]
+        )
+        with caplog.at_level(logging.DEBUG, logger="app.core.exceptions.handlers"):
+            await validation_exception_handler(_make_request("POST", "/orders"), exc)
+
+        [record] = caplog.records
+        assert record.levelno == logging.DEBUG
+        assert record.getMessage() == (
+            "Validation error: body.a: Field required; body.b: Field required"
+        )
+
+    async def test_a_rate_limit_says_who_where_and_when_to_retry(self, caplog):
+        scope = {
+            "type": "http",
+            "method": "POST",
+            "path": "/v1/auth/login",
+            "headers": [],
+            "query_string": b"",
+            "client": ("203.0.113.7", 50000),
         }
+        with caplog.at_level(logging.DEBUG, logger="app.core.exceptions.handlers"):
+            await rate_limit_exception_handler(Request(scope), RateLimitExceeded(_limit()))
 
-    def test_no_ansi_codes_when_logging_json(self):
-        # The message is built before the formatter runs, so JSON logs would carry
-        # the escape codes inside the `message` field.
-        with patch("app.core.exceptions.handlers.ansi_enabled", return_value=False):
-            assert "\033" not in _format_log(self._ctx())
+        [record] = caplog.records
+        assert record.levelno == logging.WARNING
+        assert record.getMessage() == (
+            "Rate limit 1 per 1 minute exceeded by 203.0.113.7 on POST /v1/auth/login, retry in 60s"
+        )
 
-    def test_ansi_codes_when_console_supports_color(self):
-        with patch("app.core.exceptions.handlers.ansi_enabled", return_value=True):
-            assert "\033" in _format_log(self._ctx())
+    def test_the_warning_of_slowapi_is_not_repeated(self):
+        # The handler's line above says the same and more.
+        assert logging.getLogger("slowapi").getEffectiveLevel() == logging.ERROR

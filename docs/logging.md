@@ -34,9 +34,17 @@ its `request_id`, and every line carries the architectural layer and module of t
   `%0A` stays encoded and cannot start a new line. Probes, the metrics scrape and CORS
   preflights leave no line (`QUIET_PATHS`). Uvicorn's own access log is off.
 - The exception handlers name the error code of the response with `record_error_code()`, which
-  the access line reads.
-- Exception handlers build a multi-line message (exception, location, request, status) and add
-  color only when `ansi_enabled()`, so JSON lines never contain escape codes.
+  the access line reads. What they log themselves depends on whose error it is:
+
+| Error | Level | Line |
+|---|---|---|
+| A 4xx the API answers as designed (not found, forbidden, invalid credentials, validation) | DEBUG | `NotFoundError: Workshop not found (ID: 7) (app/workshops/services/access.py:45 in ensure_visible())` |
+| Rate limit | WARNING | `Rate limit 5 per 1 minute exceeded by 203.0.113.7 on POST /v1/auth/login, retry in 56s` |
+| A value or a race the database stopped | WARNING | the class, SQLSTATE and constraint, never the values (`docs/errors.md`) |
+| A 5xx: a domain error of ours, an unhandled exception | ERROR | one line, `Unhandled RuntimeError: boom (app/...:12 in f(), GET /v1/x)`, with the traceback |
+
+  The place is the last line of `app/` in the traceback, not the library or mock below it.
+  slowapi's own warning is silenced: the handler's line says the same and when to retry.
 
 ## Usage
 
