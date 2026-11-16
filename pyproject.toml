@@ -7,7 +7,7 @@ dependencies = [
     # No extras: fastapi[standard] adds the dev server CLI, a cloud CLI, an OpenTelemetry
     # exporter and a template engine to the production image. The two packages FastAPI
     # needs at runtime here are listed explicitly: form parsing (login) and EmailStr.
-    "fastapi>=0.162.2",
+    "fastapi>=0.162.5",
     "python-multipart>=0.0.33",
     "email-validator>=2.3",
     "uvicorn[standard]>=0.54",
@@ -15,7 +15,7 @@ dependencies = [
     "asyncpg>=0.32",
     "anyio>=4.16",
     "pydantic>=2.14",
-    "pydantic-settings>=2.16",
+    "pydantic-settings>=2.16.3",
     "pyjwt>=2.15",
     "argon2-cffi>=25.1",
     "httpx>=0.28",
